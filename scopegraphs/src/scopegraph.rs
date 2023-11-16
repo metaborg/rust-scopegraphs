@@ -43,7 +43,7 @@ pub trait ScopeGraph {
     /// Adds a new edge from `src`, to `dst`, with label `lbl` to the scope graph.
     /// After this operation, all future calls to [`ScopeGraph::get_edges`] on the source will contain the destination.
     ///
-    /// Example:
+    /// Examplek:
     /// ```no_run
     /// # use scopegraphs::scopegraphs::ScopeGraph;
     /// enum Label { LEX }
