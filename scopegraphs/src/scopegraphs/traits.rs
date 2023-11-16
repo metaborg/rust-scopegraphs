@@ -28,11 +28,15 @@ pub trait ScopeGraph {
     /// After this operation, all future calls to [`ScopeGraph::get_data`] on this scope will return the associated data.
     ///
     /// Example:
-    /// ```ignore
-    /// val sg = get_scope_graph()
-    /// val scope = sg.add_scope(&data)
-    /// val newData = sg.get_data(scope)
-    /// assert_eq!(data, newData)
+    /// ```no_run
+    /// # use scopegraphs::scopegraphs::ScopeGraph;
+    /// let mut sg : &dyn ScopeGraph<Scope = i32, Label = i32, Data = i32> = todo!();
+    /// let data = 42;
+    /// 
+    /// let scope = sg.add_scope(&data);
+    /// 
+    /// let newData = sg.get_data(scope);
+    /// assert_eq!(data, *newData);
     /// ```
     fn add_scope(&mut self, data: &Self::Data) -> &Self::Scope;
 
@@ -40,18 +44,23 @@ pub trait ScopeGraph {
     /// After this operation, all future calls to [`ScopeGraph::get_edges`] on the source will contain the destination.
     ///
     /// Example:
-    /// ```ignore
-    /// val sg = get_scope_graph()
-    /// val src = sg.add_scope(&data)
-    /// val dst = sg.add_scope(&data)
-    /// sg.add_edge(src, P, dst)
-    /// val dst_iter = sg.get_edges(src, P, dst)
-    /// assert_eq!(dst_iter.any(|&d| d == dst))
+    /// ```no_run
+    /// # use scopegraphs::scopegraphs::ScopeGraph;
+    /// enum Label { LEX }
+    /// let mut sg : &dyn ScopeGraph<Scope = i32, Label = Label, Data = i32> = todo!();
+    /// let data = 42;
+    /// 
+    /// let src = sg.add_scope(&data);
+    /// let dst = sg.add_scope(&data);
+    /// sg.add_edge(src, &Label::LEX, dst);
+    /// 
+    /// let dst_iter = sg.get_edges(src, &Label::LEX);
+    /// assert!(dst_iter.any(|&d| d == *dst));
     /// ```
     ///
     fn add_edge(&mut self, src: &Self::Scope, lbl: &Self::Label, dst: &Self::Scope);
 
     fn get_data(&self, scope: &Self::Scope) -> &Self::Data;
 
-    fn get_edges(&self, scope: &Self::Scope, lbl: &Self::Data) -> Iter<'_, Self::Scope>;
+    fn get_edges(&self, scope: &Self::Scope, lbl: &Self::Label) -> Iter<'_, Self::Scope>;
 }
