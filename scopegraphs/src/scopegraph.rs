@@ -29,7 +29,7 @@ pub trait ScopeGraph {
     ///
     /// Example:
     /// ```no_run
-    /// # use scopegraphs::scopegraphs::ScopeGraph;
+    /// # use scopegraphs::ScopeGraph;
     /// let mut sg : &dyn ScopeGraph<Scope = i32, Label = i32, Data = i32> = todo!();
     /// let data = 42;
     ///
@@ -43,9 +43,9 @@ pub trait ScopeGraph {
     /// Adds a new edge from `src`, to `dst`, with label `lbl` to the scope graph.
     /// After this operation, all future calls to [`ScopeGraph::get_edges`] on the source will contain the destination.
     ///
-    /// Examplek:
+    /// Example:
     /// ```no_run
-    /// # use scopegraphs::scopegraphs::ScopeGraph;
+    /// # use scopegraphs::ScopeGraph;
     /// enum Label { LEX }
     /// let mut sg : &dyn ScopeGraph<Scope = i32, Label = Label, Data = i32> = todo!();
     /// let data = 42;
@@ -54,7 +54,7 @@ pub trait ScopeGraph {
     /// let dst = sg.add_scope(&data);
     /// sg.add_edge(src, &Label::LEX, dst);
     ///
-    /// let dst_iter = sg.get_edges(src, &Label::LEX);
+    /// let mut  dst_iter = sg.get_edges(src, &Label::LEX);
     /// assert!(dst_iter.any(|&d| d == *dst));
     /// ```
     ///
