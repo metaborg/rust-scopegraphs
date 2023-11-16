@@ -32,9 +32,9 @@ pub trait ScopeGraph {
     /// # use scopegraphs::scopegraphs::ScopeGraph;
     /// let mut sg : &dyn ScopeGraph<Scope = i32, Label = i32, Data = i32> = todo!();
     /// let data = 42;
-    /// 
+    ///
     /// let scope = sg.add_scope(&data);
-    /// 
+    ///
     /// let newData = sg.get_data(scope);
     /// assert_eq!(data, *newData);
     /// ```
@@ -49,18 +49,21 @@ pub trait ScopeGraph {
     /// enum Label { LEX }
     /// let mut sg : &dyn ScopeGraph<Scope = i32, Label = Label, Data = i32> = todo!();
     /// let data = 42;
-    /// 
+    ///
     /// let src = sg.add_scope(&data);
     /// let dst = sg.add_scope(&data);
     /// sg.add_edge(src, &Label::LEX, dst);
-    /// 
+    ///
     /// let dst_iter = sg.get_edges(src, &Label::LEX);
     /// assert!(dst_iter.any(|&d| d == *dst));
     /// ```
     ///
     fn add_edge(&mut self, src: &Self::Scope, lbl: &Self::Label, dst: &Self::Scope);
 
+    /// Returns the data associated with the `scope` argument.
     fn get_data(&self, scope: &Self::Scope) -> &Self::Data;
 
+    /// Returns the targets of the outgoing edges of `src` with label `lbl`.
     fn get_edges(&self, scope: &Self::Scope, lbl: &Self::Label) -> Iter<'_, Self::Scope>;
+
 }
