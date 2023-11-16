@@ -65,5 +65,4 @@ pub trait ScopeGraph {
 
     /// Returns the targets of the outgoing edges of `src` with label `lbl`.
     fn get_edges(&self, scope: &Self::Scope, lbl: &Self::Label) -> Iter<'_, Self::Scope>;
-
 }
