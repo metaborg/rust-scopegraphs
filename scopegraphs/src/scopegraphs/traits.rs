@@ -28,7 +28,7 @@ pub trait ScopeGraph {
     /// After this operation, all future calls to [`ScopeGraph::get_data`] on this scope will return the associated data.
     ///
     /// Example:
-    /// ```
+    /// ```ignore
     /// val sg = get_scope_graph()
     /// val scope = sg.add_scope(&data)
     /// val newData = sg.get_data(scope)
@@ -40,7 +40,7 @@ pub trait ScopeGraph {
     /// After this operation, all future calls to [`ScopeGraph::get_edges`] on the source will contain the destination.
     ///
     /// Example:
-    /// ```
+    /// ```ignore
     /// val sg = get_scope_graph()
     /// val src = sg.add_scope(&data)
     /// val dst = sg.add_scope(&data)
