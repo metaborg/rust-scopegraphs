@@ -1,1 +1,3 @@
-pub mod scopegraphs;
+mod scopegraph;
+
+pub use scopegraph::ScopeGraph;
