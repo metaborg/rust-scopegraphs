@@ -7,6 +7,8 @@ on:
 env:
   CARGO_TERM_COLOR: always
 
+permissions: write-all
+
 jobs:
   clippy:
     name: Clippy
@@ -15,8 +17,6 @@ jobs:
       checks: write
     steps:
       - uses: actions/checkout@v3
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly
