@@ -1,8 +1,4 @@
-use scopegraphs::{
-    regex,
-    regex::{Regex, RegexRef},
-    Label,
-};
+use scopegraphs::{regex, regex::Regex, Label};
 
 macro_rules! assert_matches {
     ($expression:expr, $pattern:pat $(if $guard:expr)? $(,)?) => {
@@ -27,40 +23,31 @@ fn test_regex() {
     assert_matches!(regex!(A), Regex::Symbol(A));
     assert_matches!(
         regex!(A | B),
-        Regex::Or(
-            RegexRef::Ref(&Regex::Symbol(A)),
-            RegexRef::Ref(&Regex::Symbol(B))
-        )
+        Regex::Or(&Regex::Symbol(A), &Regex::Symbol(B))
     );
     assert_matches!(
         regex!(A | B | C),
         Regex::Or(
-            RegexRef::Ref(&Regex::Or(
-                RegexRef::Ref(&Regex::Symbol(A)),
-                RegexRef::Ref(&Regex::Symbol(B))
-            )),
-            RegexRef::Ref(&Regex::Symbol(C))
+            &Regex::Or(&Regex::Symbol(A), &Regex::Symbol(B)),
+            &Regex::Symbol(C)
         )
     );
     assert_matches!(
         regex!(A & B),
-        Regex::And(
-            RegexRef::Ref(&Regex::Symbol(A)),
-            RegexRef::Ref(&Regex::Symbol(B))
-        )
+        Regex::And(&Regex::Symbol(A), &Regex::Symbol(B))
     );
     assert_matches!(
         regex!(A* B*),
         Regex::Concat(
-            RegexRef::Ref(&Regex::Repeat(RegexRef::Ref(&Regex::Symbol(A)))),
-            RegexRef::Ref(&Regex::Repeat(RegexRef::Ref(&Regex::Symbol(B))))
+            &Regex::Repeat(&Regex::Symbol(A)),
+            &Regex::Repeat(&Regex::Symbol(B))
         )
     );
     assert_matches!(
         regex!(~A ~B),
         Regex::Concat(
-            RegexRef::Ref(&Regex::Complement(RegexRef::Ref(&Regex::Symbol(A)))),
-            RegexRef::Ref(&Regex::Complement(RegexRef::Ref(&Regex::Symbol(B))))
+            &Regex::Complement(&Regex::Symbol(A)),
+            &Regex::Complement(&Regex::Symbol(B))
         )
     );
 }

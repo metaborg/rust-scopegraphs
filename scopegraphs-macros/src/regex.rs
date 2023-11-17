@@ -21,16 +21,16 @@ impl ToTokens for Regex {
             Regex::Empty => quote! {scopegraphs::regex::Regex::Empty},
             Regex::Epsilon => quote! {scopegraphs::regex::Regex::Epsilon},
             Regex::Symbol(s) => quote! {scopegraphs::regex::Regex::Symbol(#s)},
-            Regex::Repeat(r) => quote! {scopegraphs::regex::Regex::Repeat(Into::into(&#r))},
-            Regex::Complement(c) => quote! {scopegraphs::regex::Regex::Complement(Into::into(&#c))},
+            Regex::Repeat(r) => quote! {scopegraphs::regex::Regex::Repeat(&#r)},
+            Regex::Complement(c) => quote! {scopegraphs::regex::Regex::Complement(&#c)},
             Regex::Or(l, r) => {
-                quote! {scopegraphs::regex::Regex::Or(Into::into(&#l), Into::into(&#r))}
+                quote! {scopegraphs::regex::Regex::Or(&#l, &#r)}
             }
             Regex::And(l, r) => {
-                quote! {scopegraphs::regex::Regex::And(Into::into(&#l), Into::into(&#r))}
+                quote! {scopegraphs::regex::Regex::And(&#l, &#r)}
             }
             Regex::Concat(l, r) => {
-                quote! {scopegraphs::regex::Regex::Concat(Into::into(&#l), Into::into(&#r))}
+                quote! {scopegraphs::regex::Regex::Concat(&#l, &#r)}
             }
         })
     }
