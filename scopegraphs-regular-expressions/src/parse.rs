@@ -1,40 +1,7 @@
-use proc_macro2::TokenStream as TokenStream2;
-use quote::{quote, ToTokens};
+use crate::regex::Symbol;
+use crate::Regex;
 use syn::parse::{Parse, ParseStream};
 use syn::{parenthesized, Path, Token};
-
-#[derive(Clone)]
-pub enum Regex {
-    Empty,
-    Epsilon,
-    Symbol(Path),
-    Repeat(Box<Regex>),
-    Complement(Box<Regex>),
-    Or(Box<Regex>, Box<Regex>),
-    And(Box<Regex>, Box<Regex>),
-    Concat(Box<Regex>, Box<Regex>),
-}
-
-impl ToTokens for Regex {
-    fn to_tokens(&self, tokens: &mut TokenStream2) {
-        tokens.extend(match self {
-            Regex::Empty => quote! {scopegraphs::regex::Regex::Empty},
-            Regex::Epsilon => quote! {scopegraphs::regex::Regex::Epsilon},
-            Regex::Symbol(s) => quote! {scopegraphs::regex::Regex::Symbol(#s)},
-            Regex::Repeat(r) => quote! {scopegraphs::regex::Regex::Repeat(&#r)},
-            Regex::Complement(c) => quote! {scopegraphs::regex::Regex::Complement(&#c)},
-            Regex::Or(l, r) => {
-                quote! {scopegraphs::regex::Regex::Or(&#l, &#r)}
-            }
-            Regex::And(l, r) => {
-                quote! {scopegraphs::regex::Regex::And(&#l, &#r)}
-            }
-            Regex::Concat(l, r) => {
-                quote! {scopegraphs::regex::Regex::Concat(&#l, &#r)}
-            }
-        })
-    }
-}
 
 impl Regex {
     /// A symbol is an element from the alphabet, usually an enum variant.
@@ -55,11 +22,11 @@ impl Regex {
             };
         }
 
-        let res: Path = input.parse()?;
-        if res.is_ident("e") {
+        let name: Path = input.parse()?;
+        if name.is_ident("e") {
             Ok(Self::Epsilon)
         } else {
-            Ok(Self::Symbol(res))
+            Ok(Self::Symbol(Symbol { name }))
         }
     }
 
@@ -140,5 +107,48 @@ impl Regex {
 impl Parse for Regex {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         Self::parse_regex(input)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{parse_regex, Regex::*};
+    #[test]
+    fn test_regex() {
+        assert_eq!(parse_regex("A").unwrap(), Symbol("A".into()));
+        assert_eq!(
+            parse_regex("A | B").unwrap(),
+            Or(Box::new(Symbol("A".into())), Box::new(Symbol("B".into())))
+        );
+        assert_eq!(
+            parse_regex("A | B | C").unwrap(),
+            Or(
+                Box::new(Or(
+                    Box::new(Symbol("A".into())),
+                    Box::new(Symbol("B".into()))
+                )),
+                Box::new(Symbol("C".into()))
+            )
+        );
+        assert_eq!(
+            parse_regex("A & B").unwrap(),
+            And(Box::new(Symbol("A".into())), Box::new(Symbol("B".into())))
+        );
+        assert_eq!(
+            parse_regex("A* B*").unwrap(),
+            Concat(
+                Box::new(Repeat(Box::new(Symbol("A".into())))),
+                Box::new(Repeat(Box::new(Symbol("B".into()))))
+            )
+        );
+        assert_eq!(
+            parse_regex("~A ~B").unwrap(),
+            Concat(
+                Box::new(Complement(Box::new(Symbol("A".into())))),
+                Box::new(Complement(Box::new(Symbol("B".into()))))
+            )
+        );
+        assert_eq!(parse_regex("e").unwrap(), Epsilon);
+        assert_eq!(parse_regex("0").unwrap(), Empty);
     }
 }

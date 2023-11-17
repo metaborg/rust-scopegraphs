@@ -8,3 +8,4 @@ edition = "2021"
 [dependencies]
 scopegraphs-lib = {path="../scopegraphs-lib"}
 scopegraphs-macros = {path="../scopegraphs-macros"}
+scopegraphs-regular-expressions = {path="../scopegraphs-regular-expressions"}
