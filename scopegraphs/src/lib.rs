@@ -1,3 +1,2 @@
-pub mod label;
-pub mod resolve;
-pub mod scopegraph;
+pub use scopegraphs_lib::*;
+pub use scopegraphs_macros::*;

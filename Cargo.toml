@@ -1,7 +1,8 @@
 [workspace]
-
 resolver = "2"
-
 members = [
+    "scopegraphs-lib",
     "scopegraphs",
+    "scopegraphs-macros"
 ]
+default-members = ["scopegraphs", "scopegraphs-lib", "scopegraphs-macros"]
