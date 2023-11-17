@@ -43,8 +43,8 @@ impl<SCOPE, LABEL, DATA> ScopeGraph<SCOPE, LABEL, DATA> {
     ///
     /// Example:
     /// ```no_run
-    /// # use scopegraphs::ScopeGraph;
-    /// let mut sg : &dyn ScopeGraph<Scope = i32, Label = i32, Data = i32> = todo!();
+    /// # use scopegraphs::scopegraph::ScopeGraph;
+    /// let mut sg : ScopeGraph<i32, i32, i32> = ScopeGraph::new();
     /// let data = 42;
     ///
     /// let scope = sg.add_scope(&data);
@@ -61,9 +61,11 @@ impl<SCOPE, LABEL, DATA> ScopeGraph<SCOPE, LABEL, DATA> {
     ///
     /// Example:
     /// ```no_run
-    /// # use scopegraphs::ScopeGraph;
+    /// # use scopegraphs::{scopegraph::ScopeGraph, Label};
+    ///
+    /// #[derive(Label, Eq, PartialEq, Copy, Clone)]
     /// enum Label { LEX }
-    /// let mut sg : &dyn ScopeGraph<Scope = i32, Label = Label, Data = i32> = todo!();
+    /// let mut sg : ScopeGraph<i32, Label, i32> = ScopeGraph::new();
     /// let data = 42;
     ///
     /// let src = sg.add_scope(&data);
@@ -71,7 +73,7 @@ impl<SCOPE, LABEL, DATA> ScopeGraph<SCOPE, LABEL, DATA> {
     /// sg.add_edge(src, &Label::LEX, dst);
     ///
     /// let mut  dst_iter = sg.get_edges(src, &Label::LEX);
-    /// assert!(dst_iter.any(|&d| d == *dst));
+    /// assert!(dst_iter.any(|d| d == *dst));
     /// ```
     ///
     pub fn add_edge(&mut self, _src: &SCOPE, _lbl: &LABEL, _dst: &SCOPE) {
