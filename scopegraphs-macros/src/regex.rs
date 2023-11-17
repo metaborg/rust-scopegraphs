@@ -86,10 +86,13 @@ impl Regex {
         let inner = Self::parse_atom(input)?;
         let lookahead = input.lookahead1();
         if lookahead.peek(Token![?]) {
+            let _ = input.parse::<Token![?]>();
             Ok(Self::Or(Box::new(inner), Box::new(Self::Epsilon)))
         } else if lookahead.peek(Token![*]) {
+            let _ = input.parse::<Token![*]>();
             Ok(Self::Repeat(Box::new(inner)))
         } else if lookahead.peek(Token![+]) {
+            let _ = input.parse::<Token![+]>();
             Ok(Self::Concat(Box::new(inner.clone()), Box::new(inner)))
         } else {
             Ok(inner)
@@ -119,8 +122,10 @@ impl Regex {
             if input.is_empty() {
                 return Ok(lhs);
             } else if input.peek(Token![|]) {
+                let _ = input.parse::<Token![|]>();
                 lhs = Self::Or(Box::new(lhs), Box::new(Self::parse_concatenation(input)?))
             } else if input.peek(Token![&]) {
+                let _ = input.parse::<Token![&]>();
                 lhs = Self::And(Box::new(lhs), Box::new(Self::parse_concatenation(input)?))
             } else {
                 return Err(syn::Error::new(
