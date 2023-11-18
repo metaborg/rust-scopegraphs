@@ -11,6 +11,7 @@ pub struct MatchState {
     empty: bool,
     pub transition_table: HashMap<Rc<Symbol>, StateID>,
     pub default_transition: StateID,
+    pub regex: Rc<Regex>,
 }
 
 impl MatchState {
@@ -197,15 +198,24 @@ impl RegexCompiler {
                     default_transition: *state_ids
                         .get(self.default_transitions.get(state).unwrap())
                         .unwrap(),
+                    regex: state.clone(),
                 },
             );
         }
 
-        CompiledRegex {
+        let compiled = CompiledRegex {
             initial: *state_ids.get(&self.regex).unwrap(),
             regex: self.regex,
             states: match_states,
+        };
+
+        #[cfg(feature = "dot")]
+        {
+            let mut f = std::fs::File::create("output.dot").unwrap();
+            compiled.output_dot(&mut f).unwrap();
         }
+
+        compiled
     }
 }
 

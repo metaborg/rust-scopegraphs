@@ -2,9 +2,14 @@ use proc_macro2::{LexError, TokenStream};
 use thiserror::Error;
 
 mod compile;
-mod emit;
 mod parse;
 mod regex;
+
+#[cfg(feature = "rust-code-emitting")]
+mod emit;
+
+#[cfg(feature = "dot")]
+mod dot;
 
 pub use compile::{CompiledRegex, MatchState};
 pub use regex::Regex;

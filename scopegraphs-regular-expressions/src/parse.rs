@@ -14,7 +14,7 @@ impl Regex {
         if input.peek(syn::LitInt) {
             let val = input.parse::<syn::LitInt>()?;
             return if let Ok(0) = val.base10_parse() {
-                Ok(Self::EmptyString)
+                Ok(Self::EmptySet)
             } else {
                 Err(syn::Error::new(
                     val.span(),
@@ -25,7 +25,7 @@ impl Regex {
 
         let name: Path = input.parse()?;
         if name.is_ident("e") {
-            Ok(Self::EmptySet)
+            Ok(Self::EmptyString)
         } else {
             Ok(Self::Symbol(Symbol { name }.into()))
         }
@@ -157,7 +157,7 @@ mod tests {
                 Rc::new(Complement(Rc::new(Symbol(Rc::new("B".into())))))
             )
         );
-        assert_eq!(parse_regex("e").unwrap(), EmptySet);
-        assert_eq!(parse_regex("0").unwrap(), EmptyString);
+        assert_eq!(parse_regex("0").unwrap(), EmptySet);
+        assert_eq!(parse_regex("e").unwrap(), EmptyString);
     }
 }

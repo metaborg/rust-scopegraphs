@@ -11,4 +11,4 @@ proc-macro = true
 [dependencies]
 syn = { version = "2.0.29", features = ["derive"] }
 quote = "1.0.33"
-scopegraphs-regular-expressions = {path = "../scopegraphs-regular-expressions"}
+scopegraphs-regular-expressions = {path = "../scopegraphs-regular-expressions", features = ["rust-code-emitting", "dot"]}

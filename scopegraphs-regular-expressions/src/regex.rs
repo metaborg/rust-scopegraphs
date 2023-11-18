@@ -2,6 +2,8 @@ use crate::compile::AlphabetOrder;
 use proc_macro2::TokenStream;
 use std::collections::HashSet;
 use std::fmt::Debug;
+#[cfg(feature = "pretty-print")]
+use std::fmt::{Display, Formatter};
 use std::ops::Deref;
 use std::rc::Rc;
 use syn::Path;
@@ -9,6 +11,14 @@ use syn::Path;
 #[derive(Hash, Debug, Clone, PartialEq, Eq)]
 pub struct Symbol {
     pub(super) name: Path,
+}
+
+#[cfg(feature = "pretty-print")]
+impl Display for Symbol {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let name = &self.name;
+        write!(f, "{}", quote::quote!(#name))
+    }
 }
 
 impl From<&str> for Symbol {
@@ -249,6 +259,22 @@ fn normalize_and(l: &Rc<Regex>, r: &Rc<Regex>, ab: &AlphabetOrder) -> Rc<Regex> 
         // ?
         _ if l.compare(&r, ab) > 0 => normalize_and(&r, &l, ab),
         _ => Regex::And(l, r).into(),
+    }
+}
+
+#[cfg(feature = "pretty-print")]
+impl Display for Regex {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Regex::EmptyString => write!(f, "e"),
+            Regex::EmptySet => write!(f, "0"),
+            Regex::Symbol(s) => write!(f, "{s}"),
+            Regex::Repeat(r) => write!(f, "({r})*"),
+            Regex::Complement(c) => write!(f, "~({c})"),
+            Regex::Or(a, b) => write!(f, "{a} | {b}"),
+            Regex::And(a, b) => write!(f, "{a} | {b}"),
+            Regex::Concat(a, b) => write!(f, "{a} {b}"),
+        }
     }
 }
 
