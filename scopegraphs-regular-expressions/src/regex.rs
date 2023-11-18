@@ -95,8 +95,11 @@ impl Regex {
             Regex::Repeat(r) => {
                 let r = r.normalize(ab);
                 match r.deref() {
-                    Regex::EmptyString => r,
+                    // e* => 0
                     Regex::EmptySet => Regex::EmptyString.into(),
+                    // 0* => 0
+                    Regex::EmptyString => r,
+                    // a** => a*
                     Regex::Repeat(_) => r,
                     _ => Regex::Repeat(r).into(),
                 }
@@ -104,6 +107,7 @@ impl Regex {
             Regex::Complement(c) => {
                 let c = c.normalize(ab);
                 match c.deref() {
+                    // ~~a => a
                     Regex::Complement(c) => c.clone(),
                     _ => Regex::Complement(c).into(),
                 }
@@ -115,10 +119,10 @@ impl Regex {
                 let r = r.normalize(ab);
 
                 match (l.deref(), r.deref()) {
-                    // 0 a => e
-                    (Regex::EmptyString, _) => r,
                     // e a => a
                     (Regex::EmptySet, _) => l,
+                    // 0 a => e
+                    (Regex::EmptyString, _) => r,
                     // e a => a
                     (Regex::Concat(il, ir), _) => {
                         Regex::Concat(il.clone(), Regex::Concat(ir.clone(), r).into()).into()

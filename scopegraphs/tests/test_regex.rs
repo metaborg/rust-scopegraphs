@@ -8,9 +8,25 @@ pub enum Alphabet {
 
 #[test]
 fn test_regex() {
+    // use Alphabet::*;
+    //
+    // let mut res = regex!(Alphabet; A * B);
+    //
+    // assert!(!res.is_empty());
+    // assert!(!res.is_accepting());
+    // res.accept(A);
+    // assert!(!res.is_empty());
+    // assert!(!res.is_accepting());
+    // res.accept(B);
+    // assert!(!res.is_empty());
+    // assert!(res.is_accepting());
+}
+
+#[test]
+fn test_concat() {
     use Alphabet::*;
 
-    let mut res = regex!(Alphabet; A * B);
+    let mut res = regex!(Alphabet; A B);
 
     assert!(!res.is_empty());
     assert!(!res.is_accepting());

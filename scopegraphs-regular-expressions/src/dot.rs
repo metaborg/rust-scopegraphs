@@ -10,12 +10,14 @@ impl CompiledRegex {
             let attrs = if state.is_accepting() {
                 ", shape=doublecircle"
             } else {
-                ""
+                ", shape=circle"
             };
-            writeln!(w, "node[label=\"{}\"{attrs}] id{src}", state.regex)?;
+            writeln!(w, "node[label=\"{}\"{attrs}]; {src};", state.regex)?;
+        }
 
+        for (src, state) in &self.states {
             for (sym, tgt) in &state.transition_table {
-                writeln!(w, "id{src} -> id{tgt} [label=\"{sym}\"]")?;
+                writeln!(w, "{src} -> {tgt} [label=\"{sym}\"];")?;
             }
         }
 

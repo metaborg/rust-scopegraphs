@@ -127,11 +127,10 @@ impl RegexCompiler {
     fn create_transitions(&mut self) {
         let mut work_list = VecDeque::new();
 
-        work_list.push_back(Rc::new(Regex::EmptySet));
         work_list.push_back(self.regex.clone());
+        work_list.push_back(Rc::new(Regex::EmptySet));
 
         while let Some(state) = work_list.pop_front() {
-            println!("{:?}", state);
             self.create_transitions_step(state, &mut work_list);
         }
     }
@@ -167,18 +166,10 @@ impl RegexCompiler {
         state_ids
     }
 
-    fn find_nullable(&self) -> HashSet<&State> {
-        self.state_transitions
-            .keys()
-            .filter(|x| x.is_nullable())
-            .collect::<HashSet<_>>()
-    }
-
     fn compile(mut self) -> CompiledRegex {
         self.create_transitions();
 
         let non_final = self.find_non_final();
-        let nullable = self.find_nullable();
         let state_ids = self.find_state_ids();
 
         let mut match_states = HashMap::new();
@@ -188,12 +179,16 @@ impl RegexCompiler {
                 .map(|(k, v)| (k.clone(), *state_ids.get(v).unwrap()))
                 .collect();
 
+            let non_final = non_final.contains(state);
+            let nullable = state.is_nullable();
+            let empty = state.is_empty();
+
             match_states.insert(
                 *state_ids.get(state).unwrap(),
                 MatchState {
-                    non_final: non_final.contains(state),
-                    nullable: nullable.contains(state),
-                    empty: state.is_empty(),
+                    non_final,
+                    nullable,
+                    empty,
                     transition_table,
                     default_transition: *state_ids
                         .get(self.default_transitions.get(state).unwrap())
