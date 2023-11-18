@@ -17,14 +17,30 @@ pub use regex::Regex;
 pub trait RegexMatcher {
     type Alphabet;
 
+    fn new() -> Self
+    where
+        Self: Sized;
+
     /// accepts the specified symbol.
     ///
     /// If accepting failed, the new state is empty.
     fn accept(&mut self, inp: Self::Alphabet);
-    fn accept_many(&mut self, inp: impl Iterator<Item = Self::Alphabet>) {
+    fn accept_many(&mut self, inp: impl IntoIterator<Item = Self::Alphabet>) {
         for i in inp {
             self.accept(i);
         }
+    }
+
+    /// Returns true if the regular expression accepts the input iterator
+    fn accepts(&mut self, iter: impl IntoIterator<Item = Self::Alphabet>) -> bool {
+        for i in iter {
+            self.accept(i);
+            if self.is_empty() {
+                return false;
+            }
+        }
+
+        self.is_accepting()
     }
 
     fn is_final(&self) -> bool;

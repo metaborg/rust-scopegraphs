@@ -1,9 +1,13 @@
 use crate::CompiledRegex;
-use proc_macro2::TokenStream;
-use quote::{quote, ToTokens};
+use proc_macro2::{Ident, TokenStream};
+use quote::quote;
+use syn::Type;
 
-impl ToTokens for CompiledRegex {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
+impl CompiledRegex {
+    /// Convert this compiled regex into rust code that accepts this regular expression.
+    /// `name` is the name of the type that is emitted, and `alphabet` is the type of symbols
+    /// that the machine should accept.
+    pub fn emit(&self, name: &Ident, alphabet: &Type) -> TokenStream {
         let Self {
             states, initial, ..
         } = self;
@@ -52,19 +56,17 @@ impl ToTokens for CompiledRegex {
             .map(|i| i.is_oblivion())
             .collect();
 
-        tokens.extend(quote!(
-            struct Machine {
+        quote!(
+            struct #name {
                 state: usize,
             }
 
-            impl Machine {
-                pub fn new() -> Self { Self {state: #initial} }
-            }
+            impl scopegraphs::RegexMatcher for #name {
+                type Alphabet = #alphabet;
 
-            impl scopegraphs::RegexMatcher for Machine {
-                type Alphabet = A;
+                fn new() -> Self { Self {state: #initial} }
 
-                fn accept(&mut self, token: Self::Alphabet) {
+                fn accept(&mut self, token: #alphabet) {
                     match self.state {
                         #(
                             #ids => #arms
@@ -100,6 +102,6 @@ impl ToTokens for CompiledRegex {
                     }
                 }
             }
-        ))
+        )
     }
 }

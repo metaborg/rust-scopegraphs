@@ -61,7 +61,10 @@ impl Regex {
             Ok(Self::Repeat(Rc::new(inner)))
         } else if lookahead.peek(Token![+]) {
             let _ = input.parse::<Token![+]>();
-            Ok(Self::Concat(Rc::new(inner.clone()), Rc::new(inner)))
+            Ok(Self::Concat(
+                Rc::new(inner.clone()),
+                Rc::new(Self::Repeat(Rc::new(inner))),
+            ))
         } else {
             Ok(inner)
         }
