@@ -181,7 +181,7 @@ impl RegexCompiler {
 
             let non_final = non_final.contains(state);
             let nullable = state.is_nullable();
-            let empty = state.is_empty();
+            let empty = state.is_oblivion();
 
             match_states.insert(
                 *state_ids.get(state).unwrap(),

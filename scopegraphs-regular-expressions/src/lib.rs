@@ -59,11 +59,13 @@ pub enum ParseError {
     Parse(#[from] syn::Error),
 }
 
+/// parse a string to a regular expression
 pub fn parse_regex(input: impl AsRef<str>) -> Result<Regex, ParseError> {
     let stream: TokenStream = input.as_ref().parse()?;
     Ok(parse_regex_token_stream(stream)?)
 }
 
+/// parse a rust [`TokenStream`](TokenStream) to a regular expression
 pub fn parse_regex_token_stream(input: TokenStream) -> syn::Result<Regex> {
     syn::parse2(input)
 }

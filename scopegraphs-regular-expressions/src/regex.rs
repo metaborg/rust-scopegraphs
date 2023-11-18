@@ -29,15 +29,24 @@ impl From<&str> for Symbol {
     }
 }
 
+/// A regular expression over a scope graph
 #[derive(Hash, Debug, Clone, PartialEq, Eq)]
 pub enum Regex {
+    /// `e`
     EmptyString,
+    /// `0`
     EmptySet,
+    /// A symbol like `a`
     Symbol(Rc<Symbol>),
+    /// x*
     Repeat(Rc<Regex>),
+    /// ~x
     Complement(Rc<Regex>),
+    /// x | y
     Or(Rc<Regex>, Rc<Regex>),
+    /// x & y
     And(Rc<Regex>, Rc<Regex>),
+    /// x y
     Concat(Rc<Regex>, Rc<Regex>),
 }
 
@@ -87,6 +96,9 @@ impl Regex {
         }
     }
 
+    /// Normalizes a regex to a standard form.
+    ///
+    /// For example, `a e` is equivalent to `a`, and this transformation is made here.
     pub fn normalize(self: &Rc<Self>, ab: &AlphabetOrder) -> Rc<Regex> {
         match self.deref() {
             Regex::EmptyString => self.clone(),
@@ -119,27 +131,32 @@ impl Regex {
                 let r = r.normalize(ab);
 
                 match (l.deref(), r.deref()) {
-                    // e a => a
+                    // 0 a => 0
                     (Regex::EmptySet, _) => l,
-                    // 0 a => e
+                    // e a => e
                     (Regex::EmptyString, _) => r,
-                    // e a => a
+                    // (a b) c => a (b c)
                     (Regex::Concat(il, ir), _) => {
                         Regex::Concat(il.clone(), Regex::Concat(ir.clone(), r).into()).into()
                     }
-                    // a e =>
-                    (_, Regex::EmptyString) => r,
-                    (_, Regex::EmptySet) => l,
+                    // a 0 => 0
+                    (_, Regex::EmptySet) => r,
+                    // a e => a
+                    (_, Regex::EmptyString) => l,
                     _ => Regex::Concat(l, r).into(),
                 }
             }
         }
     }
 
-    pub fn is_empty(&self) -> bool {
-        matches!(self, Regex::EmptyString)
+    /// Returns whether this regex accepts the empty set or oblivion
+    pub fn is_oblivion(&self) -> bool {
+        matches!(self, Regex::EmptySet)
     }
 
+    /// Returns whether this regex is nullable.
+    ///
+    /// That's either the empty string `e`, or some regex which has the empty string in the right place, like `e | a` is nullable because `e` is nullable.
     pub fn is_nullable(&self) -> bool {
         match self {
             Regex::EmptySet => false,
@@ -153,6 +170,9 @@ impl Regex {
         }
     }
 
+    /// Searches for the alphabet used in this regular expression.
+    ///
+    /// Uses depth-first search to traverse the regex to get the alphabet in use.
     pub fn alphabet(&self) -> HashSet<Rc<Symbol>> {
         let mut alphabet = HashSet::new();
         self.search_alphabet(&mut alphabet);
