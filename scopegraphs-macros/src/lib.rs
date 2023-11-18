@@ -96,11 +96,11 @@ pub fn compile_regex(input: TokenStream) -> TokenStream {
     #[cfg(feature = "dot")]
     if let Some(path) = graph {
         let path = path.value();
-        let mut f =
-            File::create(&path).expect(&format!("can't open dot file for graphing at {}", path));
+        let mut f = File::create(&path)
+            .unwrap_or_else(|e| panic!("can't open dot file for graphing at {path}: {e}"));
         compiled
             .output_dot(&mut f)
-            .expect(&format!("failed while graphing at {}", path))
+            .unwrap_or_else(|e| panic!("failed while graphing at {path}: {e}"));
     }
 
     compiled.emit(&input.name, &input.alphabet_type).into()

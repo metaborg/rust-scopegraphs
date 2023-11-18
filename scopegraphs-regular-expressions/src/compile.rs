@@ -92,7 +92,7 @@ impl RegexCompiler {
             // put it in reverse states
             self.reverse_transitions
                 .entry(next_state.clone())
-                .or_insert_with(HashSet::new)
+                .or_default()
                 .insert(state.clone());
             // add the transition
             transitions.insert(symbol.clone(), next_state.clone());
@@ -113,7 +113,7 @@ impl RegexCompiler {
         // put it in reverse states
         self.reverse_transitions
             .entry(default_state.clone())
-            .or_insert_with(HashSet::new)
+            .or_default()
             .insert(state.clone());
 
         // add the transition (default)
@@ -158,10 +158,8 @@ impl RegexCompiler {
 
     fn find_state_ids(&self) -> HashMap<&State, StateID> {
         let mut state_ids = HashMap::new();
-        let mut state_id_counter = 0;
-        for state in self.state_transitions.keys() {
+        for (state_id_counter, state) in self.state_transitions.keys().enumerate() {
             state_ids.insert(state, state_id_counter);
-            state_id_counter += 1;
         }
         state_ids
     }

@@ -22,7 +22,7 @@ impl CompiledRegex {
                 let new_states: Vec<_> = options
                     .iter()
                     .flat_map(|x| i.transition_table.get(*x))
-                    .map(|i| *i)
+                    .copied()
                     .collect();
                 let matchers: Vec<_> = options.into_iter().map(|i| i.name.clone()).collect();
 
