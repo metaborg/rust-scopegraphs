@@ -100,7 +100,7 @@ fn test_negate() {
 fn test_negate_or() {
     use Alphabet::*;
 
-    compile_regex!(type Machine<Alphabet> = ~(A | B));
+    compile_regex!(#[graph="negate_or.dot"] type Machine<Alphabet> = ~(A | B));
 
     assert!(Machine::new().accepts([]));
     assert!(!Machine::new().accepts([A]));

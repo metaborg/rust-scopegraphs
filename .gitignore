@@ -16,4 +16,4 @@ Cargo.lock
 
 .vscode/
 
-output.dot
+*.dot

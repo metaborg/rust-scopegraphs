@@ -9,3 +9,7 @@ edition = "2021"
 scopegraphs-lib = {path="../scopegraphs-lib"}
 scopegraphs-macros = {path="../scopegraphs-macros"}
 scopegraphs-regular-expressions = {path="../scopegraphs-regular-expressions"}
+
+[features]
+default = ["dot"]
+dot = ["scopegraphs-regular-expressions/dot", "scopegraphs-macros/dot"]

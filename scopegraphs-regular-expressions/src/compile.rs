@@ -204,12 +204,6 @@ impl RegexCompiler {
             states: match_states,
         };
 
-        #[cfg(feature = "dot")]
-        {
-            let mut f = std::fs::File::create("output.dot").unwrap();
-            compiled.output_dot(&mut f).unwrap();
-        }
-
         compiled
     }
 }
