@@ -16,8 +16,16 @@ impl CompiledRegex {
         }
 
         for (src, state) in &self.states {
-            for (sym, tgt) in &state.transition_table {
-                writeln!(w, "{src} -> {tgt} [label=\"{sym}\"];")?;
+            let all_default = state
+                .transition_table
+                .iter()
+                .all(|(_, x)| x == &state.default_transition);
+            if all_default {
+                writeln!(w, "{src} -> {} [label=\"_\"];", state.default_transition)?;
+            } else {
+                for (sym, tgt) in &state.transition_table {
+                    writeln!(w, "{src} -> {tgt} [label=\"{sym}\"];")?;
+                }
             }
         }
 

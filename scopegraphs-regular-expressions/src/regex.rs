@@ -52,11 +52,11 @@ impl Regex {
     pub fn apply_symbol(&self, symbol: Option<&Rc<Symbol>>) -> Rc<Regex> {
         match self {
             // a: 0 => 0
-            Regex::EmptyString => Regex::EmptySet.into(),
-            // a: e => e
             Regex::EmptySet => Regex::EmptySet.into(),
-            // a: a => 0
-            // a: b => e
+            // a: e => e
+            Regex::EmptyString => Regex::EmptySet.into(),
+            // a: a => e
+            // a: b => 0
             Regex::Symbol(s) => {
                 if Some(s) == symbol {
                     Regex::EmptyString.into()
@@ -142,8 +142,8 @@ impl Regex {
 
     pub fn is_nullable(&self) -> bool {
         match self {
-            Regex::EmptyString => false,
-            Regex::EmptySet => true,
+            Regex::EmptySet => false,
+            Regex::EmptyString => true,
             Regex::Symbol(_) => false,
             Regex::Concat(l, r) => l.is_nullable() && r.is_nullable(),
             Regex::Repeat(_) => true,
@@ -159,7 +159,7 @@ impl Regex {
         alphabet
     }
 
-    fn search_alphabet<'a>(&'a self, alphabet: &mut HashSet<Rc<Symbol>>) {
+    fn search_alphabet(&self, alphabet: &mut HashSet<Rc<Symbol>>) {
         match self {
             Regex::EmptyString => {}
             Regex::EmptySet => {}
@@ -284,7 +284,10 @@ impl Display for Regex {
 
 #[cfg(test)]
 mod tests {
+    use crate::compile::AlphabetOrder;
     use crate::parse_regex;
+    use crate::regex::Symbol;
+    use std::rc::Rc;
 
     #[test]
     fn nullable() {
@@ -309,5 +312,28 @@ mod tests {
         assert!(parse_regex("A*").unwrap().is_nullable());
         assert!(!parse_regex("A+").unwrap().is_nullable());
         assert!(parse_regex("A?").unwrap().is_nullable());
+    }
+
+    #[test]
+    fn apply_symbol() {
+        let a = Rc::new(Symbol::from("a"));
+        let b = Rc::new(Symbol::from("b"));
+        let c = Rc::new(Symbol::from("c"));
+        let ab = AlphabetOrder::new(&[a.clone(), b.clone(), c.clone()].into_iter().collect());
+
+        assert_eq!(
+            parse_regex("a b")
+                .unwrap()
+                .apply_symbol(Some(&a))
+                .normalize(&ab),
+            parse_regex("b").unwrap().into()
+        );
+        assert_eq!(
+            parse_regex("a b")
+                .unwrap()
+                .apply_symbol(Some(&b))
+                .normalize(&ab),
+            parse_regex("0").unwrap().into()
+        );
     }
 }

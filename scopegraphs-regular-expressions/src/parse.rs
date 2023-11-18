@@ -55,7 +55,7 @@ impl Regex {
         let lookahead = input.lookahead1();
         if lookahead.peek(Token![?]) {
             let _ = input.parse::<Token![?]>();
-            Ok(Self::Or(Rc::new(inner), Rc::new(Self::EmptySet)))
+            Ok(Self::Or(Rc::new(inner), Rc::new(Self::EmptyString)))
         } else if lookahead.peek(Token![*]) {
             let _ = input.parse::<Token![*]>();
             Ok(Self::Repeat(Rc::new(inner)))
