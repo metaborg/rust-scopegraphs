@@ -1,5 +1,6 @@
 use crate::regex::Symbol;
 use crate::Regex;
+use std::rc::Rc;
 use syn::parse::{Parse, ParseStream};
 use syn::{parenthesized, Path, Token};
 
@@ -13,7 +14,7 @@ impl Regex {
         if input.peek(syn::LitInt) {
             let val = input.parse::<syn::LitInt>()?;
             return if let Ok(0) = val.base10_parse() {
-                Ok(Self::Empty)
+                Ok(Self::EmptyString)
             } else {
                 Err(syn::Error::new(
                     val.span(),
@@ -24,9 +25,9 @@ impl Regex {
 
         let name: Path = input.parse()?;
         if name.is_ident("e") {
-            Ok(Self::Epsilon)
+            Ok(Self::EmptySet)
         } else {
-            Ok(Self::Symbol(Symbol { name }))
+            Ok(Self::Symbol(Symbol { name }.into()))
         }
     }
 
@@ -47,20 +48,20 @@ impl Regex {
     fn parse_closure(input: ParseStream) -> syn::Result<Self> {
         if input.peek(Token![~]) {
             let _ = input.parse::<Token![~]>()?;
-            return Ok(Self::Complement(Box::new(Self::parse_closure(input)?)));
+            return Ok(Self::Complement(Rc::new(Self::parse_closure(input)?)));
         }
 
         let inner = Self::parse_atom(input)?;
         let lookahead = input.lookahead1();
         if lookahead.peek(Token![?]) {
             let _ = input.parse::<Token![?]>();
-            Ok(Self::Or(Box::new(inner), Box::new(Self::Epsilon)))
+            Ok(Self::Or(Rc::new(inner), Rc::new(Self::EmptySet)))
         } else if lookahead.peek(Token![*]) {
             let _ = input.parse::<Token![*]>();
-            Ok(Self::Repeat(Box::new(inner)))
+            Ok(Self::Repeat(Rc::new(inner)))
         } else if lookahead.peek(Token![+]) {
             let _ = input.parse::<Token![+]>();
-            Ok(Self::Concat(Box::new(inner.clone()), Box::new(inner)))
+            Ok(Self::Concat(Rc::new(inner.clone()), Rc::new(inner)))
         } else {
             Ok(inner)
         }
@@ -74,8 +75,8 @@ impl Regex {
             | input.peek(Token![~])
         {
             Ok(Self::Concat(
-                Box::new(lhs),
-                Box::new(Self::parse_concatenation(input)?),
+                Rc::new(lhs),
+                Rc::new(Self::parse_concatenation(input)?),
             ))
         } else {
             Ok(lhs)
@@ -90,10 +91,10 @@ impl Regex {
                 return Ok(lhs);
             } else if input.peek(Token![|]) {
                 let _ = input.parse::<Token![|]>();
-                lhs = Self::Or(Box::new(lhs), Box::new(Self::parse_concatenation(input)?))
+                lhs = Self::Or(Rc::new(lhs), Rc::new(Self::parse_concatenation(input)?))
             } else if input.peek(Token![&]) {
                 let _ = input.parse::<Token![&]>();
-                lhs = Self::And(Box::new(lhs), Box::new(Self::parse_concatenation(input)?))
+                lhs = Self::And(Rc::new(lhs), Rc::new(Self::parse_concatenation(input)?))
             } else {
                 return Err(syn::Error::new(
                     input.span(),
@@ -113,42 +114,50 @@ impl Parse for Regex {
 #[cfg(test)]
 mod tests {
     use crate::{parse_regex, Regex::*};
+    use std::rc::Rc;
+
     #[test]
     fn test_regex() {
-        assert_eq!(parse_regex("A").unwrap(), Symbol("A".into()));
+        assert_eq!(parse_regex("A").unwrap(), Symbol(Rc::new("A".into())));
         assert_eq!(
             parse_regex("A | B").unwrap(),
-            Or(Box::new(Symbol("A".into())), Box::new(Symbol("B".into())))
+            Or(
+                Rc::new(Symbol(Rc::new("A".into()))),
+                Rc::new(Symbol(Rc::new("B".into())))
+            )
         );
         assert_eq!(
             parse_regex("A | B | C").unwrap(),
             Or(
-                Box::new(Or(
-                    Box::new(Symbol("A".into())),
-                    Box::new(Symbol("B".into()))
+                Rc::new(Or(
+                    Rc::new(Symbol(Rc::new("A".into()))),
+                    Rc::new(Symbol(Rc::new("B".into())))
                 )),
-                Box::new(Symbol("C".into()))
+                Rc::new(Symbol(Rc::new("C".into())))
             )
         );
         assert_eq!(
             parse_regex("A & B").unwrap(),
-            And(Box::new(Symbol("A".into())), Box::new(Symbol("B".into())))
+            And(
+                Rc::new(Symbol(Rc::new("A".into()))),
+                Rc::new(Symbol(Rc::new("B".into())))
+            )
         );
         assert_eq!(
             parse_regex("A* B*").unwrap(),
             Concat(
-                Box::new(Repeat(Box::new(Symbol("A".into())))),
-                Box::new(Repeat(Box::new(Symbol("B".into()))))
+                Rc::new(Repeat(Rc::new(Symbol(Rc::new("A".into()))))),
+                Rc::new(Repeat(Rc::new(Symbol(Rc::new("B".into())))))
             )
         );
         assert_eq!(
             parse_regex("~A ~B").unwrap(),
             Concat(
-                Box::new(Complement(Box::new(Symbol("A".into())))),
-                Box::new(Complement(Box::new(Symbol("B".into()))))
+                Rc::new(Complement(Rc::new(Symbol(Rc::new("A".into()))))),
+                Rc::new(Complement(Rc::new(Symbol(Rc::new("B".into())))))
             )
         );
-        assert_eq!(parse_regex("e").unwrap(), Epsilon);
-        assert_eq!(parse_regex("0").unwrap(), Empty);
+        assert_eq!(parse_regex("e").unwrap(), EmptySet);
+        assert_eq!(parse_regex("0").unwrap(), EmptyString);
     }
 }

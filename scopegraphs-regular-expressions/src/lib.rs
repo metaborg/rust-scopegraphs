@@ -2,10 +2,33 @@ use proc_macro2::{LexError, TokenStream};
 use thiserror::Error;
 
 mod compile;
+mod emit;
 mod parse;
 mod regex;
 
+pub use compile::{CompiledRegex, MatchState};
 pub use regex::Regex;
+
+pub trait RegexMatcher {
+    type Alphabet;
+
+    /// accepts the specified symbol.
+    ///
+    /// If accepting failed, the new state is empty.
+    fn accept(&mut self, inp: Self::Alphabet);
+    fn accept_many(&mut self, inp: impl Iterator<Item = Self::Alphabet>) {
+        for i in inp {
+            self.accept(i);
+        }
+    }
+
+    fn is_final(&self) -> bool;
+    fn is_accepting(&self) -> bool;
+    fn is_oblivion(&self) -> bool;
+    fn is_empty(&self) -> bool {
+        self.is_final() && !self.is_accepting()
+    }
+}
 
 #[derive(Error, Debug)]
 pub enum ParseError {
@@ -17,30 +40,9 @@ pub enum ParseError {
 
 pub fn parse_regex(input: impl AsRef<str>) -> Result<Regex, ParseError> {
     let stream: TokenStream = input.as_ref().parse()?;
-    Ok(parse_token_stream(stream)?)
+    Ok(parse_regex_token_stream(stream)?)
 }
 
-pub fn parse_token_stream(input: TokenStream) -> syn::Result<Regex> {
+pub fn parse_regex_token_stream(input: TokenStream) -> syn::Result<Regex> {
     syn::parse2(input)
 }
-
-// impl ToTokens for Regex {
-//     fn to_tokens(&self, tokens: &mut TokenStream2) {
-//         tokens.extend(match self {
-//             Regex::Empty => quote! {scopegraphs::regex::Regex::Empty},
-//             Regex::Epsilon => quote! {scopegraphs::regex::Regex::Epsilon},
-//             Regex::Symbol(s) => quote! {scopegraphs::regex::Regex::Symbol(#s)},
-//             Regex::Repeat(r) => quote! {scopegraphs::regex::Regex::Repeat(&#r)},
-//             Regex::Complement(c) => quote! {scopegraphs::regex::Regex::Complement(&#c)},
-//             Regex::Or(l, r) => {
-//                 quote! {scopegraphs::regex::Regex::Or(&#l, &#r)}
-//             }
-//             Regex::And(l, r) => {
-//                 quote! {scopegraphs::regex::Regex::And(&#l, &#r)}
-//             }
-//             Regex::Concat(l, r) => {
-//                 quote! {scopegraphs::regex::Regex::Concat(&#l, &#r)}
-//             }
-//         })
-//     }
-// }
