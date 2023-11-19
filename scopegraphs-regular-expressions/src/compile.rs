@@ -34,7 +34,7 @@ impl MatchState {
 
 pub struct CompiledRegex {
     pub regex: Rc<Regex>,
-    pub states: HashMap<StateID, MatchState>,
+    pub states: Vec<MatchState>,
     pub initial: StateID,
 }
 
@@ -208,10 +208,23 @@ impl RegexCompiler {
             );
         }
 
+        let mut match_states = match_states.into_iter().collect::<Vec<_>>();
+        match_states.sort_unstable_by_key(|x| x.0);
+
+        #[cfg(debug_assertions)]
+        if match_states.len() > 0 {
+            let mut curr = match_states[0].0;
+            assert_eq!(curr, 0);
+            for &(i, _) in match_states.iter().skip(1) {
+                assert_eq!(i, curr + 1);
+                curr = i;
+            }
+        }
+
         let compiled = CompiledRegex {
             initial: *state_ids.get(&self.regex).unwrap(),
             regex: self.regex,
-            states: match_states,
+            states: match_states.into_iter().map(|i| i.1).collect(),
         };
 
         compiled

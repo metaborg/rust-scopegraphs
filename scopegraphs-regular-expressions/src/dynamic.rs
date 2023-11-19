@@ -22,19 +22,18 @@ impl CompiledRegex {
 
 impl<'a> RegexMatcher<&'a str> for DynamicMatcher<'_> {
     fn accept(&mut self, inp: &'a str) {
-        if let Some(current_state) = self.compiled_regex.states.get(&self.current_state) {
-            self.current_state = current_state
-                .string_transition_table
-                .get(inp)
-                .copied()
-                .unwrap_or(current_state.default_transition);
-        }
+        let current_state = &self.compiled_regex.states[self.current_state];
+        self.current_state = current_state
+            .string_transition_table
+            .get(inp)
+            .copied()
+            .unwrap_or(current_state.default_transition);
     }
 
     fn is_final(&self) -> bool {
         self.compiled_regex
             .states
-            .get(&self.current_state)
+            .get(self.current_state)
             .map(MatchState::is_final)
             .unwrap_or_default()
     }
@@ -42,7 +41,7 @@ impl<'a> RegexMatcher<&'a str> for DynamicMatcher<'_> {
     fn is_accepting(&self) -> bool {
         self.compiled_regex
             .states
-            .get(&self.current_state)
+            .get(self.current_state)
             .map(MatchState::is_accepting)
             .unwrap_or_default()
     }
@@ -50,7 +49,7 @@ impl<'a> RegexMatcher<&'a str> for DynamicMatcher<'_> {
     fn is_oblivion(&self) -> bool {
         self.compiled_regex
             .states
-            .get(&self.current_state)
+            .get(self.current_state)
             .map(MatchState::is_oblivion)
             .unwrap_or_default()
     }

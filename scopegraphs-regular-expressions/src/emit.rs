@@ -1,4 +1,4 @@
-use crate::CompiledRegex;
+use crate::{CompiledRegex, MatchState};
 use proc_macro2::{Ident, TokenStream};
 use quote::quote;
 use syn::Type;
@@ -12,16 +12,15 @@ impl CompiledRegex {
             states, initial, ..
         } = self;
 
-        let ids: Vec<_> = states.keys().collect();
-        let arms: Vec<_> = ids
+        let ids: Vec<_> = (0..states.len()).collect();
+        let arms: Vec<_> = states
             .iter()
-            .flat_map(|i| states.get(i))
-            .map(|i| {
-                let options: Vec<_> = i.transition_table.keys().collect();
-                let default_transition = i.default_transition;
+            .map(|s| {
+                let options: Vec<_> = s.transition_table.keys().collect();
+                let default_transition = s.default_transition;
                 let new_states: Vec<_> = options
                     .iter()
-                    .flat_map(|x| i.transition_table.get(*x))
+                    .flat_map(|x| s.transition_table.get(*x))
                     .copied()
                     .collect();
                 let matchers: Vec<_> = options.into_iter().map(|i| i.name.clone()).collect();
@@ -38,23 +37,9 @@ impl CompiledRegex {
             })
             .collect();
 
-        let finals: Vec<_> = ids
-            .iter()
-            .flat_map(|i| states.get(i))
-            .map(|i| i.is_final())
-            .collect();
-
-        let accepting: Vec<_> = ids
-            .iter()
-            .flat_map(|i| states.get(i))
-            .map(|i| i.is_accepting())
-            .collect();
-
-        let oblivions: Vec<_> = ids
-            .iter()
-            .flat_map(|i| states.get(i))
-            .map(|i| i.is_oblivion())
-            .collect();
+        let finals: Vec<_> = states.iter().map(MatchState::is_final).collect();
+        let accepting: Vec<_> = states.iter().map(MatchState::is_accepting).collect();
+        let oblivions: Vec<_> = states.iter().map(MatchState::is_oblivion).collect();
 
         quote!(
             struct #name {

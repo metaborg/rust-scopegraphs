@@ -7,7 +7,7 @@ impl CompiledRegex {
     pub fn output_dot(&self, w: &mut impl Write) -> io::Result<()> {
         writeln!(w, "digraph {{")?;
 
-        for (src, state) in &self.states {
+        for (src, state) in self.states.iter().enumerate() {
             let attrs = if state.is_accepting() {
                 ", shape=doublecircle"
             } else {
@@ -16,7 +16,7 @@ impl CompiledRegex {
             writeln!(w, "node[label=\"{}\"{attrs}]; {src};", state.regex)?;
         }
 
-        for (src, state) in &self.states {
+        for (src, state) in self.states.iter().enumerate() {
             let all_default = state
                 .transition_table
                 .iter()
