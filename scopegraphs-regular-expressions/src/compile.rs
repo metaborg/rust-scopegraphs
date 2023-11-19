@@ -1,5 +1,7 @@
 use crate::regex::Symbol;
 use crate::Regex;
+#[cfg(feature = "dynamic")]
+use quote::quote;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::rc::Rc;
 
@@ -10,6 +12,8 @@ pub struct MatchState {
     nullable: bool,
     empty: bool,
     pub transition_table: HashMap<Rc<Symbol>, StateID>,
+    #[cfg(feature = "dynamic")]
+    pub string_transition_table: HashMap<String, StateID>,
     pub default_transition: StateID,
     pub regex: Rc<Regex>,
 }
@@ -188,6 +192,11 @@ impl RegexCompiler {
                     nullable,
                     empty,
                     transition_table,
+                    #[cfg(feature = "dynamic")]
+                    string_transition_table: transition_table
+                        .iter()
+                        .map(|(label, dst)| (format!("{}", quote!(#label)), dst))
+                        .collect(),
                     default_transition: *state_ids
                         .get(self.default_transitions.get(state).unwrap())
                         .unwrap(),

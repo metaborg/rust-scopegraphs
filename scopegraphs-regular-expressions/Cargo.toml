@@ -14,3 +14,4 @@ thiserror = "1.0.50"
 rust-code-emitting = ["quote"]
 pretty-print = ["quote"]
 dot = ["pretty-print"]
+dynamic = ["quote"]

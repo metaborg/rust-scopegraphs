@@ -2,6 +2,7 @@ use proc_macro2::{LexError, TokenStream};
 use thiserror::Error;
 
 mod compile;
+#[cfg(feature = "dynamic")]
 mod dynamic;
 mod parse;
 mod regex;
@@ -15,6 +16,9 @@ mod dot;
 pub use compile::{CompiledRegex, MatchState};
 pub use regex::Regex;
 
+/// A type that can match a regex. Can be created at compile time
+/// through the [`compile_regex`](scopegraphs::compile_regex) macro,
+/// or at runtime with the [`dynamic`] feature through [`CompiledRegex::matcher`].
 pub trait RegexMatcher<A> {
     /// accepts the specified symbol.
     ///
