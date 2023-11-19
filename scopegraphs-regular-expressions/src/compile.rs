@@ -212,7 +212,7 @@ impl RegexCompiler {
         match_states.sort_unstable_by_key(|x| x.0);
 
         #[cfg(debug_assertions)]
-        if match_states.len() > 0 {
+        if !match_states.is_empty() {
             let mut curr = match_states[0].0;
             assert_eq!(curr, 0);
             for &(i, _) in match_states.iter().skip(1) {

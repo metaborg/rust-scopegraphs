@@ -55,7 +55,7 @@ jobs:
       - name: Run cargo test
         uses: actions-rs/cargo@v1
         with:
-          command: test --all-features
+          command: test
 
   test-miri:
     name: Test Miri
@@ -68,4 +68,4 @@ jobs:
           rustup override set nightly
           cargo miri setup
       - name: Test with Miri
-        run: cargo miri test --all-features
+        run: cargo miri test
