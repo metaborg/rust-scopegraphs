@@ -2,6 +2,7 @@ use proc_macro2::{LexError, TokenStream};
 use thiserror::Error;
 
 mod compile;
+mod dynamic;
 mod parse;
 mod regex;
 
@@ -14,25 +15,19 @@ mod dot;
 pub use compile::{CompiledRegex, MatchState};
 pub use regex::Regex;
 
-pub trait RegexMatcher {
-    type Alphabet;
-
-    fn new() -> Self
-    where
-        Self: Sized;
-
+pub trait RegexMatcher<A> {
     /// accepts the specified symbol.
     ///
     /// If accepting failed, the new state is empty.
-    fn accept(&mut self, inp: Self::Alphabet);
-    fn accept_many(&mut self, inp: impl IntoIterator<Item = Self::Alphabet>) {
+    fn accept(&mut self, inp: A);
+    fn accept_many(&mut self, inp: impl IntoIterator<Item = A>) {
         for i in inp {
             self.accept(i);
         }
     }
 
     /// Returns true if the regular expression accepts the input iterator
-    fn accepts(&mut self, iter: impl IntoIterator<Item = Self::Alphabet>) -> bool {
+    fn accepts(&mut self, iter: impl IntoIterator<Item = A>) -> bool {
         for i in iter {
             self.accept(i);
             if self.is_empty() {

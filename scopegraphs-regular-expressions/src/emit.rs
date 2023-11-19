@@ -61,11 +61,11 @@ impl CompiledRegex {
                 state: usize,
             }
 
-            impl scopegraphs::RegexMatcher for #name {
-                type Alphabet = #alphabet;
-
+            impl #name {
                 fn new() -> Self { Self {state: #initial} }
+            }
 
+            impl scopegraphs::RegexMatcher<#alphabet> for #name {
                 fn accept(&mut self, token: #alphabet) {
                     match self.state {
                         #(
