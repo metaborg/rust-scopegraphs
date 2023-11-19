@@ -176,7 +176,7 @@ impl RegexCompiler {
 
         let mut match_states = HashMap::new();
         for (state, edges) in &self.state_transitions {
-            let transition_table = edges
+            let transition_table: HashMap<_, _> = edges
                 .iter()
                 .map(|(k, v)| (k.clone(), *state_ids.get(v).unwrap()))
                 .collect();
@@ -191,12 +191,15 @@ impl RegexCompiler {
                     non_final,
                     nullable,
                     empty,
-                    transition_table,
                     #[cfg(feature = "dynamic")]
                     string_transition_table: transition_table
                         .iter()
-                        .map(|(label, dst)| (format!("{}", quote!(#label)), dst))
+                        .map(|(label, dst)| {
+                            let path = &label.name;
+                            (format!("{}", quote!(#path)), *dst)
+                        })
                         .collect(),
+                    transition_table,
                     default_transition: *state_ids
                         .get(self.default_transitions.get(state).unwrap())
                         .unwrap(),

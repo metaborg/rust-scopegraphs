@@ -11,5 +11,6 @@ scopegraphs-macros = {path="../scopegraphs-macros"}
 scopegraphs-regular-expressions = {path="../scopegraphs-regular-expressions"}
 
 [features]
-default = ["dot"]
+default = ["dot", "dynamic-regex"]
 dot = ["scopegraphs-regular-expressions/dot", "scopegraphs-macros/dot"]
+dynamic-regex = ["scopegraphs-regular-expressions/dynamic"]

@@ -23,13 +23,11 @@ impl CompiledRegex {
 impl<'a> RegexMatcher<&'a str> for DynamicMatcher<'_> {
     fn accept(&mut self, inp: &'a str) {
         if let Some(current_state) = self.compiled_regex.states.get(&self.current_state) {
-            for (symbol, state) in &current_state.transition_table {
-                if symbol.name.is_ident(inp) {
-                    self.current_state = *state;
-                    return;
-                }
-            }
-            self.current_state = current_state.default_transition;
+            self.current_state = current_state
+                .string_transition_table
+                .get(inp)
+                .copied()
+                .unwrap_or(current_state.default_transition);
         }
     }
 
