@@ -29,6 +29,7 @@ fn test_concat() {
     compile_regex!(type Machine<Alphabet> = A B);
 
     assert!(Machine::new().accepts([A, B]));
+    assert!(!Machine::new().accepts([B, A]));
     assert!(!Machine::new().accepts([]));
     assert!(!Machine::new().accepts([A]));
     assert!(!Machine::new().accepts([A, B, C]));
