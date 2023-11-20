@@ -514,10 +514,10 @@ mod tests {
     }
     #[test]
     fn test_operators() {
-        /*assert_eq!(
+        assert_eq!(
             parse_regex("A*").unwrap(),
             Repeat(Rc::new(Symbol(Rc::new("A".into()))))
-        );*/
+        );
         assert_eq!(
             parse_regex("A+").unwrap(),
             Concat(
