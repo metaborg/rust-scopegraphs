@@ -21,7 +21,7 @@ impl Automaton {
 }
 
 impl<'a> RegexMatcher<&'a str> for DynamicMatcher<'_> {
-    fn accept(&mut self, inp: &'a str) {
+    fn step(&mut self, inp: &'a str) {
         let current_state = &self.compiled_regex.states[self.current_state];
         self.current_state = current_state
             .string_transition_table
@@ -56,9 +56,9 @@ impl<'a> RegexMatcher<&'a str> for DynamicMatcher<'_> {
 }
 
 impl RegexMatcher<char> for DynamicMatcher<'_> {
-    fn accept(&mut self, inp: char) {
+    fn step(&mut self, inp: char) {
         let mut data = [0; 4];
-        self.accept(&*inp.encode_utf8(&mut data))
+        self.step(&*inp.encode_utf8(&mut data))
     }
 
     fn is_final(&self) -> bool {

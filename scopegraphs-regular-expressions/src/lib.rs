@@ -20,20 +20,23 @@ pub use regex::Regex;
 /// through the [`compile_regex`](scopegraphs::compile_regex) macro,
 /// or at runtime with the [`dynamic`] feature through [`Automaton::matcher`].
 pub trait RegexMatcher<A> {
-    /// accepts the specified symbol.
+    /// Takes a transition in the state machine, accepting a single symbol.
     ///
-    /// If accepting failed, the new state is empty.
-    fn accept(&mut self, inp: A);
-    fn accept_many(&mut self, inp: impl IntoIterator<Item = A>) {
+    /// If the symbol was not accepted, because the regex doesn't allow it, the new state is empty,
+    /// which can be checked using [`RegexMatcher::is_empty`].
+    fn step(&mut self, inp: A);
+
+    /// Steps once for each element in the iterator
+    fn step_many(&mut self, inp: impl IntoIterator<Item = A>) {
         for i in inp {
-            self.accept(i);
+            self.step(i);
         }
     }
 
     /// Returns true if the regular expression accepts the input iterator
     fn accepts(&mut self, iter: impl IntoIterator<Item = A>) -> bool {
         for i in iter {
-            self.accept(i);
+            self.step(i);
             if self.is_empty() {
                 return false;
             }

@@ -51,7 +51,7 @@ impl Automaton {
             }
 
             impl scopegraphs::RegexMatcher<#alphabet> for #name {
-                fn accept(&mut self, token: #alphabet) {
+                fn step(&mut self, token: #alphabet) {
                     match self.state {
                         #(
                             #ids => #arms
