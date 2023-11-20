@@ -168,11 +168,6 @@ impl Regex {
         }
     }
 
-    /// Returns whether this regex accepts the empty set or oblivion
-    pub fn is_oblivion(&self) -> bool {
-        matches!(self, Regex::EmptySet)
-    }
-
     /// Returns whether this regex is nullable.
     ///
     /// That's either the empty string `e`, or some regex which has the empty string in the right place, like `e | a` is nullable because `e` is nullable.

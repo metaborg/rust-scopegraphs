@@ -39,7 +39,6 @@ impl Automaton {
 
         let finals: Vec<_> = states.iter().map(MatchState::is_final).collect();
         let accepting: Vec<_> = states.iter().map(MatchState::is_accepting).collect();
-        let oblivions: Vec<_> = states.iter().map(MatchState::is_oblivion).collect();
 
         quote!(
             struct #name {
@@ -73,15 +72,6 @@ impl Automaton {
                     match self.state {
                         #(
                             #ids => {return #accepting;}
-                        ),*
-                        _ => unreachable!(),
-                    }
-                }
-
-                fn is_oblivion(&self) -> bool {
-                    match self.state {
-                        #(
-                            #ids => {return #oblivions;}
                         ),*
                         _ => unreachable!(),
                     }

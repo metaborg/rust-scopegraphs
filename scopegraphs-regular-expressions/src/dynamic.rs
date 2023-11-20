@@ -45,14 +45,6 @@ impl<'a> RegexMatcher<&'a str> for DynamicMatcher<'_> {
             .map(MatchState::is_accepting)
             .unwrap_or_default()
     }
-
-    fn is_oblivion(&self) -> bool {
-        self.compiled_regex
-            .states
-            .get(self.current_state)
-            .map(MatchState::is_oblivion)
-            .unwrap_or_default()
-    }
 }
 
 impl RegexMatcher<char> for DynamicMatcher<'_> {
@@ -67,10 +59,6 @@ impl RegexMatcher<char> for DynamicMatcher<'_> {
 
     fn is_accepting(&self) -> bool {
         RegexMatcher::<&str>::is_accepting(self)
-    }
-
-    fn is_oblivion(&self) -> bool {
-        RegexMatcher::<&str>::is_oblivion(self)
     }
 }
 

@@ -10,7 +10,6 @@ pub type StateID = usize;
 pub struct MatchState {
     non_final: bool,
     nullable: bool,
-    empty: bool,
     pub transition_table: HashMap<Rc<Symbol>, StateID>,
     #[cfg(feature = "dynamic")]
     pub string_transition_table: HashMap<String, StateID>,
@@ -25,10 +24,6 @@ impl MatchState {
 
     pub fn is_accepting(&self) -> bool {
         self.nullable
-    }
-
-    pub fn is_oblivion(&self) -> bool {
-        self.empty
     }
 }
 
@@ -181,14 +176,12 @@ impl RegexCompiler {
 
             let non_final = non_final.contains(state);
             let nullable = state.is_nullable();
-            let empty = state.is_oblivion();
 
             match_states.insert(
                 *state_ids.get(state).unwrap(),
                 MatchState {
                     non_final,
                     nullable,
-                    empty,
                     #[cfg(feature = "dynamic")]
                     string_transition_table: transition_table
                         .iter()

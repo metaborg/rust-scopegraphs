@@ -47,7 +47,6 @@ pub trait RegexMatcher<A> {
 
     fn is_final(&self) -> bool;
     fn is_accepting(&self) -> bool;
-    fn is_oblivion(&self) -> bool;
     fn is_empty(&self) -> bool {
         self.is_final() && !self.is_accepting()
     }
