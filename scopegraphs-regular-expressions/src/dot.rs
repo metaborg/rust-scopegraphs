@@ -1,8 +1,8 @@
-use crate::CompiledRegex;
+use crate::Automaton;
 use std::io;
 use std::io::Write;
 
-impl CompiledRegex {
+impl Automaton {
     /// Create a graphviz dot file from a compiled regex.
     pub fn output_dot(&self, w: &mut impl Write) -> io::Result<()> {
         writeln!(w, "digraph {{")?;

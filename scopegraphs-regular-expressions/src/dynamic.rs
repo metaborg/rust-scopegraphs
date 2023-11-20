@@ -4,14 +4,14 @@
 //! expression that is used does not need to be known at compile time.
 
 use crate::compile::StateID;
-use crate::{CompiledRegex, MatchState, RegexMatcher};
+use crate::{Automaton, MatchState, RegexMatcher};
 
 pub struct DynamicMatcher<'a> {
-    compiled_regex: &'a CompiledRegex,
+    compiled_regex: &'a Automaton,
     current_state: StateID,
 }
 
-impl CompiledRegex {
+impl Automaton {
     pub fn matcher(&self) -> DynamicMatcher {
         DynamicMatcher {
             compiled_regex: self,

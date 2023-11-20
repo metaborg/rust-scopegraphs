@@ -32,7 +32,7 @@ impl MatchState {
     }
 }
 
-pub struct CompiledRegex {
+pub struct Automaton {
     pub regex: Rc<Regex>,
     pub states: Vec<MatchState>,
     pub initial: StateID,
@@ -168,7 +168,7 @@ impl RegexCompiler {
         state_ids
     }
 
-    fn compile(mut self) -> CompiledRegex {
+    fn compile(mut self) -> Automaton {
         self.create_transitions();
 
         let non_final = self.find_non_final();
@@ -221,7 +221,7 @@ impl RegexCompiler {
             }
         }
 
-        let compiled = CompiledRegex {
+        let compiled = Automaton {
             initial: *state_ids.get(&self.regex).unwrap(),
             regex: self.regex,
             states: match_states.into_iter().map(|i| i.1).collect(),
@@ -232,7 +232,7 @@ impl RegexCompiler {
 }
 
 impl Regex {
-    pub fn compile(self) -> CompiledRegex {
+    pub fn compile(self) -> Automaton {
         let compiler = RegexCompiler::new(self);
         compiler.compile()
     }

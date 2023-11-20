@@ -1,9 +1,9 @@
-use crate::{CompiledRegex, MatchState};
+use crate::{Automaton, MatchState};
 use proc_macro2::{Ident, TokenStream};
 use quote::quote;
 use syn::Type;
 
-impl CompiledRegex {
+impl Automaton {
     /// Convert this compiled regex into rust code that accepts this regular expression.
     /// `name` is the name of the type that is emitted, and `alphabet` is the type of symbols
     /// that the machine should accept.
