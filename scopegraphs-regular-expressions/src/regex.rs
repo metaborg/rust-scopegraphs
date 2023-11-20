@@ -214,14 +214,18 @@ impl Regex {
     }
 
     fn order(&self, ab: &AlphabetOrder) -> i64 {
+        // ordering of these variants is the same as the one in the java implementation of spoofax
+        // at https://github.com/metaborg/nabl/blob/802559782da2216b66d290f90179c2ac8f21ba3f/scopegraph/src/main/java/mb/scopegraph/regexp/impl/RegExpNormalizingBuilder.java#L164.
+        // The exact order is likely not necessary for correctness, and it's unclear if it's a good
+        // order for speed, but we decided to use the same order regardless, just to be sure.
         match self {
-            Regex::EmptyString => 1,
-            Regex::EmptySet => 2,
-            Regex::Repeat(_) => 3,
-            Regex::Complement(_) => 4,
+            Regex::EmptySet => 1,
+            Regex::EmptyString => 2,
+            Regex::Concat(_, _) => 3,
+            Regex::Repeat(_) => 4,
             Regex::Or(_, _) => 5,
             Regex::And(_, _) => 6,
-            Regex::Concat(_, _) => 7,
+            Regex::Complement(_) => 7,
             Regex::Symbol(s) => ab.get(s) + 8,
         }
     }
