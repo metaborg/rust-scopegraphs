@@ -3,7 +3,8 @@ use proc_macro2::TokenStream;
 use std::collections::HashSet;
 use std::fmt::Debug;
 #[cfg(feature = "pretty-print")]
-use std::fmt::{Display, Formatter};
+use std::fmt::Display;
+use std::fmt::Formatter;
 use std::ops::Deref;
 use std::rc::Rc;
 use syn::Path;
@@ -30,7 +31,7 @@ impl From<&str> for Symbol {
 }
 
 /// A regular expression over a scope graph
-#[derive(Hash, Debug, Clone, PartialEq, Eq)]
+#[derive(Hash, Clone, PartialEq, Eq)]
 pub enum Regex {
     /// `e`
     EmptyString,
@@ -48,6 +49,21 @@ pub enum Regex {
     And(Rc<Regex>, Rc<Regex>),
     /// x y
     Concat(Rc<Regex>, Rc<Regex>),
+}
+
+impl Debug for Regex {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::EmptyString => write!(f, "e"),
+            Self::EmptySet => write!(f, "0"),
+            Self::Symbol(sym) => sym.as_ref().name.get_ident().fmt(f),
+            Self::Repeat(re) => f.write_fmt(format_args!("{:?}*", re.as_ref())),
+            Self::Complement(re) => f.write_fmt(format_args!("~{:?}", re.as_ref())),
+            Self::Or(l, r) => f.write_fmt(format_args!("{:?} | {:?}", l.as_ref(), r.as_ref())),
+            Self::And(l, r) => f.write_fmt(format_args!("{:?} & {:?}", l.as_ref(), r.as_ref())),
+            Self::Concat(l, r) => f.write_fmt(format_args!("{:?} {:?}", l.as_ref(), r.as_ref())),
+        }
+    }
 }
 
 impl Regex {
