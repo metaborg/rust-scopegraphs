@@ -65,7 +65,7 @@ impl Regex {
         match self {
             // a: 0 => 0
             Regex::EmptySet => Regex::EmptySet.into(),
-            // a: e => e
+            // a: e => 0
             Regex::EmptyString => Regex::EmptySet.into(),
             // a: a => e
             // a: b => 0
@@ -110,9 +110,9 @@ impl Regex {
             Regex::Repeat(r) => {
                 let r = r.normalize(ab);
                 match r.deref() {
-                    // e* => 0
+                    // 0* => e
                     Regex::EmptySet => Regex::EmptyString.into(),
-                    // 0* => 0
+                    // e* => e
                     Regex::EmptyString => r,
                     // a** => a*
                     Regex::Repeat(_) => r,
