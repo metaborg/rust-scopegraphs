@@ -89,9 +89,7 @@ impl RegexCompiler {
 
         // find all reachable states from this state
         for symbol in &self.alphabet {
-            let next_state = state
-                .apply_symbol(Some(symbol))
-                .normalize(&self.alphabet_order);
+            let next_state = state.derive(Some(symbol)).normalize(&self.alphabet_order);
 
             // put it in reverse states
             self.reverse_transitions
@@ -112,7 +110,7 @@ impl RegexCompiler {
     }
 
     fn step_default_state(&mut self, state: &State, work_list: &mut VecDeque<State>) {
-        let default_state = state.apply_symbol(None).normalize(&self.alphabet_order);
+        let default_state = state.derive(None).normalize(&self.alphabet_order);
 
         // put it in reverse states
         self.reverse_transitions

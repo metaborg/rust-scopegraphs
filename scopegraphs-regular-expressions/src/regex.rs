@@ -57,8 +57,11 @@ impl Regex {
     /// state regex(abab), if we see a symbol a, we go to state regex(bab)
     ///
     /// symbol can be None, to see what happens when a token outside of the alphabet
-    /// is given to see what state we go to then. (TODO: I think??)
-    pub fn apply_symbol(&self, symbol: Option<&Rc<Symbol>>) -> Rc<Regex> {
+    /// is given to see what state we go to then.
+    ///
+    /// This is called the Brzozowski derivative
+    /// Janusz A. Brzozowski (1964). "Derivatives of Regular Expressions". J ACM. 11 (4): 481–494. doi:10.1145/321239.321249
+    pub fn derive(&self, symbol: Option<&Rc<Symbol>>) -> Rc<Regex> {
         match self {
             // a: 0 => 0
             Regex::EmptySet => Regex::EmptySet.into(),
@@ -75,20 +78,20 @@ impl Regex {
             }
             // a: (ab)* => b(ab)*
             Regex::Repeat(r) => {
-                Regex::Concat(r.apply_symbol(symbol), Regex::Repeat(r.clone()).into()).into()
+                Regex::Concat(r.derive(symbol), Regex::Repeat(r.clone()).into()).into()
             }
             // a: ~(ab) => ~(b)
-            Regex::Complement(c) => Regex::Complement(c.apply_symbol(symbol)).into(),
+            Regex::Complement(c) => Regex::Complement(c.derive(symbol)).into(),
             // a: (ab | ac) => b | c
-            Regex::Or(l, r) => Regex::Or(l.apply_symbol(symbol), r.apply_symbol(symbol)).into(),
+            Regex::Or(l, r) => Regex::Or(l.derive(symbol), r.derive(symbol)).into(),
             // a: (ab & ac) => b & c
-            Regex::And(l, r) => Regex::And(l.apply_symbol(symbol), r.apply_symbol(symbol)).into(),
+            Regex::And(l, r) => Regex::And(l.derive(symbol), r.derive(symbol)).into(),
             // a: ab => b
             Regex::Concat(l, r) => {
-                let new = Regex::Concat(l.apply_symbol(symbol), r.clone()).into();
+                let new = Regex::Concat(l.derive(symbol), r.clone()).into();
 
                 if l.is_nullable() {
-                    Regex::Or(new, r.apply_symbol(symbol)).into()
+                    Regex::Or(new, r.derive(symbol)).into()
                 } else {
                     new
                 }
@@ -342,17 +345,11 @@ mod tests {
         let ab = AlphabetOrder::new(&[a.clone(), b.clone(), c.clone()].into_iter().collect());
 
         assert_eq!(
-            parse_regex("a b")
-                .unwrap()
-                .apply_symbol(Some(&a))
-                .normalize(&ab),
+            parse_regex("a b").unwrap().derive(Some(&a)).normalize(&ab),
             parse_regex("b").unwrap().into()
         );
         assert_eq!(
-            parse_regex("a b")
-                .unwrap()
-                .apply_symbol(Some(&b))
-                .normalize(&ab),
+            parse_regex("a b").unwrap().derive(Some(&b)).normalize(&ab),
             parse_regex("0").unwrap().into()
         );
     }
