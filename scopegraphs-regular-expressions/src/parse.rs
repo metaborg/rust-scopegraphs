@@ -72,7 +72,7 @@
 //!
 //! ### Implementation
 //!
-//! This module contains a lexer ([`RegexLexer`]), which is a wrapper around a [`ParseStream`] that emits [`RegexSymbol`]s (the tokens of our language).
+//! This module contains a lexer ([`RegexLexer`]), which is a wrapper around a [`ParseStream`] that emits [`RToken`]s (the tokens of our language).
 //! Using [`parenthesized`], we recursively parse regular expressions inside brackets.
 //!
 //! The parser implementation ([`RegexParser`]) corresponds to the parse table in the following way:
@@ -179,7 +179,7 @@ struct RegexLexer<'a> {
 }
 
 impl<'a> RegexLexer<'a> {
-    /// Returns the next [`RegexSymbol`] from the `input`.
+    /// Returns the next [`RToken`] from the `input`.
     fn scan(input: ParseStream<'a>) -> syn::Result<RToken> {
         if input.is_empty() {
             return Ok(RToken::End);
@@ -194,7 +194,7 @@ impl<'a> RegexLexer<'a> {
             return Regex::parse(&inner).map(|re| RToken::Regex(Rc::new(re)));
         }
 
-        // Scan '0' symbol
+        // Scan '0' token
         if let Ok(val) = input.parse::<syn::LitInt>() {
             if let Ok(0) = val.base10_parse() {
                 return Ok(RToken::Zero);
@@ -211,32 +211,32 @@ impl<'a> RegexLexer<'a> {
             }
         }
 
-        // Scan '~' symbol
+        // Scan '~' token
         if input.parse::<Token![~]>().is_ok() {
             return Ok(RToken::Neg);
         }
 
-        // Scan '*' symbol
+        // Scan '*' token
         if input.parse::<Token![*]>().is_ok() {
             return Ok(RToken::Repeat);
         }
 
-        // Scan '+' symbol
+        // Scan '+' token
         if input.parse::<Token![+]>().is_ok() {
             return Ok(RToken::Plus);
         }
 
-        // Scan '?' symbol
+        // Scan '?' token
         if input.parse::<Token![?]>().is_ok() {
             return Ok(RToken::Optional);
         }
 
-        // Scan '|' symbol
+        // Scan '|' token
         if input.parse::<Token![|]>().is_ok() {
             return Ok(RToken::Or);
         }
 
-        // Scan '&' symbol
+        // Scan '&' token
         if input.parse::<Token![&]>().is_ok() {
             return Ok(RToken::And);
         }
@@ -244,16 +244,16 @@ impl<'a> RegexLexer<'a> {
         Err(lookahead.error())
     }
 
-    /// Peeks the first symbol in the stream.
+    /// Peeks the first token in the stream.
     fn peek(&self) -> &RToken {
         &self.top
     }
 
     /// Advances lexer to the next token.
     fn next(&mut self) -> syn::Result<RToken> {
-        let sym = self.top.clone();
+        let token = self.top.clone();
         self.top = Self::scan(self.input)?;
-        Ok(sym)
+        Ok(token)
     }
 
     /// Returns the current position in the stream (mainly for emitting errors).
@@ -480,13 +480,16 @@ enum PState {
     RegexAndRegex = 14,
 }
 
+/// Segment of the parse stack.
+///
 /// In regular LR parsing literature, the parse stack is an alternating sequence of states and symbols.
-/// It starts with the initial state [`ParserState::State0`], and always (except between a reduction and a goto) has a state on top.
+/// It starts with the initial state [`ParserState::StateInitial`], and always (except between a reduction and a goto) has a state on top.
 /// We differ from this representation in two ways:
 /// 1. We do not explicitly push the initial state to the stack, but implicitly assume it in [`RegexParser::state`].
 /// 2. We combine the reduce and goto actions.
 ///    The reduce actions do not push the result to the stack, but pass it to [`RegexParser::goto`] directly.
 ///    [`RegexParser::goto`] computes the next state based on the top of the stack and the result that was passed in, and pushes the result and the new state to the stack.
+///
 /// This allows us to combine the stack elements as 2-tuples, getting rid of a lot of runtime checks & pattern matching.
 #[derive(Clone)]
 struct StackSegment {
@@ -530,7 +533,9 @@ impl<'a> RegexParser<'a> {
         Ok(false) // not (yet) in accepting state
     }
 
-    /// Get last [symbol](RegexSymbol) shifted to the stack.
+    /// Get last [state](PState) shifted to the stack.
+    ///
+    /// Defaults to the (implicit) [initial state](PState::Initial) in case of an empty stack.
     fn state(&self) -> PState {
         self.parse_stack
             .last()
@@ -538,7 +543,7 @@ impl<'a> RegexParser<'a> {
             .unwrap_or(PState::Initial) // implicitly assume State 0 on bottom of stack.
     }
 
-    /// Pop last state and symbol from the stack.
+    /// Pop last state and token from the stack.
     fn pop_stack(&mut self) -> syn::Result<StackSegment> {
         if let Some(segment) = self.parse_stack.pop() {
             Ok(segment)
@@ -547,12 +552,12 @@ impl<'a> RegexParser<'a> {
         }
     }
 
-    /// Get last [symbol](RegexSymbol) shifted to the stack.
+    /// Get last [token](RToken) shifted to the stack.
     fn pop_stack_token(&mut self) -> syn::Result<RToken> {
         self.pop_stack().map(|ss| ss.token)
     }
 
-    /// Get last symbol shifted to the stack, and assert it is a [`RToken::Regex`] variant.
+    /// Get last token shifted to the stack, and assert it is a [`RToken::Regex`] variant.
     fn pop_stack_regex(&mut self) -> syn::Result<Rc<Regex>> {
         if let RToken::Regex(regex) = self.pop_stack_token()? {
             Ok(regex)
@@ -561,19 +566,19 @@ impl<'a> RegexParser<'a> {
         }
     }
 
-    /// Get last symbol shifted to the stack, and assert it is a particular `expected` [`RegexSymbol`].
-    fn expect_symbol(&mut self, expected: RToken) -> syn::Result<()> {
+    /// Get last token shifted to the stack, and assert it is a particular `expected` [`RToken`].
+    fn expect_token(&mut self, expected: RToken) -> syn::Result<()> {
         if expected == self.pop_stack_token()? {
             Ok(())
         } else {
-            self.internal_error("expected other symbol on top of stack")
+            self.internal_error("expected other token on top of stack")
         }
     }
 
     // reduce atoms
 
     fn reduce_atom(&mut self, expected: RToken, result: Regex) -> syn::Result<bool> {
-        self.expect_symbol(expected)?;
+        self.expect_token(expected)?;
         self.goto(Rc::new(result))
     }
 
@@ -614,7 +619,7 @@ impl<'a> RegexParser<'a> {
         expected: RToken,
         build: impl Fn(Rc<Regex>) -> Regex,
     ) -> syn::Result<bool> {
-        self.expect_symbol(expected)?;
+        self.expect_token(expected)?;
         let re = self.pop_stack_regex()?;
         self.goto(Rc::new(build(re)))
     }
@@ -659,7 +664,7 @@ impl<'a> RegexParser<'a> {
     ) -> syn::Result<bool> {
         // right-hand-side is on top of stack ...
         let r = self.pop_stack_regex()?;
-        self.expect_symbol(expected)?;
+        self.expect_token(expected)?;
         let l = self.pop_stack_regex()?;
         self.goto(Rc::new(build(l, r)))
     }
