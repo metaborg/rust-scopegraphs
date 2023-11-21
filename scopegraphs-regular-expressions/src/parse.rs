@@ -40,7 +40,7 @@
 //!
 //! ### Parse Table
 //!
-//! The LR parse table generated from this grammar is as follows (closure sets on the documentation of [`ParserState`]):
+//! The LR parse table generated from this grammar is as follows (closure sets on the documentation of [`PState`]):
 //!
 //! | State | `0`       | `e`        | `l`        | `~`        | `*`        | `+`        | `?`        | <code>\|</code> | `&`        | `$`        |   | `S` | `E`   |
 //! | ----- | --------- | ---------- | ---------- | ---------- | ---------- | ---------- | ---------- | --------------- | ---------- | ---------- | - | --- | ----- |
@@ -483,7 +483,7 @@ enum PState {
 /// Segment of the parse stack.
 ///
 /// In regular LR parsing literature, the parse stack is an alternating sequence of states and symbols.
-/// It starts with the initial state [`ParserState::StateInitial`], and always (except between a reduction and a goto) has a state on top.
+/// It starts with the initial state [`PState::Initial`], and always (except between a reduction and a goto) has a state on top.
 /// We differ from this representation in two ways:
 /// 1. We do not explicitly push the initial state to the stack, but implicitly assume it in [`RegexParser::state`].
 /// 2. We combine the reduce and goto actions.
