@@ -194,7 +194,7 @@ enum ParserState {
 /// In regular LR parsing literature, the parse stack is an alternating sequence of states and symbols.
 /// It starts with the initial state [`ParserState::State0`], and always (except between a reduction and a goto) has a state on top.
 /// We differ from this representation in two ways:
-/// 1. We do not explicitly push the initial state to the stack, but implicitly assume it in [`RegexParser::goto`].
+/// 1. We do not explicitly push the initial state to the stack, but implicitly assume it in [`RegexParser::state`].
 /// 2. We combine the reduce and goto actions.
 ///    The reduce actions do not push the result to the stack, but pass it to [`RegexParser::goto`] directly.
 ///    [`RegexParser::goto`] computes the next state based on the top of the stack and the result that was passed in, and pushes the result and the new state to the stack.
@@ -302,7 +302,6 @@ impl<'a> RegexLexer<'a> {
 
 struct RegexParser<'a> {
     lexer: RegexLexer<'a>,
-    state: ParserState,
     symbol_stack: Vec<StackSymbol>,
 }
 
@@ -315,12 +314,11 @@ impl<'a> RegexParser<'a> {
         };
         Ok(Self {
             lexer,
-            state: ParserState::State0,
             symbol_stack: vec![],
         })
     }
 
-    /// Shift action (standars in LR parsers).
+    /// Shift action (standard in LR parsers).
     ///
     /// Pushes current token to the stack, and transitions to `new_state`.
     fn shift(&mut self, new_state: ParserState) -> syn::Result<bool> {
@@ -329,17 +327,29 @@ impl<'a> RegexParser<'a> {
             state: new_state,
             symbol: next_symbol,
         });
-        self.state = new_state;
         Ok(false) // not (yet) in accepting state
     }
 
     /// Get last [symbol](RegexSymbol) shifted to the stack.
-    fn top_stack_symbol(&mut self) -> syn::Result<RegexSymbol> {
+    fn state(&self) -> ParserState {
+        self.symbol_stack
+            .last()
+            .map(|ss| ss.state)
+            .unwrap_or(ParserState::State0) // implicitly assume State 0 on bottom of stack.
+    }
+
+    /// Pop last state and symbol from the stack.
+    fn pop_stack(&mut self) -> syn::Result<StackSymbol> {
         if let Some(symbol) = self.symbol_stack.pop() {
-            Ok(symbol.symbol)
+            Ok(symbol)
         } else {
             self.internal_error("expected non-empty stack")
         }
+    }
+
+    /// Get last [symbol](RegexSymbol) shifted to the stack.
+    fn top_stack_symbol(&mut self) -> syn::Result<RegexSymbol> {
+        self.pop_stack().map(|ss| ss.symbol)
     }
 
     /// Get last symbol shifted to the stack, and assert it is a [`StackSymbol::Regex`] variant.
@@ -472,12 +482,7 @@ impl<'a> RegexParser<'a> {
     /// It peeks the state `S` on top of the stack (assuming `0` in case of an empty stack).
     /// Then it finds the `GOTO[S, E]` entry, and pushes the result and the new state to the stack.
     fn goto(&mut self, result: Rc<Regex>) -> syn::Result<bool> {
-        let st = self
-            .symbol_stack
-            .last()
-            .map(|ss| ss.state)
-            .unwrap_or(ParserState::State0);
-        let state = match st {
+        let state = match self.state() {
             ParserState::State0 => ParserState::State1,
             ParserState::State1 => ParserState::State9,
             ParserState::State5 => ParserState::State12,
@@ -493,7 +498,6 @@ impl<'a> RegexParser<'a> {
             state,
             symbol: RegexSymbol::Regex(result),
         });
-        self.state = state;
         Ok(false)
     }
 
@@ -502,21 +506,21 @@ impl<'a> RegexParser<'a> {
         Ok(true)
     }
 
-    fn build_error(&mut self, msg: &str) -> syn::Error {
+    fn build_error(&self, msg: &str) -> syn::Error {
         syn::Error::new(self.lexer.span(), msg)
     }
 
-    fn error<T>(&mut self, msg: &str) -> syn::Result<T> {
+    fn error<T>(&self, msg: &str) -> syn::Result<T> {
         Err(self.build_error(msg))
     }
 
-    fn internal_error<T>(&mut self, msg: &str) -> syn::Result<T> {
+    fn internal_error<T>(&self, msg: &str) -> syn::Result<T> {
         Err(self.build_error(&format!("internal parsing error: {}", msg)))
     }
 
     /// Implementation of the ACTION-table.
     fn step(&mut self) -> syn::Result<bool> {
-        match self.state {
+        match self.state() {
             ParserState::State0
             | ParserState::State5
             | ParserState::State10
