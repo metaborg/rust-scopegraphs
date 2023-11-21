@@ -56,7 +56,7 @@ impl Debug for Regex {
         match self {
             Self::EmptyString => write!(f, "e"),
             Self::EmptySet => write!(f, "0"),
-            Self::Symbol(sym) => write!(f, "{:?}", (*sym).name.get_ident()),
+            Self::Symbol(sym) => write!(f, "{:?}", sym.name.get_ident()),
             Self::Repeat(re) => write!(f, "{:?}*", *re),
             Self::Complement(re) => write!(f, "~{:?}", *re),
             Self::Or(l, r) => write!(f, "{:?} | {:?}", *l, *r),

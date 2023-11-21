@@ -73,40 +73,29 @@ impl Debug for StackSymbol {
     }
 }
 
-struct RegexParser<'a> {
+struct RegexLexer<'a> {
     input: ParseStream<'a>,
-    state: ParserState,
-    next: Option<RegexSymbol>,
-    symbol_stack: Vec<StackSymbol>,
+    top: RegexSymbol,
 }
 
-impl<'a> RegexParser<'a> {
-    fn new(input: ParseStream<'a>) -> Self {
-        Self {
-            input,
-            state: ParserState::State0,
-            next: None,
-            symbol_stack: vec![StackSymbol::State(ParserState::State0)],
-        }
-    }
-
-    fn scan(&self) -> syn::Result<RegexSymbol> {
-        if self.input.is_empty() {
+impl<'a> RegexLexer<'a> {
+    fn scan(input: ParseStream<'a>) -> syn::Result<RegexSymbol> {
+        if input.is_empty() {
             return Ok(RegexSymbol::End);
         }
 
-        let lookahead = self.input.lookahead1();
+        let lookahead = input.lookahead1();
 
         // Rust performs parenthesis matching: leverage that here.
         if lookahead.peek(syn::token::Paren) {
             let inner;
-            parenthesized!(inner in self.input);
+            parenthesized!(inner in input);
             return Regex::parse(&inner).map(|re| RegexSymbol::Regex(Rc::new(re)));
         }
 
         // Scan '0' symbol
         if lookahead.peek(syn::LitInt) {
-            let val = self.input.parse::<syn::LitInt>()?;
+            let val = input.parse::<syn::LitInt>()?;
             if let Ok(0) = val.base10_parse() {
                 return Ok(RegexSymbol::Zero);
             }
@@ -114,7 +103,7 @@ impl<'a> RegexParser<'a> {
 
         // Scan 'e' and names
         if lookahead.peek(syn::Ident) {
-            let name = self.input.parse::<Path>()?;
+            let name = input.parse::<Path>()?;
             if name.is_ident("e") {
                 return Ok(RegexSymbol::Epsilon);
             } else {
@@ -125,50 +114,83 @@ impl<'a> RegexParser<'a> {
 
         // Scan '~' symbol
         if lookahead.peek(Token![~]) {
-            self.input.parse::<Token![~]>()?;
+            input.parse::<Token![~]>()?;
             return Ok(RegexSymbol::Neg);
         }
 
         // Scan '*' symbol
         if lookahead.peek(Token![*]) {
-            self.input.parse::<Token![*]>()?;
+            input.parse::<Token![*]>()?;
             return Ok(RegexSymbol::Repeat);
         }
 
         // Scan '+' symbol
         if lookahead.peek(Token![+]) {
-            self.input.parse::<Token![+]>()?;
+            input.parse::<Token![+]>()?;
             return Ok(RegexSymbol::Plus);
         }
 
         // Scan '?' symbol
         if lookahead.peek(Token![?]) {
-            self.input.parse::<Token![?]>()?;
+            input.parse::<Token![?]>()?;
             return Ok(RegexSymbol::Optional);
         }
 
         // Scan '|' symbol
         if lookahead.peek(Token![|]) {
-            self.input.parse::<Token![|]>()?;
+            input.parse::<Token![|]>()?;
             return Ok(RegexSymbol::Or);
         }
 
         // Scan '&' symbol
         if lookahead.peek(Token![&]) {
-            self.input.parse::<Token![&]>()?;
+            input.parse::<Token![&]>()?;
             return Ok(RegexSymbol::And);
         }
 
         Err(lookahead.error())
     }
 
+    fn peek(&self) -> &RegexSymbol {
+        &self.top
+    }
+
+    fn next(&mut self) -> syn::Result<RegexSymbol> {
+        let sym = self.top.clone();
+        self.top = Self::scan(self.input)?;
+        Ok(sym)
+    }
+
+    fn span(&self) -> proc_macro2::Span {
+        self.input.span()
+    }
+}
+
+struct RegexParser<'a> {
+    lexer: RegexLexer<'a>,
+    state: ParserState,
+    symbol_stack: Vec<StackSymbol>,
+}
+
+impl<'a> RegexParser<'a> {
+    fn init(input: ParseStream<'a>) -> syn::Result<Self> {
+        let lexer = RegexLexer {
+            input,
+            top: RegexLexer::scan(input)?,
+        };
+        Ok(Self {
+            lexer,
+            state: ParserState::State0,
+            symbol_stack: vec![StackSymbol::State(ParserState::State0)],
+        })
+    }
+
     fn shift(&mut self, new_state: ParserState) -> syn::Result<bool> {
-        let next_symbol = self.next()?;
+        let next_symbol = self.lexer.next()?;
         self.symbol_stack
             .push(StackSymbol::Symbol(next_symbol.clone()));
         self.symbol_stack.push(StackSymbol::State(new_state));
         self.state = new_state;
-        self.next = Some(self.scan()?);
         Ok(false) // not in accepting state
     }
 
@@ -337,24 +359,11 @@ impl<'a> RegexParser<'a> {
     }
 
     fn build_error(&mut self, msg: &str) -> syn::Error {
-        syn::Error::new(self.input.span(), msg)
+        syn::Error::new(self.lexer.span(), msg)
     }
 
     fn error<T>(&mut self, msg: &str) -> syn::Result<T> {
         Err(self.build_error(msg))
-    }
-
-    fn init(&mut self) -> syn::Result<()> {
-        self.next = Some(self.scan()?);
-        Ok(())
-    }
-
-    fn next(&mut self) -> syn::Result<RegexSymbol> {
-        if let Some(next) = self.next.clone() {
-            Ok(next)
-        } else {
-            self.error("internal parsing error: forgot to initialize?")
-        }
     }
 
     fn step(&mut self) -> syn::Result<bool> {
@@ -362,7 +371,7 @@ impl<'a> RegexParser<'a> {
             ParserState::State0
             | ParserState::State5
             | ParserState::State10
-            | ParserState::State11 => match self.next()? {
+            | ParserState::State11 => match self.lexer.peek() {
                 RegexSymbol::Zero => self.shift(ParserState::State2),
                 RegexSymbol::Epsilon => self.shift(ParserState::State3),
                 RegexSymbol::Regex(_) => self.shift(ParserState::State4),
@@ -371,7 +380,7 @@ impl<'a> RegexParser<'a> {
                     "expected '0', 'e', '~', label or parenthesized regular expression here",
                 ),
             },
-            ParserState::State1 => match self.next()? {
+            ParserState::State1 => match self.lexer.peek() {
                 RegexSymbol::Zero => self.shift(ParserState::State2),
                 RegexSymbol::Epsilon => self.shift(ParserState::State3),
                 RegexSymbol::Regex(_) => self.shift(ParserState::State4),
@@ -390,7 +399,7 @@ impl<'a> RegexParser<'a> {
             ParserState::State7 => self.reduce_plus(),
             ParserState::State8 => self.reduce_optional(),
             ParserState::State9 => {
-                match self.next()? {
+                match self.lexer.peek() {
                     // concat is right-associative, so shift in case of a new literal/pre-fix operator
                     RegexSymbol::Zero => self.shift(ParserState::State2),
                     RegexSymbol::Epsilon => self.shift(ParserState::State3),
@@ -407,7 +416,7 @@ impl<'a> RegexParser<'a> {
                 }
             }
             ParserState::State12 => {
-                match self.next()? {
+                match self.lexer.peek() {
                     // neg has top priority, but is ambiguous with posf-fix operators.
                     RegexSymbol::Zero => self.reduce_neg(),
                     RegexSymbol::Epsilon => self.reduce_neg(),
@@ -428,7 +437,7 @@ impl<'a> RegexParser<'a> {
                 }
             }
             ParserState::State13 => {
-                match self.next()? {
+                match self.lexer.peek() {
                     // or has lowest priority, so shift in any case
                     RegexSymbol::Zero => self.shift(ParserState::State2),
                     RegexSymbol::Epsilon => self.shift(ParserState::State3),
@@ -444,7 +453,7 @@ impl<'a> RegexParser<'a> {
                 }
             }
             ParserState::State14 => {
-                match self.next()? {
+                match self.lexer.peek() {
                     // '&' has priority over '|' only, so shift in any other case
                     RegexSymbol::Zero => self.shift(ParserState::State2),
                     RegexSymbol::Epsilon => self.shift(ParserState::State3),
@@ -477,8 +486,7 @@ impl<'a> RegexParser<'a> {
     }
 
     pub fn parse_regex(input: ParseStream<'a>) -> syn::Result<Regex> {
-        let mut parser = RegexParser::new(input);
-        parser.init()?;
+        let mut parser = RegexParser::init(input)?;
         let mut accept = false;
         while !accept {
             accept = parser.step()?
