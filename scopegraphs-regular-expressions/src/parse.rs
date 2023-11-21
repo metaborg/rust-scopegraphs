@@ -181,7 +181,7 @@ impl<'a> RegexParser<'a> {
         Ok(Self {
             lexer,
             state: ParserState::State0,
-            symbol_stack: vec![StackSymbol::State(ParserState::State0)],
+            symbol_stack: vec![],
         })
     }
 
@@ -327,11 +327,11 @@ impl<'a> RegexParser<'a> {
     // goto jump table
 
     fn goto(&mut self, result: Rc<Regex>) -> syn::Result<bool> {
-        if self.symbol_stack.is_empty() {
-            return self
-                .error("internal parsing error: expected non-empty stack on a 'goto' action'");
-        }
-        if let Some(StackSymbol::State(st)) = self.symbol_stack.last() {
+        if let StackSymbol::State(st) = self
+            .symbol_stack
+            .last()
+            .unwrap_or(&StackSymbol::State(ParserState::State0))
+        {
             self.state = match st {
                 ParserState::State0 => ParserState::State1,
                 ParserState::State1 => ParserState::State9,
@@ -466,14 +466,10 @@ impl<'a> RegexParser<'a> {
 
     fn finalize(mut self) -> syn::Result<Regex> {
         let regex = self.top_regex()?;
-        if let Some(StackSymbol::State(ParserState::State0)) = self.symbol_stack.pop() {
-            if self.symbol_stack.is_empty() {
-                Ok(regex.deref().clone())
-            } else {
-                self.error("error: residual input after parsing finished.")
-            }
+        if self.symbol_stack.is_empty() {
+            Ok(regex.deref().clone())
         } else {
-            self.error("internal parsing error: expected state 0 on bottom of stack.")
+            self.error("internal parsing error: residual input after parsing finished.")
         }
     }
 
