@@ -1,3 +1,136 @@
+//! This module contains a bottom-up (LR(1)) parser for our regular expression data type.
+//!
+//!
+//! ### Grammar
+//!
+//! The parser is implemented based on a LR parse table generated from [an online generator](https://jsmachines.sourceforge.net/machines/lr1.html), using the following grammar.
+//!
+//! ```bnf
+//!  0: S -> E
+//!  1: E -> 0
+//!  2: E -> e
+//!  3: E -> l
+//!  4: E -> ~ E
+//!  5: E -> E *
+//!  6: E -> E +
+//!  7: E -> E ?
+//!  8: E -> E E
+//!  9: E -> E | E
+//! 10: E -> E & E
+//! ```
+//!
+//! Here, `l` should be interpreted as label literals and parenthesized expressions.
+//! We do not spell out the parenthesized expressions because the Rust lexer can automatically handle those for us.
+//!
+//!
+//! ### Disambiguation
+//!
+//! To disambiguate this grammar, we used the same operator priorities as [Statix](https://github.com/metaborg/nabl/blob/802559782da2216b66d290f90179c2ac8f21ba3f/statix.lang/syntax/statix/lang/Core.sdf3#L218-L221):
+//!
+//! | Operator            | Precedence Level | Associativity |
+//! | :-----------------: | :--------------- | ------------- |
+//! | `~`                 | 4                |               |
+//! | `*`                 | 4                |               |
+//! | `+`                 | 4                |               |
+//! | `?`                 | 4                |               |
+//! | (concat)            | 3                | (right)       |
+//! | `&`                 | 2                | (left)        |
+//! | <code>\|</code>     | 1                | (left)        |
+//!
+//!
+//! ### Parse Table
+//!
+//! The LR parse table generated from this grammar is as follows:
+//!
+//! | State | `0`       | `e`        | `l`        | `~`        | `*`        | `+`        | `?`        | <code>\|</code> | `&`        | `$`        |   | `S` | `E`   |
+//! | ----- | --------- | ---------- | ---------- | ---------- | ---------- | ---------- | ---------- | --------------- | ---------- | ---------- | - | --- | ----- |
+//! | 0     | `s2`      | `s3`       | `s4`       | `s5`       |            |            |            |                 |            |            |   |     | `1`   |
+//! | 1     | `s2`      | `s3`       | `s4`       | `s5`       | `s6`       | `s7`       | `s8`       | `s10`           | `s11`      | `ACC`      |   |     | `9`   |
+//! | 2     | `r1`      | `r1`       | `r1`       | `r1`       | `r1`       | `r1`       | `r1`       | `r1`            | `r1`       | `r1`       |   |     |       |
+//! | 3     | `r2`      | `r2`       | `r2`       | `r2`       | `r2`       | `r2`       | `r2`       | `r2`            | `r2`       | `r2`       |   |     |       |
+//! | 4     | `r3`      | `r3`       | `r3`       | `r3`       | `r3`       | `r3`       | `r3`       | `r3`            | `r3`       | `r3`       |   |     |       |
+//! | 5     | `s2`      | `s3`       | `s4`       | `s5`       |            |            |            |                 |            |            |   |     | `12`  |
+//! | 6     | `r5`      | `r5`       | `r5`       | `r5`       | `r5`       | `r5`       | `r5`       | `r5`            | `r5`       | `r5`       |   |     |       |
+//! | 7     | `r6`      | `r6`       | `r6`       | `r6`       | `r6`       | `r6`       | `r6`       | `r6`            | `r6`       | `r6`       |   |     |       |
+//! | 8     | `r7`      | `r7`       | `r7`       | `r7`       | `r7`       | `r7`       | `r7`       | `r7`            | `r7`       | `r7`       |   |     |       |
+//! | 9     | `s2`[^9l] | `s3`[^9l]  | `s4`[^9l]  | `s5`[^9n]  | `s6`[^9n]  | `s7`[^9n]  | `s8`[^9n]  | `r8`[^9o]       | `r8`[^9a]  | `r8`       |   |     | `9`   |
+//! | 10    | `s2`      | `s3`       | `s4`       | `s5`       |            |            |            |                 |            |            |   |     | `13`  |
+//! | 11    | `s2`      | `s3`       | `s4`       | `s5`       |            |            |            |                 |            |            |   |     | `14`  |
+//! | 12    | `r4`[^120]| `r4`[^12e] | `r4`[^12l] | `r4`[^12n] | `AMB`[^2b] | `AMB`[^2b] | `AMB`[^2b] | `r4`[^12o]      | `r4`[^12a] | `r4`       |   |     | `9`   |
+//! | 13    | `s2`[^3l] | `s3`[^3l]  | `s4`[^3l]  | `s5`[^3l]  | `s6`[^3l]  | `s7`[^3l]  | `s8`[^3l]  | `r9`[^3o]       | `s11`[^3l] | `r9`       |   |     | `9`   |
+//! | 14    | `s2`[^4l] | `s3`[^4l]  | `s4`[^4l]  | `s5`[^4l]  | `s6`[^4l]  | `s7`[^4l]  | `s8`[^4l]  | `r10`[^4o]      | `r10`[^4a] | `r10`      |   |     | `9`   |
+//!
+//! The first segment being the ACTION-table, the last two columns being the GOTO-table.
+//! In the action table, actions as `sX` means: shift the symbol onto the stack, transition to state `X`.
+//! Actions like `rY` mean: reduce the top of the stack using production `Y` (from original grammar).
+//! The `ACC` action means accepting the current input.
+//! The `AMB` action is emitting an error that the current expression is ambiguous.
+//! Empty boxes are parse errors: the tokens are not expected at that position.
+//! The resolution of ambiguities (positions in the table where both a shift and a reduce action are possible (shift/reduce conflicts)) are annotated and their resolution motivated in the footnotes.
+//!
+//!
+//! ### Implementation
+//!
+//! This module contains a lexer ([`RegexLexer`]), which is a wrapper around a [`ParseStream`] that emits [`RegexSymbol`]s (the tokens of our language).
+//! Using [`parenthesized`], we recursively parse regular expressions inside brackets.
+//!
+//! The parser implementation ([`RegexParser`]) corresponds to the parse table in the following way:
+//! - The [`RegexParser::shift`] function implements shifting and transitioning to some state.
+//! - The [`RegexParser::goto`] function implements the GOTO-table.
+//! - The [`RegexParser::accept`] function accepts the input, leaving the resulting regular expression on the stack.
+//! - The [`RegexParser::step`] function performs a parsing step per invocation (i.e., it implements the ACTION-table).
+//!
+//! The reduction rules each have their own function as well:
+//! - `r1`: [`RegexParser::reduce_zero`]
+//! - `r2`: [`RegexParser::reduce_epsilon`]
+//! - `r3`: [`RegexParser::reduce_symbol`] (also parses parenthesized expressions)
+//! - `r4`: [`RegexParser::reduce_neg`]
+//! - `r5`: [`RegexParser::reduce_repeat`]
+//! - `r6`: [`RegexParser::reduce_plus`]
+//! - `r7`: [`RegexParser::reduce_optional`]
+//! - `r8`: [`RegexParser::reduce_concat`]
+//! - `r9`: [`RegexParser::reduce_or`]
+//! - `r10`: [`RegexParser::reduce_and`]
+//!
+//!
+//! [^9l]: shift/reduce conflict with `r8`: resolved this way because concatenation is right-associative, so we need to shift more before we can reduce.
+//!
+//! [^9n]: shift/reduce conflict with `r8`: resolved this way because `~`/`*`/`+`/`?` have priority over concatenation.
+//!
+//! [^9o]: shift/reduce conflict with `s8`: resolved as `r8` because concatenation has priority over `|`.
+//!
+//! [^9a]: shift/reduce conflict with `s10`: resolved as `r8` because concatenation has priority over `&`.
+//!
+//!
+//!
+//! [^120]: shift/reduce conflict with `s2`: resolved as `r4` because negation has priority over concatenation.
+//!
+//! [^12e]: shift/reduce conflict with `s3`: resolved as `r4` because negation has priority over concatenation.
+//!
+//! [^12l]: shift/reduce conflict with `s4`: resolved as `r4` because negation has priority over concatenation.
+//!
+//! [^12n]: shift/reduce conflict with `s2`: resolved as `r4` because negation has priority over concatenation.
+//!
+//! [^2b]:  shift/reduce conflict with `s2`: resolved as an _ambiguity error_ because there is no priority between `~` (prefix operator) and `*`/`+`/`?` (postfix operators).
+//!
+//! [^12o]: shift/reduce conflict with `s2`: resolved as `r4` because negation has priority over `|`.
+//!
+//! [^12a]: shift/reduce conflict with `s2`: resolved as `r4` because negation has priority over `&`.
+//!
+//!
+//!
+//! [^3l]: shift/reduce conflict with `r9`: resolved as a shift because `|` has lowest priority.
+//!
+//! [^3o]: shift/reduce conflict with `s10`: resolved as a `r9` because `|` is left-associative.
+//!
+//!
+//!
+//! [^4l]: shift/reduce conflict with `r10`: resolved as a shift because `&` has lower priority than all operators, except for `|`.
+//!
+//! [^4o]: shift/reduce conflict with `s10`: resolved as a `r10` because `&` is left-associative.
+//!
+//! [^4a]: shift/reduce conflict with `s11`: resolved as a `r10` because `&` has priority over `|`.
+
 use crate::regex::Symbol;
 use crate::Regex;
 use std::fmt::Debug;
