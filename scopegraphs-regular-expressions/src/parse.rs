@@ -40,7 +40,7 @@
 //!
 //! ### Parse Table
 //!
-//! The LR parse table generated from this grammar is as follows:
+//! The LR parse table generated from this grammar is as follows (closure sets on the documentation of [`ParserState`]):
 //!
 //! | State | `0`       | `e`        | `l`        | `~`        | `*`        | `+`        | `?`        | <code>\|</code> | `&`        | `$`        |   | `S` | `E`   |
 //! | ----- | --------- | ---------- | ---------- | ---------- | ---------- | ---------- | ---------- | --------------- | ---------- | ---------- | - | --- | ----- |
@@ -67,6 +67,7 @@
 //! The `AMB` action is emitting an error that the current expression is ambiguous.
 //! Empty boxes are parse errors: the tokens are not expected at that position.
 //! The resolution of ambiguities (positions in the table where both a shift and a reduce action are possible (shift/reduce conflicts)) are annotated and their resolution motivated in the footnotes.
+//! For more explanation on constructing the parse table, see [these slides](https://www.eecis.udel.edu/~cavazos/cisc672-fall08/lectures/Lecture-10.pdf).
 //!
 //!
 //! ### Implementation
@@ -172,23 +173,219 @@ impl Debug for RegexSymbol {
     }
 }
 
+/// Enumeration of the states of the parser.
+/// Ordinal numbers correspond to the state numbers in top-level docs.
+///
+/// The documentation of each item contains its closure set.
+/// If not documented, the lookahead is `$/*/+/?/0/e/l/~/|/&` (i.e., all tokens).
 #[derive(Clone, Copy, Debug)]
 enum ParserState {
-    State0,
-    State1,
-    State2,
-    State3,
-    State4,
-    State5,
-    State6,
-    State7,
-    State8,
-    State9,
-    State10,
-    State11,
-    State12,
-    State13,
-    State14,
+    /// Initial state of the parser.
+    ///
+    /// Closure set:
+    /// - [S -> .E, $]
+    /// - [E -> .0]
+    /// - [E -> .e]
+    /// - [E -> .l]
+    /// - [E -> .~ E]
+    /// - [E -> .E *]
+    /// - [E -> .E +]
+    /// - [E -> .E ?]
+    /// - [E -> .E E]
+    /// - [E -> .E | E]
+    /// - [E -> .E & E]
+    StateInitial = 0,
+    /// State after reducing a top-level regular expression.
+    /// Might accept when the end of the stream is reached, or continue parsing a infix/post-fix operation.
+    ///
+    /// Closure set:    
+    /// - [S -> E., $]
+    /// - [E -> E.*]
+    /// - [E -> E.+]
+    /// - [E -> E.?]
+    /// - [E -> E.E]
+    /// - [E -> E.| E]
+    /// - [E -> E.& E]
+    /// - [E -> .0]
+    /// - [E -> .e]
+    /// - [E -> .l]
+    /// - [E -> .~ E]
+    /// - [E -> .E *]
+    /// - [E -> .E +]
+    /// - [E -> .E ?]
+    /// - [E -> .E E]
+    /// - [E -> .E | E]
+    /// - [E -> .E & E]
+    StateRegex = 1,
+    /// State after shifting a `0`: will always reduce using `E -> 0`.
+    ///
+    /// Closure set:
+    /// - [E -> 0.]
+    StateZero = 2,
+    /// State after shifting a `e`: will always reduce using `E -> e`.
+    ///
+    /// Closure set:
+    /// - [E -> e.]
+    StateEpsilon = 3,
+    /// State after shifting a `l` or parenthesized expression: will always reduce using `E -> l` or `E -> ( E )`.
+    ///
+    /// Closure set:
+    /// - [E -> l.]
+    /// - [E -> ( E ).] (manually added)
+    StateSymbol = 4,
+    /// State after shifting a `~`.
+    ///
+    /// Closure set:
+    /// - [E -> ~.E]
+    /// - [E -> .0]
+    /// - [E -> .e]
+    /// - [E -> .l]
+    /// - [E -> .~ E]
+    /// - [E -> .E *]
+    /// - [E -> .E +]
+    /// - [E -> .E ?]
+    /// - [E -> .E E]
+    /// - [E -> .E | E]
+    /// - [E -> .E & E]
+    StateNeg = 5,
+    /// State after shifting a `*`.
+    /// Will always reduce using `E -> E *`.
+    ///
+    /// Closure set:
+    /// - [E -> E *.]
+    StateRegexRepeat = 6,
+    /// State after shifting a `+`.
+    /// Will always reduce using `E -> E +`.
+    ///
+    /// Closure set:
+    /// - [E -> E +.]
+    StateRegexPlus = 7,
+    /// State after shifting a `?`.
+    /// Will always reduce using `E -> E ?`.
+    ///
+    /// Closure set:
+    /// - [E -> E ?.]
+    StateRegexOptional = 8,
+    /// State two fully reduced regular expressions are at the top of the stack.
+    /// Can further reduce concat operations, or shift inputs with higher priority.
+    ///
+    /// Closure set:
+    /// - [E -> E E.]
+    /// - [E -> E.*]
+    /// - [E -> E.+]
+    /// - [E -> E.?]
+    /// - [E -> E.E]
+    /// - [E -> E.| E]
+    /// - [E -> E.& E]
+    /// - [E -> .0]
+    /// - [E -> .e]
+    /// - [E -> .l]
+    /// - [E -> .~ E]
+    /// - [E -> .E *]
+    /// - [E -> .E +]
+    /// - [E -> .E ?]
+    /// - [E -> .E E]
+    /// - [E -> .E | E]
+    /// - [E -> .E & E]
+    StateRegexRegex = 9,
+    /// State after shifting a `|`.
+    /// Can reduce using `E -> E | E`, or shift inputs with higher priority.
+    ///
+    /// Closure set:
+    /// - [E -> E |.E]
+    /// - [E -> .0]
+    /// - [E -> .e]
+    /// - [E -> .l]
+    /// - [E -> .~ E]
+    /// - [E -> .E *]
+    /// - [E -> .E +]
+    /// - [E -> .E ?]
+    /// - [E -> .E E]
+    /// - [E -> .E | E]
+    /// - [E -> .E & E]
+    StateRegexOr = 10,
+    /// State after shifting a `&`.
+    /// Can reduce using `E -> E & E`, or shift inputs with higher priority.
+    ///
+    /// Closure set:
+    /// - [E -> E &.E]
+    /// - [E -> .0]
+    /// - [E -> .e]
+    /// - [E -> .l]
+    /// - [E -> .~ E]
+    /// - [E -> .E *]
+    /// - [E -> .E +]
+    /// - [E -> .E ?]
+    /// - [E -> .E E]
+    /// - [E -> .E | E]
+    /// - [E -> .E & E]
+    StateRegexAnd = 11,
+    /// State when a negation operator and a RE are at the top of the stack.
+    /// Can reduce using the `E -> ~ E` production, or give an ambiguity error with other unary operators.
+    ///
+    /// Closure set:
+    /// - [E -> ~ E.]
+    /// - [E -> E.*]
+    /// - [E -> E.+]
+    /// - [E -> E.?]
+    /// - [E -> E.E]
+    /// - [E -> E.| E]
+    /// - [E -> E.& E]
+    /// - [E -> .0]
+    /// - [E -> .e]
+    /// - [E -> .l]
+    /// - [E -> .~ E]
+    /// - [E -> .E *]
+    /// - [E -> .E +]
+    /// - [E -> .E ?]
+    /// - [E -> .E E]
+    /// - [E -> .E | E]
+    /// - [E -> .E & E]
+    StateNegRegex = 12,
+    /// State when an RE, an or-operator and another RE are at the top of the stack.
+    /// Can reduce using the `E -> E | E` production, or shift higher priority operators.
+    ///
+    /// Closure set:
+    /// - [E -> E | E.]
+    /// - [E -> E.*]
+    /// - [E -> E.+]
+    /// - [E -> E.?]
+    /// - [E -> E.E]
+    /// - [E -> E.| E]
+    /// - [E -> E.& E]
+    /// - [E -> .0]
+    /// - [E -> .e]
+    /// - [E -> .l]
+    /// - [E -> .~ E]
+    /// - [E -> .E *]
+    /// - [E -> .E +]
+    /// - [E -> .E ?]
+    /// - [E -> .E E]
+    /// - [E -> .E | E]
+    /// - [E -> .E & E]
+    StateRegexOrRegex = 13,
+    /// State when an RE, an and-operator and another RE are at the top of the stack.
+    /// Can reduce using the `E -> E & E` production, or shift higher priority operators.
+    ///
+    /// Closure set:
+    /// - [E -> E & E.]
+    /// - [E -> E.*]
+    /// - [E -> E.+]
+    /// - [E -> E.?]
+    /// - [E -> E.E]
+    /// - [E -> E.| E]
+    /// - [E -> E.& E]
+    /// - [E -> .0]
+    /// - [E -> .e]
+    /// - [E -> .l]
+    /// - [E -> .~ E]
+    /// - [E -> .E *]
+    /// - [E -> .E +]
+    /// - [E -> .E ?]
+    /// - [E -> .E E]
+    /// - [E -> .E | E]
+    /// - [E -> .E & E]
+    StateRegexAndRegex = 14,
 }
 
 /// In regular LR parsing literature, the parse stack is an alternating sequence of states and symbols.
@@ -335,7 +532,7 @@ impl<'a> RegexParser<'a> {
         self.symbol_stack
             .last()
             .map(|ss| ss.state)
-            .unwrap_or(ParserState::State0) // implicitly assume State 0 on bottom of stack.
+            .unwrap_or(ParserState::StateInitial) // implicitly assume State 0 on bottom of stack.
     }
 
     /// Pop last state and symbol from the stack.
@@ -483,15 +680,15 @@ impl<'a> RegexParser<'a> {
     /// Then it finds the `GOTO[S, E]` entry, and pushes the result and the new state to the stack.
     fn goto(&mut self, result: Rc<Regex>) -> syn::Result<bool> {
         let state = match self.state() {
-            ParserState::State0 => ParserState::State1,
-            ParserState::State1 => ParserState::State9,
-            ParserState::State5 => ParserState::State12,
-            ParserState::State9 => ParserState::State9,
-            ParserState::State10 => ParserState::State13,
-            ParserState::State11 => ParserState::State14,
-            ParserState::State12 => ParserState::State9,
-            ParserState::State13 => ParserState::State9,
-            ParserState::State14 => ParserState::State9,
+            ParserState::StateInitial => ParserState::StateRegex,
+            ParserState::StateRegex => ParserState::StateRegexRegex,
+            ParserState::StateNeg => ParserState::StateNegRegex,
+            ParserState::StateRegexRegex => ParserState::StateRegexRegex,
+            ParserState::StateRegexOr => ParserState::StateRegexOrRegex,
+            ParserState::StateRegexAnd => ParserState::StateRegexAndRegex,
+            ParserState::StateNegRegex => ParserState::StateRegexRegex, // redundant: negations are always reduced eagerly
+            ParserState::StateRegexOrRegex => ParserState::StateRegexRegex,
+            ParserState::StateRegexAndRegex => ParserState::StateRegexRegex,
             _ => return self.internal_error("cannot perform 'goto' action on current state"),
         };
         self.symbol_stack.push(StackSymbol {
@@ -521,52 +718,52 @@ impl<'a> RegexParser<'a> {
     /// Implementation of the ACTION-table.
     fn step(&mut self) -> syn::Result<bool> {
         match self.state() {
-            ParserState::State0
-            | ParserState::State5
-            | ParserState::State10
-            | ParserState::State11 => match self.lexer.peek() {
-                RegexSymbol::Zero => self.shift(ParserState::State2),
-                RegexSymbol::Epsilon => self.shift(ParserState::State3),
-                RegexSymbol::Regex(_) => self.shift(ParserState::State4),
-                RegexSymbol::Neg => self.shift(ParserState::State5),
+            ParserState::StateInitial
+            | ParserState::StateNeg
+            | ParserState::StateRegexOr
+            | ParserState::StateRegexAnd => match self.lexer.peek() {
+                RegexSymbol::Zero => self.shift(ParserState::StateZero),
+                RegexSymbol::Epsilon => self.shift(ParserState::StateEpsilon),
+                RegexSymbol::Regex(_) => self.shift(ParserState::StateSymbol),
+                RegexSymbol::Neg => self.shift(ParserState::StateNeg),
                 _ => self.error(
                     "expected '0', 'e', '~', label or parenthesized regular expression here",
                 ),
             },
-            ParserState::State1 => match self.lexer.peek() {
-                RegexSymbol::Zero => self.shift(ParserState::State2),
-                RegexSymbol::Epsilon => self.shift(ParserState::State3),
-                RegexSymbol::Regex(_) => self.shift(ParserState::State4),
-                RegexSymbol::Neg => self.shift(ParserState::State5),
-                RegexSymbol::Repeat => self.shift(ParserState::State6),
-                RegexSymbol::Plus => self.shift(ParserState::State7),
-                RegexSymbol::Optional => self.shift(ParserState::State8),
-                RegexSymbol::Or => self.shift(ParserState::State10),
-                RegexSymbol::And => self.shift(ParserState::State11),
+            ParserState::StateRegex => match self.lexer.peek() {
+                RegexSymbol::Zero => self.shift(ParserState::StateZero),
+                RegexSymbol::Epsilon => self.shift(ParserState::StateEpsilon),
+                RegexSymbol::Regex(_) => self.shift(ParserState::StateSymbol),
+                RegexSymbol::Neg => self.shift(ParserState::StateNeg),
+                RegexSymbol::Repeat => self.shift(ParserState::StateRegexRepeat),
+                RegexSymbol::Plus => self.shift(ParserState::StateRegexPlus),
+                RegexSymbol::Optional => self.shift(ParserState::StateRegexOptional),
+                RegexSymbol::Or => self.shift(ParserState::StateRegexOr),
+                RegexSymbol::And => self.shift(ParserState::StateRegexAnd),
                 RegexSymbol::End => Self::accept(),
             },
-            ParserState::State2 => self.reduce_zero(),
-            ParserState::State3 => self.reduce_epsilon(),
-            ParserState::State4 => self.reduce_symbol(),
-            ParserState::State6 => self.reduce_repeat(),
-            ParserState::State7 => self.reduce_plus(),
-            ParserState::State8 => self.reduce_optional(),
-            ParserState::State9 => match self.lexer.peek() {
+            ParserState::StateZero => self.reduce_zero(),
+            ParserState::StateEpsilon => self.reduce_epsilon(),
+            ParserState::StateSymbol => self.reduce_symbol(),
+            ParserState::StateRegexRepeat => self.reduce_repeat(),
+            ParserState::StateRegexPlus => self.reduce_plus(),
+            ParserState::StateRegexOptional => self.reduce_optional(),
+            ParserState::StateRegexRegex => match self.lexer.peek() {
                 // concat is right-associative, so shift in case of a new literal/pre-fix operator
-                RegexSymbol::Zero => self.shift(ParserState::State2),
-                RegexSymbol::Epsilon => self.shift(ParserState::State3),
-                RegexSymbol::Regex(_) => self.shift(ParserState::State4),
-                RegexSymbol::Neg => self.shift(ParserState::State5),
+                RegexSymbol::Zero => self.shift(ParserState::StateZero),
+                RegexSymbol::Epsilon => self.shift(ParserState::StateEpsilon),
+                RegexSymbol::Regex(_) => self.shift(ParserState::StateSymbol),
+                RegexSymbol::Neg => self.shift(ParserState::StateNeg),
                 // post-fix operators have priority over concat, so shift here
-                RegexSymbol::Repeat => self.shift(ParserState::State6),
-                RegexSymbol::Plus => self.shift(ParserState::State7),
-                RegexSymbol::Optional => self.shift(ParserState::State8),
+                RegexSymbol::Repeat => self.shift(ParserState::StateRegexRepeat),
+                RegexSymbol::Plus => self.shift(ParserState::StateRegexPlus),
+                RegexSymbol::Optional => self.shift(ParserState::StateRegexOptional),
                 // concat has priority over '|' and  '&', so reduce here
                 RegexSymbol::Or => self.reduce_concat(),
                 RegexSymbol::And => self.reduce_concat(),
                 RegexSymbol::End => self.reduce_concat(),
             },
-            ParserState::State12 => match self.lexer.peek() {
+            ParserState::StateNegRegex => match self.lexer.peek() {
                 // neg has top priority, but is ambiguous with posf-fix operators.
                 RegexSymbol::Zero => self.reduce_neg(),
                 RegexSymbol::Epsilon => self.reduce_neg(),
@@ -585,29 +782,29 @@ impl<'a> RegexParser<'a> {
                 RegexSymbol::And => self.reduce_neg(),
                 RegexSymbol::End => self.reduce_neg(),
             },
-            ParserState::State13 => match self.lexer.peek() {
+            ParserState::StateRegexOrRegex => match self.lexer.peek() {
                 // or has lowest priority, so shift in any case
-                RegexSymbol::Zero => self.shift(ParserState::State2),
-                RegexSymbol::Epsilon => self.shift(ParserState::State3),
-                RegexSymbol::Regex(_) => self.shift(ParserState::State4),
-                RegexSymbol::Neg => self.shift(ParserState::State5),
-                RegexSymbol::Repeat => self.shift(ParserState::State6),
-                RegexSymbol::Plus => self.shift(ParserState::State7),
-                RegexSymbol::Optional => self.shift(ParserState::State8),
+                RegexSymbol::Zero => self.shift(ParserState::StateZero),
+                RegexSymbol::Epsilon => self.shift(ParserState::StateEpsilon),
+                RegexSymbol::Regex(_) => self.shift(ParserState::StateSymbol),
+                RegexSymbol::Neg => self.shift(ParserState::StateNeg),
+                RegexSymbol::Repeat => self.shift(ParserState::StateRegexRepeat),
+                RegexSymbol::Plus => self.shift(ParserState::StateRegexPlus),
+                RegexSymbol::Optional => self.shift(ParserState::StateRegexOptional),
                 // or is left-associative, so reduce eagerly
                 RegexSymbol::Or => self.reduce_or(),
-                RegexSymbol::And => self.shift(ParserState::State11),
+                RegexSymbol::And => self.shift(ParserState::StateRegexAnd),
                 RegexSymbol::End => self.reduce_or(),
             },
-            ParserState::State14 => match self.lexer.peek() {
+            ParserState::StateRegexAndRegex => match self.lexer.peek() {
                 // '&' has priority over '|' only, so shift in any other case
-                RegexSymbol::Zero => self.shift(ParserState::State2),
-                RegexSymbol::Epsilon => self.shift(ParserState::State3),
-                RegexSymbol::Regex(_) => self.shift(ParserState::State4),
-                RegexSymbol::Neg => self.shift(ParserState::State5),
-                RegexSymbol::Repeat => self.shift(ParserState::State6),
-                RegexSymbol::Plus => self.shift(ParserState::State7),
-                RegexSymbol::Optional => self.shift(ParserState::State8),
+                RegexSymbol::Zero => self.shift(ParserState::StateZero),
+                RegexSymbol::Epsilon => self.shift(ParserState::StateEpsilon),
+                RegexSymbol::Regex(_) => self.shift(ParserState::StateSymbol),
+                RegexSymbol::Neg => self.shift(ParserState::StateNeg),
+                RegexSymbol::Repeat => self.shift(ParserState::StateRegexRepeat),
+                RegexSymbol::Plus => self.shift(ParserState::StateRegexPlus),
+                RegexSymbol::Optional => self.shift(ParserState::StateRegexOptional),
                 // has priority over '|'
                 RegexSymbol::Or => self.reduce_and(),
                 // and is left-recursive, so reduce eagerly
