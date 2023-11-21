@@ -227,16 +227,14 @@ impl<'a> RegexLexer<'a> {
         }
 
         // Scan '0' symbol
-        if lookahead.peek(syn::LitInt) {
-            let val = input.parse::<syn::LitInt>()?;
+        if let Ok(val) = input.parse::<syn::LitInt>() {
             if let Ok(0) = val.base10_parse() {
                 return Ok(RegexSymbol::Zero);
             }
         }
 
         // Scan 'e' and names
-        if lookahead.peek(syn::Ident) {
-            let name = input.parse::<Path>()?;
+        if let Ok(name) = input.parse::<Path>() {
             if name.is_ident("e") {
                 return Ok(RegexSymbol::Epsilon);
             } else {
@@ -246,38 +244,32 @@ impl<'a> RegexLexer<'a> {
         }
 
         // Scan '~' symbol
-        if lookahead.peek(Token![~]) {
-            input.parse::<Token![~]>()?;
+        if let Ok(_) = input.parse::<Token![~]>() {
             return Ok(RegexSymbol::Neg);
         }
 
         // Scan '*' symbol
-        if lookahead.peek(Token![*]) {
-            input.parse::<Token![*]>()?;
+        if let Ok(_) = input.parse::<Token![*]>() {
             return Ok(RegexSymbol::Repeat);
         }
 
         // Scan '+' symbol
-        if lookahead.peek(Token![+]) {
-            input.parse::<Token![+]>()?;
+        if let Ok(_) = input.parse::<Token![+]>() {
             return Ok(RegexSymbol::Plus);
         }
 
         // Scan '?' symbol
-        if lookahead.peek(Token![?]) {
-            input.parse::<Token![?]>()?;
+        if let Ok(_) = input.parse::<Token![?]>() {
             return Ok(RegexSymbol::Optional);
         }
 
         // Scan '|' symbol
-        if lookahead.peek(Token![|]) {
-            input.parse::<Token![|]>()?;
+        if let Ok(_) = input.parse::<Token![|]>() {
             return Ok(RegexSymbol::Or);
         }
 
         // Scan '&' symbol
-        if lookahead.peek(Token![&]) {
-            input.parse::<Token![&]>()?;
+        if let Ok(_) = input.parse::<Token![&]>() {
             return Ok(RegexSymbol::And);
         }
 
