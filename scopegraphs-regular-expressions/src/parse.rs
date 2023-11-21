@@ -31,8 +31,8 @@ impl Debug for RegexSymbol {
             Self::Optional => write!(f, "'?'"),
             Self::Or => write!(f, "'|'"),
             Self::And => write!(f, "'&'"),
-            Self::Regex(regex) => regex.as_ref().fmt(f),
-            Self::End => write!(f, "'*'"),
+            Self::Regex(regex) => write!(f, "{:?}", *regex),
+            Self::End => write!(f, "'$'"),
         }
     }
 }
@@ -67,7 +67,7 @@ impl Debug for StackSymbol {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::State(state) => state.fmt(f),
-            Self::Regex(regex) => f.write_fmt(format_args!("({:?})", regex.as_ref())),
+            Self::Regex(regex) => write!(f, "({:?})", *regex),
             Self::Symbol(symbol) => symbol.fmt(f),
         }
     }
@@ -476,7 +476,7 @@ impl<'a> RegexParser<'a> {
         }
     }
 
-    pub fn parse_regex<'b: 'a>(input: ParseStream<'b>) -> syn::Result<Regex> {
+    pub fn parse_regex(input: ParseStream<'a>) -> syn::Result<Regex> {
         let mut parser = RegexParser::new(input);
         parser.init()?;
         let mut accept = false;

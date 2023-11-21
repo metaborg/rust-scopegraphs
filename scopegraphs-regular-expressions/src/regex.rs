@@ -56,12 +56,12 @@ impl Debug for Regex {
         match self {
             Self::EmptyString => write!(f, "e"),
             Self::EmptySet => write!(f, "0"),
-            Self::Symbol(sym) => sym.as_ref().name.get_ident().fmt(f),
-            Self::Repeat(re) => f.write_fmt(format_args!("{:?}*", re.as_ref())),
-            Self::Complement(re) => f.write_fmt(format_args!("~{:?}", re.as_ref())),
-            Self::Or(l, r) => f.write_fmt(format_args!("{:?} | {:?}", l.as_ref(), r.as_ref())),
-            Self::And(l, r) => f.write_fmt(format_args!("{:?} & {:?}", l.as_ref(), r.as_ref())),
-            Self::Concat(l, r) => f.write_fmt(format_args!("{:?} {:?}", l.as_ref(), r.as_ref())),
+            Self::Symbol(sym) => write!(f, "{:?}", (*sym).name.get_ident()),
+            Self::Repeat(re) => write!(f, "{:?}*", *re),
+            Self::Complement(re) => write!(f, "~{:?}", *re),
+            Self::Or(l, r) => write!(f, "{:?} | {:?}", *l, *r),
+            Self::And(l, r) => write!(f, "{:?} & {:?}", *l, *r),
+            Self::Concat(l, r) => write!(f, "{:?} {:?}", *l, *r),
         }
     }
 }
