@@ -92,6 +92,8 @@
 //! - `r9`: [`RegexParser::reduce_or`]
 //! - `r10`: [`RegexParser::reduce_and`]
 //!
+//! The parser does not have error recovery.
+//!
 //!
 //! [^9l]: shift/reduce conflict with `r8`: resolved this way because concatenation is right-associative, so we need to shift more before we can reduce.
 //!
@@ -212,6 +214,7 @@ struct RegexLexer<'a> {
 }
 
 impl<'a> RegexLexer<'a> {
+    /// Returns the next [`RegexSymbol`] from the `input`.
     fn scan(input: ParseStream<'a>) -> syn::Result<RegexSymbol> {
         if input.is_empty() {
             return Ok(RegexSymbol::End);
@@ -244,48 +247,51 @@ impl<'a> RegexLexer<'a> {
         }
 
         // Scan '~' symbol
-        if let Ok(_) = input.parse::<Token![~]>() {
+        if input.parse::<Token![~]>().is_ok() {
             return Ok(RegexSymbol::Neg);
         }
 
         // Scan '*' symbol
-        if let Ok(_) = input.parse::<Token![*]>() {
+        if input.parse::<Token![*]>().is_ok() {
             return Ok(RegexSymbol::Repeat);
         }
 
         // Scan '+' symbol
-        if let Ok(_) = input.parse::<Token![+]>() {
+        if input.parse::<Token![+]>().is_ok() {
             return Ok(RegexSymbol::Plus);
         }
 
         // Scan '?' symbol
-        if let Ok(_) = input.parse::<Token![?]>() {
+        if input.parse::<Token![?]>().is_ok() {
             return Ok(RegexSymbol::Optional);
         }
 
         // Scan '|' symbol
-        if let Ok(_) = input.parse::<Token![|]>() {
+        if input.parse::<Token![|]>().is_ok() {
             return Ok(RegexSymbol::Or);
         }
 
         // Scan '&' symbol
-        if let Ok(_) = input.parse::<Token![&]>() {
+        if input.parse::<Token![&]>().is_ok() {
             return Ok(RegexSymbol::And);
         }
 
         Err(lookahead.error())
     }
 
+    /// Peeks the first symbol in the stream.
     fn peek(&self) -> &RegexSymbol {
         &self.top
     }
 
+    /// Advances lexer to the next token.
     fn next(&mut self) -> syn::Result<RegexSymbol> {
         let sym = self.top.clone();
         self.top = Self::scan(self.input)?;
         Ok(sym)
     }
 
+    /// Returns the current position in the stream (mainly for emitting errors).
     fn span(&self) -> proc_macro2::Span {
         self.input.span()
     }
@@ -298,6 +304,7 @@ struct RegexParser<'a> {
 }
 
 impl<'a> RegexParser<'a> {
+    /// Initializer a new parser for the underlying token stream.
     fn init(input: ParseStream<'a>) -> syn::Result<Self> {
         let lexer = RegexLexer {
             input,
@@ -310,16 +317,18 @@ impl<'a> RegexParser<'a> {
         })
     }
 
+    /// Shift action (standars in LR parsers).
+    ///
+    /// Pushes current token to the stack, and transitions to `new_state`.
     fn shift(&mut self, new_state: ParserState) -> syn::Result<bool> {
         let next_symbol = self.lexer.next()?;
-        self.symbol_stack
-            .push(StackSymbol::Symbol(next_symbol.clone()));
+        self.symbol_stack.push(StackSymbol::Symbol(next_symbol));
         self.symbol_stack.push(StackSymbol::State(new_state));
         self.state = new_state;
-        Ok(false) // not in accepting state
+        Ok(false) // not (yet) in accepting state
     }
 
-    // reduce
+    /// Get last [`StackSymbol`] shifted to the stack.
     fn top_stack_symbol(&mut self) -> syn::Result<StackSymbol> {
         if let Some(StackSymbol::State(_)) = self.symbol_stack.pop() {
             if let Some(symbol) = self.symbol_stack.pop() {
@@ -332,6 +341,7 @@ impl<'a> RegexParser<'a> {
         }
     }
 
+    /// Get last symbol shifted to the stack, and assert it is a [`StackSymbol::Symbol`] variant.
     fn top_symbol(&mut self) -> syn::Result<RegexSymbol> {
         if let StackSymbol::Symbol(symbol) = self.top_stack_symbol()? {
             Ok(symbol)
@@ -340,6 +350,7 @@ impl<'a> RegexParser<'a> {
         }
     }
 
+    /// Get last symbol shifted to the stack, and assert it is a [`StackSymbol::Regex`] variant.
     fn top_regex(&mut self) -> syn::Result<Rc<Regex>> {
         if let StackSymbol::Regex(regex) = self.top_stack_symbol()? {
             Ok(regex)
@@ -348,11 +359,12 @@ impl<'a> RegexParser<'a> {
         }
     }
 
+    /// Get last symbol shifted to the stack, and assert it is a [`StackSymbol::Symbol`] variant with a particular `expected` [`RegexSymbol`].
     fn expect_symbol(&mut self, expected: RegexSymbol) -> syn::Result<()> {
         if expected == self.top_symbol()? {
             Ok(())
         } else {
-            self.internal_error("expected atom on top of stack")
+            self.internal_error("expected other symbol on top of stack")
         }
     }
 
@@ -363,19 +375,22 @@ impl<'a> RegexParser<'a> {
         self.goto(Rc::new(result))
     }
 
+    /// Reduce `E -> 0` preduction
     fn reduce_zero(&mut self) -> syn::Result<bool> {
         self.reduce_atom(RegexSymbol::Zero, Regex::EmptySet)
     }
 
+    /// Reduce `E -> e` preduction.
     fn reduce_epsilon(&mut self) -> syn::Result<bool> {
         self.reduce_atom(RegexSymbol::Epsilon, Regex::EmptyString)
     }
 
-    // Reduces both symbol literals and parenthesized regexes.
+    /// Reduce `E -> l` and `E -> ( E )` productions.
     fn reduce_symbol(&mut self) -> syn::Result<bool> {
-        match self.top_symbol()? {
-            RegexSymbol::Regex(re) => self.goto(re.clone()),
-            _ => self.internal_error("expected regex on top of stack"),
+        if let RegexSymbol::Regex(re) = self.top_symbol()? {
+            self.goto(re)
+        } else {
+            self.internal_error("expected regex on top of stack")
         }
     }
 
@@ -390,6 +405,7 @@ impl<'a> RegexParser<'a> {
         self.reduce_atom(expected, build(re))
     }
 
+    /// Reduce `E -> ~ E` production.
     fn reduce_neg(&mut self) -> syn::Result<bool> {
         self.reduce_unary_prefix(RegexSymbol::Neg, Regex::Complement)
     }
@@ -404,16 +420,23 @@ impl<'a> RegexParser<'a> {
         self.goto(Rc::new(build(re)))
     }
 
+    /// Reduce `E -> E *` production.
     fn reduce_repeat(&mut self) -> syn::Result<bool> {
         self.reduce_unary_postfix(RegexSymbol::Repeat, Regex::Repeat)
     }
 
+    /// Reduce `E -> E +` production.
+    ///
+    /// Immediately desugars `E1 +` to `E1 E1*`.
     fn reduce_plus(&mut self) -> syn::Result<bool> {
         self.reduce_unary_postfix(RegexSymbol::Plus, |re| {
             Regex::Concat(re.clone(), Rc::new(Regex::Repeat(re)))
         })
     }
 
+    /// Reduce `E -> E ?` production.
+    ///
+    /// Immediately desugars `E1 ?` to `e | E1`.
     fn reduce_optional(&mut self) -> syn::Result<bool> {
         self.reduce_unary_postfix(RegexSymbol::Optional, |re| {
             Regex::Or(Rc::new(Regex::EmptyString), re)
@@ -422,6 +445,7 @@ impl<'a> RegexParser<'a> {
 
     // reduce binary operators
 
+    /// Reduce `E -> E E` production.
     fn reduce_concat(&mut self) -> syn::Result<bool> {
         // right-hand-side is on top of stack ...
         let r = self.top_regex()?;
@@ -441,16 +465,23 @@ impl<'a> RegexParser<'a> {
         self.goto(Rc::new(build(l, r)))
     }
 
+    /// Reduce `E -> E | E` production.
     fn reduce_or(&mut self) -> syn::Result<bool> {
         self.reduce_binary_infix(RegexSymbol::Or, Regex::Or)
     }
 
+    /// Reduce `E -> E & E` production.
     fn reduce_and(&mut self) -> syn::Result<bool> {
         self.reduce_binary_infix(RegexSymbol::And, Regex::And)
     }
 
-    // goto jump table
-
+    /// Implement GOTO-table.
+    ///
+    /// Called after a reduce operation.
+    /// The `result` argument is the result of the reduction (which is always of sort `E`).
+    ///
+    /// It peeks the state `S` on top of the stack (assuming `0` in case of an empty stack).
+    /// Then it finds the `GOTO[S, E]` entry, and pushes the result and the new state to the stack.
     fn goto(&mut self, result: Rc<Regex>) -> syn::Result<bool> {
         if let StackSymbol::State(st) = self
             .symbol_stack
@@ -480,6 +511,7 @@ impl<'a> RegexParser<'a> {
         }
     }
 
+    /// Accepts the input.
     fn accept() -> syn::Result<bool> {
         Ok(true)
     }
@@ -496,6 +528,7 @@ impl<'a> RegexParser<'a> {
         Err(self.build_error(&format!("internal parsing error: {}", msg)))
     }
 
+    /// Implementation of the ACTION-table.
     fn step(&mut self) -> syn::Result<bool> {
         match self.state {
             ParserState::State0
@@ -594,6 +627,7 @@ impl<'a> RegexParser<'a> {
         }
     }
 
+    /// Extracts parsing result from the stack.
     fn finalize(mut self) -> syn::Result<Regex> {
         let regex = self.top_regex()?;
         if self.symbol_stack.is_empty() {
@@ -603,7 +637,8 @@ impl<'a> RegexParser<'a> {
         }
     }
 
-    pub fn parse_regex(input: ParseStream<'a>) -> syn::Result<Regex> {
+    /// Entry point: parses the `input` to a [`Regex`].
+    pub fn parse_regex(input: ParseStream) -> syn::Result<Regex> {
         let mut parser = RegexParser::init(input)?;
         let mut accept = false;
         while !accept {
