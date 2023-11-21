@@ -191,20 +191,23 @@ enum ParserState {
     State14,
 }
 
+/// In regular LR parsing literature, the parse stack is an alternating sequence of states and symbols.
+/// It starts with the initial state [`ParserState::State0`], and always (except between a reduction and a goto) has a state on top.
+/// We differ from this representation in two ways:
+/// 1. We do not explicitly push the initial state to the stack, but implicitly assume it in [`RegexParser::goto`].
+/// 2. We combine the reduce and goto actions.
+///    The reduce actions do not push the result to the stack, but pass it to [`RegexParser::goto`] directly.
+///    [`RegexParser::goto`] computes the next state based on the top of the stack and the result that was passed in, and pushes the result and the new state to the stack.
+/// This allows us to combine the stack elements as 2-tuples, getting rid of a lot of runtime checks & pattern matching.
 #[derive(Clone)]
-enum StackSymbol {
-    State(ParserState),
-    Symbol(RegexSymbol),
-    Regex(Rc<Regex>),
+struct StackSymbol {
+    state: ParserState,
+    symbol: RegexSymbol,
 }
 
 impl Debug for StackSymbol {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::State(state) => state.fmt(f),
-            Self::Regex(regex) => write!(f, "({:?})", *regex),
-            Self::Symbol(symbol) => symbol.fmt(f),
-        }
+        write!(f, "<{:?}, {:?}>", self.state, self.symbol)
     }
 }
 
@@ -322,46 +325,35 @@ impl<'a> RegexParser<'a> {
     /// Pushes current token to the stack, and transitions to `new_state`.
     fn shift(&mut self, new_state: ParserState) -> syn::Result<bool> {
         let next_symbol = self.lexer.next()?;
-        self.symbol_stack.push(StackSymbol::Symbol(next_symbol));
-        self.symbol_stack.push(StackSymbol::State(new_state));
+        self.symbol_stack.push(StackSymbol {
+            state: new_state,
+            symbol: next_symbol,
+        });
         self.state = new_state;
         Ok(false) // not (yet) in accepting state
     }
 
-    /// Get last [`StackSymbol`] shifted to the stack.
-    fn top_stack_symbol(&mut self) -> syn::Result<StackSymbol> {
-        if let Some(StackSymbol::State(_)) = self.symbol_stack.pop() {
-            if let Some(symbol) = self.symbol_stack.pop() {
-                Ok(symbol)
-            } else {
-                self.internal_error("expected non-empty stack")
-            }
+    /// Get last [symbol](RegexSymbol) shifted to the stack.
+    fn top_stack_symbol(&mut self) -> syn::Result<RegexSymbol> {
+        if let Some(symbol) = self.symbol_stack.pop() {
+            Ok(symbol.symbol)
         } else {
-            self.internal_error("expected state on top of stack")
-        }
-    }
-
-    /// Get last symbol shifted to the stack, and assert it is a [`StackSymbol::Symbol`] variant.
-    fn top_symbol(&mut self) -> syn::Result<RegexSymbol> {
-        if let StackSymbol::Symbol(symbol) = self.top_stack_symbol()? {
-            Ok(symbol)
-        } else {
-            self.internal_error("expected symbol on top of stack")
+            self.internal_error("expected non-empty stack")
         }
     }
 
     /// Get last symbol shifted to the stack, and assert it is a [`StackSymbol::Regex`] variant.
     fn top_regex(&mut self) -> syn::Result<Rc<Regex>> {
-        if let StackSymbol::Regex(regex) = self.top_stack_symbol()? {
+        if let RegexSymbol::Regex(regex) = self.top_stack_symbol()? {
             Ok(regex)
         } else {
             self.internal_error("expected regex on top of stack")
         }
     }
 
-    /// Get last symbol shifted to the stack, and assert it is a [`StackSymbol::Symbol`] variant with a particular `expected` [`RegexSymbol`].
+    /// Get last symbol shifted to the stack, and assert it is a particular `expected` [`RegexSymbol`].
     fn expect_symbol(&mut self, expected: RegexSymbol) -> syn::Result<()> {
-        if expected == self.top_symbol()? {
+        if expected == self.top_stack_symbol()? {
             Ok(())
         } else {
             self.internal_error("expected other symbol on top of stack")
@@ -385,13 +377,10 @@ impl<'a> RegexParser<'a> {
         self.reduce_atom(RegexSymbol::Epsilon, Regex::EmptyString)
     }
 
-    /// Reduce `E -> l` and `E -> ( E )` productions.
+    /// Reduce `E -> l` and `E -> ( E )` productions (NO-OP: symbol is shared).
     fn reduce_symbol(&mut self) -> syn::Result<bool> {
-        if let RegexSymbol::Regex(re) = self.top_symbol()? {
-            self.goto(re)
-        } else {
-            self.internal_error("expected regex on top of stack")
-        }
+        let re = self.top_regex()?;
+        self.goto(re)
     }
 
     // reduce unary operators
@@ -483,32 +472,29 @@ impl<'a> RegexParser<'a> {
     /// It peeks the state `S` on top of the stack (assuming `0` in case of an empty stack).
     /// Then it finds the `GOTO[S, E]` entry, and pushes the result and the new state to the stack.
     fn goto(&mut self, result: Rc<Regex>) -> syn::Result<bool> {
-        if let StackSymbol::State(st) = self
+        let st = self
             .symbol_stack
             .last()
-            .unwrap_or(&StackSymbol::State(ParserState::State0))
-        {
-            self.state = match st {
-                ParserState::State0 => ParserState::State1,
-                ParserState::State1 => ParserState::State9,
-                ParserState::State5 => ParserState::State12,
-                ParserState::State9 => ParserState::State9,
-                ParserState::State10 => ParserState::State13,
-                ParserState::State11 => ParserState::State14,
-                ParserState::State12 => ParserState::State9,
-                ParserState::State13 => ParserState::State9,
-                ParserState::State14 => ParserState::State9,
-                _ => {
-                    return self
-                        .internal_error("cannot perform 'goto' action on current stack state")
-                }
-            };
-            self.symbol_stack.push(StackSymbol::Regex(result.clone()));
-            self.symbol_stack.push(StackSymbol::State(self.state));
-            Ok(false)
-        } else {
-            self.internal_error("expected state on top of symbol stack")
-        }
+            .map(|ss| ss.state)
+            .unwrap_or(ParserState::State0);
+        let state = match st {
+            ParserState::State0 => ParserState::State1,
+            ParserState::State1 => ParserState::State9,
+            ParserState::State5 => ParserState::State12,
+            ParserState::State9 => ParserState::State9,
+            ParserState::State10 => ParserState::State13,
+            ParserState::State11 => ParserState::State14,
+            ParserState::State12 => ParserState::State9,
+            ParserState::State13 => ParserState::State9,
+            ParserState::State14 => ParserState::State9,
+            _ => return self.internal_error("cannot perform 'goto' action on current state"),
+        };
+        self.symbol_stack.push(StackSymbol {
+            state,
+            symbol: RegexSymbol::Regex(result),
+        });
+        self.state = state;
+        Ok(false)
     }
 
     /// Accepts the input.
