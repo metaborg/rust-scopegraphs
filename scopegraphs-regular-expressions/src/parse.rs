@@ -38,7 +38,7 @@ impl Debug for RegexSymbol {
 }
 
 #[derive(Clone, Copy, Debug)]
-enum RegexAutomatonState {
+enum ParserState {
     State0,
     State1,
     State2,
@@ -58,9 +58,9 @@ enum RegexAutomatonState {
 
 #[derive(Clone)]
 enum StackSymbol {
-    State(RegexAutomatonState),
-    Regex(Rc<Regex>),
+    State(ParserState),
     Symbol(RegexSymbol),
+    Regex(Rc<Regex>),
 }
 
 impl Debug for StackSymbol {
@@ -75,21 +75,18 @@ impl Debug for StackSymbol {
 
 struct RegexParser<'a> {
     input: ParseStream<'a>,
-    state: RegexAutomatonState,
+    state: ParserState,
     next: Option<RegexSymbol>,
     symbol_stack: Vec<StackSymbol>,
 }
-
-use RegexAutomatonState::*;
-use RegexSymbol::*;
 
 impl<'a> RegexParser<'a> {
     fn new(input: ParseStream<'a>) -> Self {
         Self {
             input,
-            state: State0,
+            state: ParserState::State0,
             next: None,
-            symbol_stack: vec![StackSymbol::State(State0)],
+            symbol_stack: vec![StackSymbol::State(ParserState::State0)],
         }
     }
 
@@ -165,7 +162,7 @@ impl<'a> RegexParser<'a> {
         Err(lookahead.error())
     }
 
-    fn shift(&mut self, new_state: RegexAutomatonState) -> syn::Result<bool> {
+    fn shift(&mut self, new_state: ParserState) -> syn::Result<bool> {
         let next_symbol = self.next()?;
         self.symbol_stack
             .push(StackSymbol::Symbol(next_symbol.clone()));
@@ -225,7 +222,7 @@ impl<'a> RegexParser<'a> {
     // Reduces both symbol literals and parenthesized regexes.
     fn reduce_symbol(&mut self) -> syn::Result<bool> {
         match self.top_symbol()? {
-            Regex(re) => self.goto(re.clone()),
+            RegexSymbol::Regex(re) => self.goto(re.clone()),
             _ => self.error("internal parsing error: expected regex on top of stack"),
         }
     }
@@ -314,15 +311,15 @@ impl<'a> RegexParser<'a> {
         }
         if let Some(StackSymbol::State(st)) = self.symbol_stack.last() {
             self.state = match st {
-                State0 => State1,
-                State1 => State9,
-                State5 => State12,
-                State9 => State9,
-                State10 => State13,
-                State11 => State14,
-                State12 => State9,
-                State13 => State9,
-                State14 => State9,
+                ParserState::State0 => ParserState::State1,
+                ParserState::State1 => ParserState::State9,
+                ParserState::State5 => ParserState::State12,
+                ParserState::State9 => ParserState::State9,
+                ParserState::State10 => ParserState::State13,
+                ParserState::State11 => ParserState::State14,
+                ParserState::State12 => ParserState::State9,
+                ParserState::State13 => ParserState::State9,
+                ParserState::State14 => ParserState::State9,
                 _ => return self.error(
                     "internal parsing error: cannot perform 'goto' action' on current stack state",
                 ),
@@ -362,102 +359,105 @@ impl<'a> RegexParser<'a> {
 
     fn step(&mut self) -> syn::Result<bool> {
         match self.state {
-            State0 | State5 | State10 | State11 => match self.next()? {
-                Zero => self.shift(State2),
-                Epsilon => self.shift(State3),
-                Regex(_) => self.shift(State4),
-                Neg => self.shift(State5),
+            ParserState::State0
+            | ParserState::State5
+            | ParserState::State10
+            | ParserState::State11 => match self.next()? {
+                RegexSymbol::Zero => self.shift(ParserState::State2),
+                RegexSymbol::Epsilon => self.shift(ParserState::State3),
+                RegexSymbol::Regex(_) => self.shift(ParserState::State4),
+                RegexSymbol::Neg => self.shift(ParserState::State5),
                 _ => self.error(
                     "expected '0', 'e', '~', label or parenthesized regular expression here",
                 ),
             },
-            State1 => match self.next()? {
-                Zero => self.shift(State2),
-                Epsilon => self.shift(State3),
-                Regex(_) => self.shift(State4),
-                Neg => self.shift(State5),
-                Repeat => self.shift(State6),
-                Plus => self.shift(State7),
-                Optional => self.shift(State8),
-                Or => self.shift(State10),
-                And => self.shift(State11),
-                End => Self::accept(),
+            ParserState::State1 => match self.next()? {
+                RegexSymbol::Zero => self.shift(ParserState::State2),
+                RegexSymbol::Epsilon => self.shift(ParserState::State3),
+                RegexSymbol::Regex(_) => self.shift(ParserState::State4),
+                RegexSymbol::Neg => self.shift(ParserState::State5),
+                RegexSymbol::Repeat => self.shift(ParserState::State6),
+                RegexSymbol::Plus => self.shift(ParserState::State7),
+                RegexSymbol::Optional => self.shift(ParserState::State8),
+                RegexSymbol::Or => self.shift(ParserState::State10),
+                RegexSymbol::And => self.shift(ParserState::State11),
+                RegexSymbol::End => Self::accept(),
             },
-            State2 => self.reduce_zero(),
-            State3 => self.reduce_epsilon(),
-            State4 => self.reduce_symbol(),
-            State6 => self.reduce_repeat(),
-            State7 => self.reduce_plus(),
-            State8 => self.reduce_optional(),
-            State9 => {
+            ParserState::State2 => self.reduce_zero(),
+            ParserState::State3 => self.reduce_epsilon(),
+            ParserState::State4 => self.reduce_symbol(),
+            ParserState::State6 => self.reduce_repeat(),
+            ParserState::State7 => self.reduce_plus(),
+            ParserState::State8 => self.reduce_optional(),
+            ParserState::State9 => {
                 match self.next()? {
                     // concat is right-associative, so shift in case of a new literal/pre-fix operator
-                    Zero => self.shift(State2),
-                    Epsilon => self.shift(State3),
-                    Regex(_) => self.shift(State4),
-                    Neg => self.shift(State5),
+                    RegexSymbol::Zero => self.shift(ParserState::State2),
+                    RegexSymbol::Epsilon => self.shift(ParserState::State3),
+                    RegexSymbol::Regex(_) => self.shift(ParserState::State4),
+                    RegexSymbol::Neg => self.shift(ParserState::State5),
                     // post-fix operators have priority over concat, so shift here
-                    Repeat => self.shift(State6),
-                    Plus => self.shift(State7),
-                    Optional => self.shift(State8),
+                    RegexSymbol::Repeat => self.shift(ParserState::State6),
+                    RegexSymbol::Plus => self.shift(ParserState::State7),
+                    RegexSymbol::Optional => self.shift(ParserState::State8),
                     // concat has priority over '|' and  '&', so reduce here
-                    Or => self.reduce_concat(),
-                    And => self.reduce_concat(),
-                    End => self.reduce_concat(),
+                    RegexSymbol::Or => self.reduce_concat(),
+                    RegexSymbol::And => self.reduce_concat(),
+                    RegexSymbol::End => self.reduce_concat(),
                 }
             }
-            State12 => {
+            ParserState::State12 => {
                 match self.next()? {
                     // neg has top priority, but is ambiguous with posf-fix operators.
-                    Zero => self.reduce_neg(),
-                    Epsilon => self.reduce_neg(),
-                    Regex(_) => self.reduce_neg(),
-                    Neg => self.reduce_neg(),
-                    Repeat => self.error(
+                    RegexSymbol::Zero => self.reduce_neg(),
+                    RegexSymbol::Epsilon => self.reduce_neg(),
+                    RegexSymbol::Regex(_) => self.reduce_neg(),
+                    RegexSymbol::Neg => self.reduce_neg(),
+                    RegexSymbol::Repeat => self.error(
                         "ambiguous regex: simultaneous use of '~' prefix and '*' postfix operator",
                     ),
-                    Plus => self.error(
+                    RegexSymbol::Plus => self.error(
                         "ambiguous regex: simultaneous use of '~' prefix and '+' postfix operator",
                     ),
-                    Optional => self.error(
+                    RegexSymbol::Optional => self.error(
                         "ambiguous regex: simultaneous use of '~' prefix and '?' postfix operator",
                     ),
-                    Or => self.reduce_neg(),
-                    And => self.reduce_neg(),
-                    End => self.reduce_neg(),
+                    RegexSymbol::Or => self.reduce_neg(),
+                    RegexSymbol::And => self.reduce_neg(),
+                    RegexSymbol::End => self.reduce_neg(),
                 }
             }
-            State13 => {
+            ParserState::State13 => {
                 match self.next()? {
                     // or has lowest priority, so shift in any case
-                    Zero => self.shift(State2),
-                    Epsilon => self.shift(State3),
-                    Regex(_) => self.shift(State4),
-                    Neg => self.shift(State5),
-                    Repeat => self.shift(State6),
-                    Plus => self.shift(State7),
-                    Optional => self.shift(State8),
+                    RegexSymbol::Zero => self.shift(ParserState::State2),
+                    RegexSymbol::Epsilon => self.shift(ParserState::State3),
+                    RegexSymbol::Regex(_) => self.shift(ParserState::State4),
+                    RegexSymbol::Neg => self.shift(ParserState::State5),
+                    RegexSymbol::Repeat => self.shift(ParserState::State6),
+                    RegexSymbol::Plus => self.shift(ParserState::State7),
+                    RegexSymbol::Optional => self.shift(ParserState::State8),
                     // or is left-associative, so reduce eagerly
-                    Or => self.reduce_or(),
-                    And => self.shift(State11),
-                    End => self.reduce_or(),
+                    RegexSymbol::Or => self.reduce_or(),
+                    RegexSymbol::And => self.shift(ParserState::State11),
+                    RegexSymbol::End => self.reduce_or(),
                 }
             }
-            State14 => {
+            ParserState::State14 => {
                 match self.next()? {
                     // '&' has priority over '|' only, so shift in any other case
-                    Zero => self.shift(State2),
-                    Epsilon => self.shift(State3),
-                    Regex(_) => self.shift(State4),
-                    Neg => self.shift(State5),
-                    Repeat => self.shift(State6),
-                    Plus => self.shift(State7),
-                    Optional => self.shift(State8),
+                    RegexSymbol::Zero => self.shift(ParserState::State2),
+                    RegexSymbol::Epsilon => self.shift(ParserState::State3),
+                    RegexSymbol::Regex(_) => self.shift(ParserState::State4),
+                    RegexSymbol::Neg => self.shift(ParserState::State5),
+                    RegexSymbol::Repeat => self.shift(ParserState::State6),
+                    RegexSymbol::Plus => self.shift(ParserState::State7),
+                    RegexSymbol::Optional => self.shift(ParserState::State8),
                     // has priority over '|'
-                    Or => self.reduce_and(),
+                    RegexSymbol::Or => self.reduce_and(),
                     // and is left-recursive, so reduce eagerly
-                    And => self.reduce_and(),
-                    End => self.reduce_and(),
+                    RegexSymbol::And => self.reduce_and(),
+                    RegexSymbol::End => self.reduce_and(),
                 }
             }
         }
@@ -465,7 +465,7 @@ impl<'a> RegexParser<'a> {
 
     fn finalize(mut self) -> syn::Result<Regex> {
         let regex = self.top_regex()?;
-        if let Some(StackSymbol::State(State0)) = self.symbol_stack.pop() {
+        if let Some(StackSymbol::State(ParserState::State0)) = self.symbol_stack.pop() {
             if self.symbol_stack.is_empty() {
                 Ok(regex.deref().clone())
             } else {
