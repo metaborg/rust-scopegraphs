@@ -200,10 +200,10 @@ impl<'a> RegexParser<'a> {
             if let Some(symbol) = self.symbol_stack.pop() {
                 Ok(symbol)
             } else {
-                self.error("internal parsing error: expected non-empty stack")
+                self.internal_error("expected non-empty stack")
             }
         } else {
-            self.error("internal parsing error: expected state on top of stack")
+            self.internal_error("expected state on top of stack")
         }
     }
 
@@ -211,7 +211,7 @@ impl<'a> RegexParser<'a> {
         if let StackSymbol::Symbol(symbol) = self.top_stack_symbol()? {
             Ok(symbol)
         } else {
-            self.error("internal parsing error: expected symbol on top of stack")
+            self.internal_error("expected symbol on top of stack")
         }
     }
 
@@ -219,18 +219,23 @@ impl<'a> RegexParser<'a> {
         if let StackSymbol::Regex(regex) = self.top_stack_symbol()? {
             Ok(regex)
         } else {
-            self.error("internal parsing error: expected regex on top of stack")
+            self.internal_error("expected regex on top of stack")
+        }
+    }
+
+    fn expect_symbol(&mut self, expected: RegexSymbol) -> syn::Result<()> {
+        if expected == self.top_symbol()? {
+            Ok(())
+        } else {
+            self.internal_error("expected atom on top of stack")
         }
     }
 
     // reduce atoms
 
     fn reduce_atom(&mut self, expected: RegexSymbol, result: Regex) -> syn::Result<bool> {
-        if expected == self.top_symbol()? {
-            self.goto(Rc::new(result))
-        } else {
-            self.error("internal parsing error: expected atom on top of stack")
-        }
+        self.expect_symbol(expected)?;
+        self.goto(Rc::new(result))
     }
 
     fn reduce_zero(&mut self) -> syn::Result<bool> {
@@ -245,7 +250,7 @@ impl<'a> RegexParser<'a> {
     fn reduce_symbol(&mut self) -> syn::Result<bool> {
         match self.top_symbol()? {
             RegexSymbol::Regex(re) => self.goto(re.clone()),
-            _ => self.error("internal parsing error: expected regex on top of stack"),
+            _ => self.internal_error("expected regex on top of stack"),
         }
     }
 
@@ -269,10 +274,7 @@ impl<'a> RegexParser<'a> {
         expected: RegexSymbol,
         build: impl Fn(Rc<Regex>) -> Regex,
     ) -> syn::Result<bool> {
-        if expected != self.top_symbol()? {
-            return self
-                .error("internal parsing error: expected post-fix operator on top of stack");
-        }
+        self.expect_symbol(expected)?;
         let re = self.top_regex()?;
         self.goto(Rc::new(build(re)))
     }
@@ -309,9 +311,7 @@ impl<'a> RegexParser<'a> {
     ) -> syn::Result<bool> {
         // right-hand-side is on top of stack ...
         let r = self.top_regex()?;
-        if expected != self.top_symbol()? {
-            return self.error("internal parsing error: incorrect operator on top level of stack");
-        }
+        self.expect_symbol(expected)?;
         let l = self.top_regex()?;
         self.goto(Rc::new(build(l, r)))
     }
@@ -342,15 +342,16 @@ impl<'a> RegexParser<'a> {
                 ParserState::State12 => ParserState::State9,
                 ParserState::State13 => ParserState::State9,
                 ParserState::State14 => ParserState::State9,
-                _ => return self.error(
-                    "internal parsing error: cannot perform 'goto' action' on current stack state",
-                ),
+                _ => {
+                    return self
+                        .internal_error("cannot perform 'goto' action on current stack state")
+                }
             };
             self.symbol_stack.push(StackSymbol::Regex(result.clone()));
             self.symbol_stack.push(StackSymbol::State(self.state));
             Ok(false)
         } else {
-            self.error("internal parsing error: expected state on top of symbol stack")
+            self.internal_error("expected state on top of symbol stack")
         }
     }
 
@@ -364,6 +365,10 @@ impl<'a> RegexParser<'a> {
 
     fn error<T>(&mut self, msg: &str) -> syn::Result<T> {
         Err(self.build_error(msg))
+    }
+
+    fn internal_error<T>(&mut self, msg: &str) -> syn::Result<T> {
+        Err(self.build_error(&format!("internal parsing error: {}", msg)))
     }
 
     fn step(&mut self) -> syn::Result<bool> {
@@ -469,7 +474,7 @@ impl<'a> RegexParser<'a> {
         if self.symbol_stack.is_empty() {
             Ok(regex.deref().clone())
         } else {
-            self.error("internal parsing error: residual input after parsing finished.")
+            self.internal_error("residual input after parsing finished.")
         }
     }
 
