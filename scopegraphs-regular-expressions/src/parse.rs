@@ -173,6 +173,95 @@ impl Debug for RegexSymbol {
     }
 }
 
+struct RegexLexer<'a> {
+    input: ParseStream<'a>,
+    top: RegexSymbol,
+}
+
+impl<'a> RegexLexer<'a> {
+    /// Returns the next [`RegexSymbol`] from the `input`.
+    fn scan(input: ParseStream<'a>) -> syn::Result<RegexSymbol> {
+        if input.is_empty() {
+            return Ok(RegexSymbol::End);
+        }
+
+        let lookahead = input.lookahead1();
+
+        // Rust performs parenthesis matching: leverage that here.
+        if lookahead.peek(syn::token::Paren) {
+            let inner;
+            parenthesized!(inner in input);
+            return Regex::parse(&inner).map(|re| RegexSymbol::Regex(Rc::new(re)));
+        }
+
+        // Scan '0' symbol
+        if let Ok(val) = input.parse::<syn::LitInt>() {
+            if let Ok(0) = val.base10_parse() {
+                return Ok(RegexSymbol::Zero);
+            }
+        }
+
+        // Scan 'e' and names
+        if let Ok(name) = input.parse::<Path>() {
+            if name.is_ident("e") {
+                return Ok(RegexSymbol::Epsilon);
+            } else {
+                let regex = Regex::Symbol(Symbol { name }.into());
+                return Ok(RegexSymbol::Regex(Rc::new(regex)));
+            }
+        }
+
+        // Scan '~' symbol
+        if input.parse::<Token![~]>().is_ok() {
+            return Ok(RegexSymbol::Neg);
+        }
+
+        // Scan '*' symbol
+        if input.parse::<Token![*]>().is_ok() {
+            return Ok(RegexSymbol::Repeat);
+        }
+
+        // Scan '+' symbol
+        if input.parse::<Token![+]>().is_ok() {
+            return Ok(RegexSymbol::Plus);
+        }
+
+        // Scan '?' symbol
+        if input.parse::<Token![?]>().is_ok() {
+            return Ok(RegexSymbol::Optional);
+        }
+
+        // Scan '|' symbol
+        if input.parse::<Token![|]>().is_ok() {
+            return Ok(RegexSymbol::Or);
+        }
+
+        // Scan '&' symbol
+        if input.parse::<Token![&]>().is_ok() {
+            return Ok(RegexSymbol::And);
+        }
+
+        Err(lookahead.error())
+    }
+
+    /// Peeks the first symbol in the stream.
+    fn peek(&self) -> &RegexSymbol {
+        &self.top
+    }
+
+    /// Advances lexer to the next token.
+    fn next(&mut self) -> syn::Result<RegexSymbol> {
+        let sym = self.top.clone();
+        self.top = Self::scan(self.input)?;
+        Ok(sym)
+    }
+
+    /// Returns the current position in the stream (mainly for emitting errors).
+    fn span(&self) -> proc_macro2::Span {
+        self.input.span()
+    }
+}
+
 /// Enumeration of the states of the parser.
 ///
 /// The state names are chosen to represent the items currently on top of the stack.
@@ -408,95 +497,6 @@ struct StackSymbol {
 impl Debug for StackSymbol {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "<{:?}, {:?}>", self.state, self.symbol)
-    }
-}
-
-struct RegexLexer<'a> {
-    input: ParseStream<'a>,
-    top: RegexSymbol,
-}
-
-impl<'a> RegexLexer<'a> {
-    /// Returns the next [`RegexSymbol`] from the `input`.
-    fn scan(input: ParseStream<'a>) -> syn::Result<RegexSymbol> {
-        if input.is_empty() {
-            return Ok(RegexSymbol::End);
-        }
-
-        let lookahead = input.lookahead1();
-
-        // Rust performs parenthesis matching: leverage that here.
-        if lookahead.peek(syn::token::Paren) {
-            let inner;
-            parenthesized!(inner in input);
-            return Regex::parse(&inner).map(|re| RegexSymbol::Regex(Rc::new(re)));
-        }
-
-        // Scan '0' symbol
-        if let Ok(val) = input.parse::<syn::LitInt>() {
-            if let Ok(0) = val.base10_parse() {
-                return Ok(RegexSymbol::Zero);
-            }
-        }
-
-        // Scan 'e' and names
-        if let Ok(name) = input.parse::<Path>() {
-            if name.is_ident("e") {
-                return Ok(RegexSymbol::Epsilon);
-            } else {
-                let regex = Regex::Symbol(Symbol { name }.into());
-                return Ok(RegexSymbol::Regex(Rc::new(regex)));
-            }
-        }
-
-        // Scan '~' symbol
-        if input.parse::<Token![~]>().is_ok() {
-            return Ok(RegexSymbol::Neg);
-        }
-
-        // Scan '*' symbol
-        if input.parse::<Token![*]>().is_ok() {
-            return Ok(RegexSymbol::Repeat);
-        }
-
-        // Scan '+' symbol
-        if input.parse::<Token![+]>().is_ok() {
-            return Ok(RegexSymbol::Plus);
-        }
-
-        // Scan '?' symbol
-        if input.parse::<Token![?]>().is_ok() {
-            return Ok(RegexSymbol::Optional);
-        }
-
-        // Scan '|' symbol
-        if input.parse::<Token![|]>().is_ok() {
-            return Ok(RegexSymbol::Or);
-        }
-
-        // Scan '&' symbol
-        if input.parse::<Token![&]>().is_ok() {
-            return Ok(RegexSymbol::And);
-        }
-
-        Err(lookahead.error())
-    }
-
-    /// Peeks the first symbol in the stream.
-    fn peek(&self) -> &RegexSymbol {
-        &self.top
-    }
-
-    /// Advances lexer to the next token.
-    fn next(&mut self) -> syn::Result<RegexSymbol> {
-        let sym = self.top.clone();
-        self.top = Self::scan(self.input)?;
-        Ok(sym)
-    }
-
-    /// Returns the current position in the stream (mainly for emitting errors).
-    fn span(&self) -> proc_macro2::Span {
-        self.input.span()
     }
 }
 
