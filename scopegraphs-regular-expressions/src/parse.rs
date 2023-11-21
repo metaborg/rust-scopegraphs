@@ -398,77 +398,69 @@ impl<'a> RegexParser<'a> {
             ParserState::State6 => self.reduce_repeat(),
             ParserState::State7 => self.reduce_plus(),
             ParserState::State8 => self.reduce_optional(),
-            ParserState::State9 => {
-                match self.lexer.peek() {
-                    // concat is right-associative, so shift in case of a new literal/pre-fix operator
-                    RegexSymbol::Zero => self.shift(ParserState::State2),
-                    RegexSymbol::Epsilon => self.shift(ParserState::State3),
-                    RegexSymbol::Regex(_) => self.shift(ParserState::State4),
-                    RegexSymbol::Neg => self.shift(ParserState::State5),
-                    // post-fix operators have priority over concat, so shift here
-                    RegexSymbol::Repeat => self.shift(ParserState::State6),
-                    RegexSymbol::Plus => self.shift(ParserState::State7),
-                    RegexSymbol::Optional => self.shift(ParserState::State8),
-                    // concat has priority over '|' and  '&', so reduce here
-                    RegexSymbol::Or => self.reduce_concat(),
-                    RegexSymbol::And => self.reduce_concat(),
-                    RegexSymbol::End => self.reduce_concat(),
-                }
-            }
-            ParserState::State12 => {
-                match self.lexer.peek() {
-                    // neg has top priority, but is ambiguous with posf-fix operators.
-                    RegexSymbol::Zero => self.reduce_neg(),
-                    RegexSymbol::Epsilon => self.reduce_neg(),
-                    RegexSymbol::Regex(_) => self.reduce_neg(),
-                    RegexSymbol::Neg => self.reduce_neg(),
-                    RegexSymbol::Repeat => self.error(
-                        "ambiguous regex: simultaneous use of '~' prefix and '*' postfix operator",
-                    ),
-                    RegexSymbol::Plus => self.error(
-                        "ambiguous regex: simultaneous use of '~' prefix and '+' postfix operator",
-                    ),
-                    RegexSymbol::Optional => self.error(
-                        "ambiguous regex: simultaneous use of '~' prefix and '?' postfix operator",
-                    ),
-                    RegexSymbol::Or => self.reduce_neg(),
-                    RegexSymbol::And => self.reduce_neg(),
-                    RegexSymbol::End => self.reduce_neg(),
-                }
-            }
-            ParserState::State13 => {
-                match self.lexer.peek() {
-                    // or has lowest priority, so shift in any case
-                    RegexSymbol::Zero => self.shift(ParserState::State2),
-                    RegexSymbol::Epsilon => self.shift(ParserState::State3),
-                    RegexSymbol::Regex(_) => self.shift(ParserState::State4),
-                    RegexSymbol::Neg => self.shift(ParserState::State5),
-                    RegexSymbol::Repeat => self.shift(ParserState::State6),
-                    RegexSymbol::Plus => self.shift(ParserState::State7),
-                    RegexSymbol::Optional => self.shift(ParserState::State8),
-                    // or is left-associative, so reduce eagerly
-                    RegexSymbol::Or => self.reduce_or(),
-                    RegexSymbol::And => self.shift(ParserState::State11),
-                    RegexSymbol::End => self.reduce_or(),
-                }
-            }
-            ParserState::State14 => {
-                match self.lexer.peek() {
-                    // '&' has priority over '|' only, so shift in any other case
-                    RegexSymbol::Zero => self.shift(ParserState::State2),
-                    RegexSymbol::Epsilon => self.shift(ParserState::State3),
-                    RegexSymbol::Regex(_) => self.shift(ParserState::State4),
-                    RegexSymbol::Neg => self.shift(ParserState::State5),
-                    RegexSymbol::Repeat => self.shift(ParserState::State6),
-                    RegexSymbol::Plus => self.shift(ParserState::State7),
-                    RegexSymbol::Optional => self.shift(ParserState::State8),
-                    // has priority over '|'
-                    RegexSymbol::Or => self.reduce_and(),
-                    // and is left-recursive, so reduce eagerly
-                    RegexSymbol::And => self.reduce_and(),
-                    RegexSymbol::End => self.reduce_and(),
-                }
-            }
+            ParserState::State9 => match self.lexer.peek() {
+                // concat is right-associative, so shift in case of a new literal/pre-fix operator
+                RegexSymbol::Zero => self.shift(ParserState::State2),
+                RegexSymbol::Epsilon => self.shift(ParserState::State3),
+                RegexSymbol::Regex(_) => self.shift(ParserState::State4),
+                RegexSymbol::Neg => self.shift(ParserState::State5),
+                // post-fix operators have priority over concat, so shift here
+                RegexSymbol::Repeat => self.shift(ParserState::State6),
+                RegexSymbol::Plus => self.shift(ParserState::State7),
+                RegexSymbol::Optional => self.shift(ParserState::State8),
+                // concat has priority over '|' and  '&', so reduce here
+                RegexSymbol::Or => self.reduce_concat(),
+                RegexSymbol::And => self.reduce_concat(),
+                RegexSymbol::End => self.reduce_concat(),
+            },
+            ParserState::State12 => match self.lexer.peek() {
+                // neg has top priority, but is ambiguous with posf-fix operators.
+                RegexSymbol::Zero => self.reduce_neg(),
+                RegexSymbol::Epsilon => self.reduce_neg(),
+                RegexSymbol::Regex(_) => self.reduce_neg(),
+                RegexSymbol::Neg => self.reduce_neg(),
+                RegexSymbol::Repeat => self.error(
+                    "ambiguous regex: simultaneous use of '~' prefix and '*' postfix operator",
+                ),
+                RegexSymbol::Plus => self.error(
+                    "ambiguous regex: simultaneous use of '~' prefix and '+' postfix operator",
+                ),
+                RegexSymbol::Optional => self.error(
+                    "ambiguous regex: simultaneous use of '~' prefix and '?' postfix operator",
+                ),
+                RegexSymbol::Or => self.reduce_neg(),
+                RegexSymbol::And => self.reduce_neg(),
+                RegexSymbol::End => self.reduce_neg(),
+            },
+            ParserState::State13 => match self.lexer.peek() {
+                // or has lowest priority, so shift in any case
+                RegexSymbol::Zero => self.shift(ParserState::State2),
+                RegexSymbol::Epsilon => self.shift(ParserState::State3),
+                RegexSymbol::Regex(_) => self.shift(ParserState::State4),
+                RegexSymbol::Neg => self.shift(ParserState::State5),
+                RegexSymbol::Repeat => self.shift(ParserState::State6),
+                RegexSymbol::Plus => self.shift(ParserState::State7),
+                RegexSymbol::Optional => self.shift(ParserState::State8),
+                // or is left-associative, so reduce eagerly
+                RegexSymbol::Or => self.reduce_or(),
+                RegexSymbol::And => self.shift(ParserState::State11),
+                RegexSymbol::End => self.reduce_or(),
+            },
+            ParserState::State14 => match self.lexer.peek() {
+                // '&' has priority over '|' only, so shift in any other case
+                RegexSymbol::Zero => self.shift(ParserState::State2),
+                RegexSymbol::Epsilon => self.shift(ParserState::State3),
+                RegexSymbol::Regex(_) => self.shift(ParserState::State4),
+                RegexSymbol::Neg => self.shift(ParserState::State5),
+                RegexSymbol::Repeat => self.shift(ParserState::State6),
+                RegexSymbol::Plus => self.shift(ParserState::State7),
+                RegexSymbol::Optional => self.shift(ParserState::State8),
+                // has priority over '|'
+                RegexSymbol::Or => self.reduce_and(),
+                // and is left-recursive, so reduce eagerly
+                RegexSymbol::And => self.reduce_and(),
+                RegexSymbol::End => self.reduce_and(),
+            },
         }
     }
 
