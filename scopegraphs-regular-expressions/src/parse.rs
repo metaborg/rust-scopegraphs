@@ -834,6 +834,10 @@ impl<'a> Parser<'a> {
 
     /// Entry point: parses the `input` to a [`Regex`].
     pub fn parse_regex(input: ParseStream) -> syn::Result<Regex> {
+        if input.is_empty() {
+            return Ok(Regex::Complement(Rc::new(Regex::EmptySet)));
+        }
+
         let mut parser = Parser::init(input)?;
         let mut accept = false;
         while !accept {
