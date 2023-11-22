@@ -8,7 +8,7 @@ use std::rc::Rc;
 pub type StateID = usize;
 
 pub struct MatchState {
-    non_final: bool,
+    pub is_final: bool,
     nullable: bool,
     pub transition_table: HashMap<Rc<Symbol>, StateID>,
     #[cfg(feature = "dynamic")]
@@ -18,10 +18,6 @@ pub struct MatchState {
 }
 
 impl MatchState {
-    pub fn is_final(&self) -> bool {
-        !self.non_final
-    }
-
     pub fn is_accepting(&self) -> bool {
         self.nullable
     }
@@ -180,7 +176,7 @@ impl RegexCompiler {
             match_states.insert(
                 *state_ids.get(state).unwrap(),
                 MatchState {
-                    non_final,
+                    is_final: !non_final,
                     nullable,
                     #[cfg(feature = "dynamic")]
                     string_transition_table: transition_table

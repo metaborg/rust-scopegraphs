@@ -34,7 +34,7 @@ impl<'a> RegexMatcher<&'a str> for DynamicMatcher<'_> {
         self.compiled_regex
             .states
             .get(self.current_state)
-            .map(MatchState::is_final)
+            .map(|i| i.is_final)
             .unwrap_or_default()
     }
 

@@ -37,7 +37,7 @@ impl Automaton {
             })
             .collect();
 
-        let finals: Vec<_> = states.iter().map(MatchState::is_final).collect();
+        let finals: Vec<_> = states.iter().map(|i| i.is_final).collect();
         let accepting: Vec<_> = states.iter().map(MatchState::is_accepting).collect();
 
         quote!(
