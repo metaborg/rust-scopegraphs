@@ -40,7 +40,7 @@
 //!
 //! ### Parse Table
 //!
-//! The LR parse table generated from this grammar is as follows (closure sets on the documentation of [`PState`]):
+//! The LR parse table generated from this grammar is as follows (closure sets on the documentation of [`ParseState`]):
 //!
 //! | State | `0`       | `e`        | `l`        | `~`        | `*`        | `+`        | `?`        | <code>\|</code> | `&`        | `$`        |   | `S` | `E`   |
 //! | ----- | --------- | ---------- | ---------- | ---------- | ---------- | ---------- | ---------- | --------------- | ---------- | ---------- | - | --- | ----- |
@@ -72,26 +72,26 @@
 //!
 //! ### Implementation
 //!
-//! This module contains a lexer ([`RegexLexer`]), which is a wrapper around a [`ParseStream`] that emits [`RToken`]s (the tokens of our language).
-//! Using [`parenthesized`], we recursively parse regular expressions inside brackets.
+//! This module contains a lexer ([`Lexer`]), which is a wrapper around a [`ParseStream`] that emits [`Token`]s (the tokens of our language).
+//! Using [`parenthesized`], we recursively parse regular expressions inside parentheses.
 //!
-//! The parser implementation ([`RegexParser`]) corresponds to the parse table in the following way:
-//! - The [`RegexParser::shift`] function implements shifting and transitioning to some state.
-//! - The [`RegexParser::goto`] function implements the GOTO-table.
-//! - The [`RegexParser::accept`] function accepts the input, leaving the resulting regular expression on the stack.
-//! - The [`RegexParser::step`] function performs a parsing step per invocation (i.e., it implements the ACTION-table).
+//! The parser implementation ([`Parser`]) corresponds to the parse table in the following way:
+//! - The [`Parser::shift`] function implements shifting and transitioning to some state.
+//! - The [`Parser::goto`] function implements the GOTO-table.
+//! - The [`Parser::accept`] function accepts the input, leaving the resulting regular expression on the stack.
+//! - The [`Parser::step`] function performs a parsing step per invocation (i.e., it implements the ACTION-table).
 //!
 //! The reduction rules each have their own function as well:
-//! - `r1`: [`RegexParser::reduce_zero`]
-//! - `r2`: [`RegexParser::reduce_epsilon`]
-//! - `r3`: [`RegexParser::reduce_symbol`] (also parses parenthesized expressions)
-//! - `r4`: [`RegexParser::reduce_neg`]
-//! - `r5`: [`RegexParser::reduce_repeat`]
-//! - `r6`: [`RegexParser::reduce_plus`]
-//! - `r7`: [`RegexParser::reduce_optional`]
-//! - `r8`: [`RegexParser::reduce_concat`]
-//! - `r9`: [`RegexParser::reduce_or`]
-//! - `r10`: [`RegexParser::reduce_and`]
+//! - `r1`: [`Parser::reduce_zero`]
+//! - `r2`: [`Parser::reduce_epsilon`]
+//! - `r3`: [`Parser::reduce_symbol`] (also parses parenthesized expressions)
+//! - `r4`: [`Parser::reduce_neg`]
+//! - `r5`: [`Parser::reduce_repeat`]
+//! - `r6`: [`Parser::reduce_plus`]
+//! - `r7`: [`Parser::reduce_optional`]
+//! - `r8`: [`Parser::reduce_concat`]
+//! - `r9`: [`Parser::reduce_or`]
+//! - `r10`: [`Parser::reduce_and`]
 //!
 //! The parser does not have error recovery.
 //!
@@ -143,7 +143,7 @@ use syn::parse::{Parse, ParseStream};
 use syn::{parenthesized, Path, Token};
 
 #[derive(Clone, PartialEq, Eq)]
-enum RToken {
+enum Token {
     Zero,
     Epsilon,
     Neg,
@@ -156,7 +156,7 @@ enum RToken {
     End,
 }
 
-impl Debug for RToken {
+impl Debug for Token {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Zero => write!(f, "'0'"),
@@ -173,16 +173,16 @@ impl Debug for RToken {
     }
 }
 
-struct RegexLexer<'a> {
+struct Lexer<'a> {
     input: ParseStream<'a>,
-    top: RToken,
+    top: Token,
 }
 
-impl<'a> RegexLexer<'a> {
-    /// Returns the next [`RToken`] from the `input`.
-    fn scan(input: ParseStream<'a>) -> syn::Result<RToken> {
+impl<'a> Lexer<'a> {
+    /// Returns the next [`Token`] from the `input`.
+    fn scan(input: ParseStream<'a>) -> syn::Result<Token> {
         if input.is_empty() {
-            return Ok(RToken::End);
+            return Ok(Token::End);
         }
 
         let lookahead = input.lookahead1();
@@ -191,66 +191,66 @@ impl<'a> RegexLexer<'a> {
         if lookahead.peek(syn::token::Paren) {
             let inner;
             parenthesized!(inner in input);
-            return Regex::parse(&inner).map(|re| RToken::Regex(Rc::new(re)));
+            return Regex::parse(&inner).map(|re| Token::Regex(Rc::new(re)));
         }
 
         // Scan '0' token
         if let Ok(val) = input.parse::<syn::LitInt>() {
             if let Ok(0) = val.base10_parse() {
-                return Ok(RToken::Zero);
+                return Ok(Token::Zero);
             }
         }
 
         // Scan 'e' and names
         if let Ok(name) = input.parse::<Path>() {
             if name.is_ident("e") {
-                return Ok(RToken::Epsilon);
+                return Ok(Token::Epsilon);
             } else {
                 let regex = Regex::Symbol(Symbol { name }.into());
-                return Ok(RToken::Regex(Rc::new(regex)));
+                return Ok(Token::Regex(Rc::new(regex)));
             }
         }
 
         // Scan '~' token
         if input.parse::<Token![~]>().is_ok() {
-            return Ok(RToken::Neg);
+            return Ok(Token::Neg);
         }
 
         // Scan '*' token
         if input.parse::<Token![*]>().is_ok() {
-            return Ok(RToken::Repeat);
+            return Ok(Token::Repeat);
         }
 
         // Scan '+' token
         if input.parse::<Token![+]>().is_ok() {
-            return Ok(RToken::Plus);
+            return Ok(Token::Plus);
         }
 
         // Scan '?' token
         if input.parse::<Token![?]>().is_ok() {
-            return Ok(RToken::Optional);
+            return Ok(Token::Optional);
         }
 
         // Scan '|' token
         if input.parse::<Token![|]>().is_ok() {
-            return Ok(RToken::Or);
+            return Ok(Token::Or);
         }
 
         // Scan '&' token
         if input.parse::<Token![&]>().is_ok() {
-            return Ok(RToken::And);
+            return Ok(Token::And);
         }
 
         Err(lookahead.error())
     }
 
     /// Peeks the first token in the stream.
-    fn peek(&self) -> &RToken {
+    fn peek(&self) -> &Token {
         &self.top
     }
 
     /// Advances lexer to the next token.
-    fn next(&mut self) -> syn::Result<RToken> {
+    fn next(&mut self) -> syn::Result<Token> {
         let token = self.top.clone();
         self.top = Self::scan(self.input)?;
         Ok(token)
@@ -271,7 +271,7 @@ impl<'a> RegexLexer<'a> {
 /// The documentation of each item contains its closure set.
 /// If not documented, the lookahead is `$/*/+/?/0/e/l/~/|/&` (i.e., all tokens).
 #[derive(Clone, Copy, Debug)]
-enum PState {
+enum ParseState {
     /// Initial state of the parser.
     ///
     /// Closure set:
@@ -483,18 +483,18 @@ enum PState {
 /// Segment of the parse stack.
 ///
 /// In regular LR parsing literature, the parse stack is an alternating sequence of states and symbols.
-/// It starts with the initial state [`PState::Initial`], and always (except between a reduction and a goto) has a state on top.
+/// It starts with the initial state [`ParseState::Initial`], and always (except between a reduction and a goto) has a state on top.
 /// We differ from this representation in two ways:
-/// 1. We do not explicitly push the initial state to the stack, but implicitly assume it in [`RegexParser::state`].
+/// 1. We do not explicitly push the initial state to the stack, but implicitly assume it in [`Parser::state`].
 /// 2. We combine the reduce and goto actions.
-///    The reduce actions do not push the result to the stack, but pass it to [`RegexParser::goto`] directly.
-///    [`RegexParser::goto`] computes the next state based on the top of the stack and the result that was passed in, and pushes the result and the new state to the stack.
+///    The reduce actions do not push the result to the stack, but pass it to [`Parser::goto`] directly.
+///    [`Parser::goto`] computes the next state based on the top of the stack and the result that was passed in, and pushes the result and the new state to the stack.
 ///
 /// This allows us to combine the stack elements as 2-tuples, getting rid of a lot of runtime checks & pattern matching.
 #[derive(Clone)]
 struct StackSegment {
-    state: PState,
-    token: RToken,
+    state: ParseState,
+    token: Token,
 }
 
 impl Debug for StackSegment {
@@ -503,17 +503,17 @@ impl Debug for StackSegment {
     }
 }
 
-struct RegexParser<'a> {
-    lexer: RegexLexer<'a>,
+struct Parser<'a> {
+    lexer: Lexer<'a>,
     parse_stack: Vec<StackSegment>,
 }
 
-impl<'a> RegexParser<'a> {
+impl<'a> Parser<'a> {
     /// Initializer a new parser for the underlying token stream.
     fn init(input: ParseStream<'a>) -> syn::Result<Self> {
-        let lexer = RegexLexer {
+        let lexer = Lexer {
             input,
-            top: RegexLexer::scan(input)?,
+            top: Lexer::scan(input)?,
         };
         Ok(Self {
             lexer,
@@ -524,7 +524,7 @@ impl<'a> RegexParser<'a> {
     /// Shift action (standard in LR parsers).
     ///
     /// Pushes current token to the stack, and transitions to `new_state`.
-    fn shift(&mut self, new_state: PState) -> syn::Result<bool> {
+    fn shift(&mut self, new_state: ParseState) -> syn::Result<bool> {
         let next_token = self.lexer.next()?;
         self.parse_stack.push(StackSegment {
             state: new_state,
@@ -533,14 +533,14 @@ impl<'a> RegexParser<'a> {
         Ok(false) // not (yet) in accepting state
     }
 
-    /// Get last [state](PState) shifted to the stack.
+    /// Get last [state](ParseState) shifted to the stack.
     ///
-    /// Defaults to the (implicit) [initial state](PState::Initial) in case of an empty stack.
-    fn state(&self) -> PState {
+    /// Defaults to the (implicit) [initial state](ParseState::Initial) in case of an empty stack.
+    fn state(&self) -> ParseState {
         self.parse_stack
             .last()
             .map(|ss| ss.state)
-            .unwrap_or(PState::Initial) // implicitly assume State 0 on bottom of stack.
+            .unwrap_or(ParseState::Initial) // implicitly assume State 0 on bottom of stack.
     }
 
     /// Pop last state and token from the stack.
@@ -552,22 +552,22 @@ impl<'a> RegexParser<'a> {
         }
     }
 
-    /// Get last [token](RToken) shifted to the stack.
-    fn pop_stack_token(&mut self) -> syn::Result<RToken> {
+    /// Get last [token](Token) shifted to the stack.
+    fn pop_stack_token(&mut self) -> syn::Result<Token> {
         self.pop_stack().map(|ss| ss.token)
     }
 
-    /// Get last token shifted to the stack, and assert it is a [`RToken::Regex`] variant.
+    /// Get last token shifted to the stack, and assert it is a [`Token::Regex`] variant.
     fn pop_stack_regex(&mut self) -> syn::Result<Rc<Regex>> {
-        if let RToken::Regex(regex) = self.pop_stack_token()? {
+        if let Token::Regex(regex) = self.pop_stack_token()? {
             Ok(regex)
         } else {
             self.internal_error("expected regex on top of stack")
         }
     }
 
-    /// Get last token shifted to the stack, and assert it is a particular `expected` [`RToken`].
-    fn expect_token(&mut self, expected: RToken) -> syn::Result<()> {
+    /// Get last token shifted to the stack, and assert it is a particular `expected` [`Token`].
+    fn expect_token(&mut self, expected: Token) -> syn::Result<()> {
         if expected == self.pop_stack_token()? {
             Ok(())
         } else {
@@ -577,19 +577,19 @@ impl<'a> RegexParser<'a> {
 
     // reduce atoms
 
-    fn reduce_atom(&mut self, expected: RToken, result: Regex) -> syn::Result<bool> {
+    fn reduce_atom(&mut self, expected: Token, result: Regex) -> syn::Result<bool> {
         self.expect_token(expected)?;
         self.goto(Rc::new(result))
     }
 
     /// Reduce `E -> 0` preduction
     fn reduce_zero(&mut self) -> syn::Result<bool> {
-        self.reduce_atom(RToken::Zero, Regex::EmptySet)
+        self.reduce_atom(Token::Zero, Regex::EmptySet)
     }
 
     /// Reduce `E -> e` preduction.
     fn reduce_epsilon(&mut self) -> syn::Result<bool> {
-        self.reduce_atom(RToken::Epsilon, Regex::EmptyString)
+        self.reduce_atom(Token::Epsilon, Regex::EmptyString)
     }
 
     /// Reduce `E -> l` and `E -> ( E )` productions (NO-OP: symbol is shared).
@@ -602,7 +602,7 @@ impl<'a> RegexParser<'a> {
 
     fn reduce_unary_prefix(
         &mut self,
-        expected: RToken,
+        expected: Token,
         build: impl Fn(Rc<Regex>) -> Regex,
     ) -> syn::Result<bool> {
         let re = self.pop_stack_regex()?;
@@ -611,12 +611,12 @@ impl<'a> RegexParser<'a> {
 
     /// Reduce `E -> ~ E` production.
     fn reduce_neg(&mut self) -> syn::Result<bool> {
-        self.reduce_unary_prefix(RToken::Neg, Regex::Complement)
+        self.reduce_unary_prefix(Token::Neg, Regex::Complement)
     }
 
     fn reduce_unary_postfix(
         &mut self,
-        expected: RToken,
+        expected: Token,
         build: impl Fn(Rc<Regex>) -> Regex,
     ) -> syn::Result<bool> {
         self.expect_token(expected)?;
@@ -626,14 +626,14 @@ impl<'a> RegexParser<'a> {
 
     /// Reduce `E -> E *` production.
     fn reduce_repeat(&mut self) -> syn::Result<bool> {
-        self.reduce_unary_postfix(RToken::Repeat, Regex::Repeat)
+        self.reduce_unary_postfix(Token::Repeat, Regex::Repeat)
     }
 
     /// Reduce `E -> E +` production.
     ///
     /// Immediately desugars `E1 +` to `E1 E1*`.
     fn reduce_plus(&mut self) -> syn::Result<bool> {
-        self.reduce_unary_postfix(RToken::Plus, |re| {
+        self.reduce_unary_postfix(Token::Plus, |re| {
             Regex::Concat(re.clone(), Rc::new(Regex::Repeat(re)))
         })
     }
@@ -642,7 +642,7 @@ impl<'a> RegexParser<'a> {
     ///
     /// Immediately desugars `E1 ?` to `e | E1`.
     fn reduce_optional(&mut self) -> syn::Result<bool> {
-        self.reduce_unary_postfix(RToken::Optional, |re| {
+        self.reduce_unary_postfix(Token::Optional, |re| {
             Regex::Or(Rc::new(Regex::EmptyString), re)
         })
     }
@@ -659,7 +659,7 @@ impl<'a> RegexParser<'a> {
 
     fn reduce_binary_infix(
         &mut self,
-        expected: RToken,
+        expected: Token,
         build: impl Fn(Rc<Regex>, Rc<Regex>) -> Regex,
     ) -> syn::Result<bool> {
         // right-hand-side is on top of stack ...
@@ -671,12 +671,12 @@ impl<'a> RegexParser<'a> {
 
     /// Reduce `E -> E | E` production.
     fn reduce_or(&mut self) -> syn::Result<bool> {
-        self.reduce_binary_infix(RToken::Or, Regex::Or)
+        self.reduce_binary_infix(Token::Or, Regex::Or)
     }
 
     /// Reduce `E -> E & E` production.
     fn reduce_and(&mut self) -> syn::Result<bool> {
-        self.reduce_binary_infix(RToken::And, Regex::And)
+        self.reduce_binary_infix(Token::And, Regex::And)
     }
 
     /// Implement GOTO-table.
@@ -689,20 +689,20 @@ impl<'a> RegexParser<'a> {
     fn goto(&mut self, result: Rc<Regex>) -> syn::Result<bool> {
         // compute state that has a new regex pushed to the stack
         let state = match self.state() {
-            PState::Initial => PState::Regex,
-            PState::Regex => PState::RegexRegex,
-            PState::Neg => PState::NegRegex,
-            PState::RegexRegex => PState::RegexRegex,
-            PState::RegexOr => PState::RegexOrRegex,
-            PState::RegexAnd => PState::RegexAndRegex,
-            PState::NegRegex => PState::RegexRegex, // redundant: negations are always reduced eagerly
-            PState::RegexOrRegex => PState::RegexRegex,
-            PState::RegexAndRegex => PState::RegexRegex,
+            ParseState::Initial => ParseState::Regex,
+            ParseState::Regex => ParseState::RegexRegex,
+            ParseState::Neg => ParseState::NegRegex,
+            ParseState::RegexRegex => ParseState::RegexRegex,
+            ParseState::RegexOr => ParseState::RegexOrRegex,
+            ParseState::RegexAnd => ParseState::RegexAndRegex,
+            ParseState::NegRegex => ParseState::RegexRegex, // redundant: negations are always reduced eagerly
+            ParseState::RegexOrRegex => ParseState::RegexRegex,
+            ParseState::RegexAndRegex => ParseState::RegexRegex,
             _ => return self.internal_error("cannot perform 'goto' action on current state"),
         };
         self.parse_stack.push(StackSegment {
             state,
-            token: RToken::Regex(result),
+            token: Token::Regex(result),
         });
         Ok(false)
     }
@@ -727,97 +727,97 @@ impl<'a> RegexParser<'a> {
     /// Implementation of the ACTION-table.
     fn step(&mut self) -> syn::Result<bool> {
         match self.state() {
-            PState::Initial | PState::Neg | PState::RegexOr | PState::RegexAnd => {
+            ParseState::Initial | ParseState::Neg | ParseState::RegexOr | ParseState::RegexAnd => {
                 match self.lexer.peek() {
-                    RToken::Zero => self.shift(PState::Zero),
-                    RToken::Epsilon => self.shift(PState::Epsilon),
-                    RToken::Regex(_) => self.shift(PState::Symbol),
-                    RToken::Neg => self.shift(PState::Neg),
+                    Token::Zero => self.shift(ParseState::Zero),
+                    Token::Epsilon => self.shift(ParseState::Epsilon),
+                    Token::Regex(_) => self.shift(ParseState::Symbol),
+                    Token::Neg => self.shift(ParseState::Neg),
                     _ => self.error(
                         "expected '0', 'e', '~', label or parenthesized regular expression here",
                     ),
                 }
             }
-            PState::Regex => match self.lexer.peek() {
-                RToken::Zero => self.shift(PState::Zero),
-                RToken::Epsilon => self.shift(PState::Epsilon),
-                RToken::Regex(_) => self.shift(PState::Symbol),
-                RToken::Neg => self.shift(PState::Neg),
-                RToken::Repeat => self.shift(PState::RegexRepeat),
-                RToken::Plus => self.shift(PState::RegexPlus),
-                RToken::Optional => self.shift(PState::RegexOptional),
-                RToken::Or => self.shift(PState::RegexOr),
-                RToken::And => self.shift(PState::RegexAnd),
-                RToken::End => Self::accept(),
+            ParseState::Regex => match self.lexer.peek() {
+                Token::Zero => self.shift(ParseState::Zero),
+                Token::Epsilon => self.shift(ParseState::Epsilon),
+                Token::Regex(_) => self.shift(ParseState::Symbol),
+                Token::Neg => self.shift(ParseState::Neg),
+                Token::Repeat => self.shift(ParseState::RegexRepeat),
+                Token::Plus => self.shift(ParseState::RegexPlus),
+                Token::Optional => self.shift(ParseState::RegexOptional),
+                Token::Or => self.shift(ParseState::RegexOr),
+                Token::And => self.shift(ParseState::RegexAnd),
+                Token::End => Self::accept(),
             },
-            PState::Zero => self.reduce_zero(),
-            PState::Epsilon => self.reduce_epsilon(),
-            PState::Symbol => self.reduce_symbol(),
-            PState::RegexRepeat => self.reduce_repeat(),
-            PState::RegexPlus => self.reduce_plus(),
-            PState::RegexOptional => self.reduce_optional(),
-            PState::RegexRegex => match self.lexer.peek() {
+            ParseState::Zero => self.reduce_zero(),
+            ParseState::Epsilon => self.reduce_epsilon(),
+            ParseState::Symbol => self.reduce_symbol(),
+            ParseState::RegexRepeat => self.reduce_repeat(),
+            ParseState::RegexPlus => self.reduce_plus(),
+            ParseState::RegexOptional => self.reduce_optional(),
+            ParseState::RegexRegex => match self.lexer.peek() {
                 // concat is right-associative, so shift in case of a new literal/pre-fix operator
-                RToken::Zero => self.shift(PState::Zero),
-                RToken::Epsilon => self.shift(PState::Epsilon),
-                RToken::Regex(_) => self.shift(PState::Symbol),
-                RToken::Neg => self.shift(PState::Neg),
+                Token::Zero => self.shift(ParseState::Zero),
+                Token::Epsilon => self.shift(ParseState::Epsilon),
+                Token::Regex(_) => self.shift(ParseState::Symbol),
+                Token::Neg => self.shift(ParseState::Neg),
                 // post-fix operators have priority over concat, so shift here
-                RToken::Repeat => self.shift(PState::RegexRepeat),
-                RToken::Plus => self.shift(PState::RegexPlus),
-                RToken::Optional => self.shift(PState::RegexOptional),
+                Token::Repeat => self.shift(ParseState::RegexRepeat),
+                Token::Plus => self.shift(ParseState::RegexPlus),
+                Token::Optional => self.shift(ParseState::RegexOptional),
                 // concat has priority over '|' and  '&', so reduce here
-                RToken::Or => self.reduce_concat(),
-                RToken::And => self.reduce_concat(),
-                RToken::End => self.reduce_concat(),
+                Token::Or => self.reduce_concat(),
+                Token::And => self.reduce_concat(),
+                Token::End => self.reduce_concat(),
             },
-            PState::NegRegex => match self.lexer.peek() {
+            ParseState::NegRegex => match self.lexer.peek() {
                 // neg has top priority, but is ambiguous with posf-fix operators.
-                RToken::Zero => self.reduce_neg(),
-                RToken::Epsilon => self.reduce_neg(),
-                RToken::Regex(_) => self.reduce_neg(),
-                RToken::Neg => self.reduce_neg(),
-                RToken::Repeat => self.error(
+                Token::Zero => self.reduce_neg(),
+                Token::Epsilon => self.reduce_neg(),
+                Token::Regex(_) => self.reduce_neg(),
+                Token::Neg => self.reduce_neg(),
+                Token::Repeat => self.error(
                     "ambiguous regex: simultaneous use of '~' prefix and '*' postfix operator",
                 ),
-                RToken::Plus => self.error(
+                Token::Plus => self.error(
                     "ambiguous regex: simultaneous use of '~' prefix and '+' postfix operator",
                 ),
-                RToken::Optional => self.error(
+                Token::Optional => self.error(
                     "ambiguous regex: simultaneous use of '~' prefix and '?' postfix operator",
                 ),
-                RToken::Or => self.reduce_neg(),
-                RToken::And => self.reduce_neg(),
-                RToken::End => self.reduce_neg(),
+                Token::Or => self.reduce_neg(),
+                Token::And => self.reduce_neg(),
+                Token::End => self.reduce_neg(),
             },
-            PState::RegexOrRegex => match self.lexer.peek() {
+            ParseState::RegexOrRegex => match self.lexer.peek() {
                 // or has lowest priority, so shift in any case
-                RToken::Zero => self.shift(PState::Zero),
-                RToken::Epsilon => self.shift(PState::Epsilon),
-                RToken::Regex(_) => self.shift(PState::Symbol),
-                RToken::Neg => self.shift(PState::Neg),
-                RToken::Repeat => self.shift(PState::RegexRepeat),
-                RToken::Plus => self.shift(PState::RegexPlus),
-                RToken::Optional => self.shift(PState::RegexOptional),
+                Token::Zero => self.shift(ParseState::Zero),
+                Token::Epsilon => self.shift(ParseState::Epsilon),
+                Token::Regex(_) => self.shift(ParseState::Symbol),
+                Token::Neg => self.shift(ParseState::Neg),
+                Token::Repeat => self.shift(ParseState::RegexRepeat),
+                Token::Plus => self.shift(ParseState::RegexPlus),
+                Token::Optional => self.shift(ParseState::RegexOptional),
                 // or is left-associative, so reduce eagerly
-                RToken::Or => self.reduce_or(),
-                RToken::And => self.shift(PState::RegexAnd),
-                RToken::End => self.reduce_or(),
+                Token::Or => self.reduce_or(),
+                Token::And => self.shift(ParseState::RegexAnd),
+                Token::End => self.reduce_or(),
             },
-            PState::RegexAndRegex => match self.lexer.peek() {
+            ParseState::RegexAndRegex => match self.lexer.peek() {
                 // '&' has priority over '|' only, so shift in any other case
-                RToken::Zero => self.shift(PState::Zero),
-                RToken::Epsilon => self.shift(PState::Epsilon),
-                RToken::Regex(_) => self.shift(PState::Symbol),
-                RToken::Neg => self.shift(PState::Neg),
-                RToken::Repeat => self.shift(PState::RegexRepeat),
-                RToken::Plus => self.shift(PState::RegexPlus),
-                RToken::Optional => self.shift(PState::RegexOptional),
+                Token::Zero => self.shift(ParseState::Zero),
+                Token::Epsilon => self.shift(ParseState::Epsilon),
+                Token::Regex(_) => self.shift(ParseState::Symbol),
+                Token::Neg => self.shift(ParseState::Neg),
+                Token::Repeat => self.shift(ParseState::RegexRepeat),
+                Token::Plus => self.shift(ParseState::RegexPlus),
+                Token::Optional => self.shift(ParseState::RegexOptional),
                 // has priority over '|'
-                RToken::Or => self.reduce_and(),
+                Token::Or => self.reduce_and(),
                 // and is left-recursive, so reduce eagerly
-                RToken::And => self.reduce_and(),
-                RToken::End => self.reduce_and(),
+                Token::And => self.reduce_and(),
+                Token::End => self.reduce_and(),
             },
         }
     }
@@ -834,7 +834,7 @@ impl<'a> RegexParser<'a> {
 
     /// Entry point: parses the `input` to a [`Regex`].
     pub fn parse_regex(input: ParseStream) -> syn::Result<Regex> {
-        let mut parser = RegexParser::init(input)?;
+        let mut parser = Parser::init(input)?;
         let mut accept = false;
         while !accept {
             accept = parser.step()?
@@ -845,7 +845,7 @@ impl<'a> RegexParser<'a> {
 
 impl Parse for Regex {
     fn parse(input: ParseStream) -> syn::Result<Self> {
-        RegexParser::parse_regex(input)
+        Parser::parse_regex(input)
     }
 }
 
