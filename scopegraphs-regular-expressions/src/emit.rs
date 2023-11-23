@@ -82,7 +82,7 @@ impl Automaton {
 
             // try removing this wrapper: many more errors appear
             impl #name {
-                fun error_container() {
+                fn error_container() {
                     #(#compile_errors;)
                     return ();
                 }
