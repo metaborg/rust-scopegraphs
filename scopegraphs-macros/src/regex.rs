@@ -1,8 +1,8 @@
+use std::rc::Rc;
+
 use proc_macro::TokenStream;
-use quote::quote_spanned;
 use scopegraphs_regular_expressions::Regex;
 use syn::parse::{Parse, ParseStream};
-use syn::spanned::Spanned;
 use syn::{Attribute, Ident, Meta, Token, Type};
 
 #[cfg(feature = "dot")]
@@ -19,25 +19,31 @@ pub(crate) struct RegexInput {
     _close: Token![>],
     _equals: Token![=],
     regex: Regex,
+    _err: Vec<syn::Error>,
 }
 
 impl Parse for RegexInput {
     fn parse(input: ParseStream) -> syn::Result<Self> {
-        Ok(Self {
-            attrs: input.call(Attribute::parse_outer)?,
-            _type: input.parse()?,
-            name: input.parse()?,
-            _open: input.parse()?,
-            alphabet_type: input.parse()?,
-            _close: input.parse()?,
-            _equals: input.parse()?,
-            regex: input.parse()?,
-        })
+        let attrs = input.call(Attribute::parse_outer)?;
+        let _type = input.parse()?;
+        let name = input.parse()?;
+        let _open = input.parse()?;
+        let alphabet_type = input.parse()?;
+        let _close = input.parse()?;
+        let _equals = input.parse()?;
+        let regex_err = input.parse();
+        let (regex, _err) = match regex_err {
+            Ok(re) => (re, vec![]),
+            Err(err) => (Regex::Complement(Rc::new(Regex::EmptySet)), vec![err]),
+        };
+        println!("Parsed regex input: errors: {:?}", _err);
+        Ok(Self { attrs, _type, name, _open, alphabet_type, _close, _equals, regex, _err })
     }
 }
 
 impl RegexInput {
     pub fn compile(self) -> TokenStream {
+        let mut errors = self._err;
         #[cfg(feature = "dot")]
         let mut graph = None;
 
@@ -56,8 +62,7 @@ impl RegexInput {
                     graph = Some(s);
                 }
                 i => {
-                    return quote_spanned!(i.span() => compile_error!("unexpected attribute");)
-                        .into();
+                    errors.push(syn::Error::new_spanned(i, "unexpected attribute"))
                 }
             }
         }
@@ -74,6 +79,6 @@ impl RegexInput {
                 .unwrap_or_else(|e| panic!("failed while graphing at {path}: {e}"));
         }
 
-        compiled.emit(&self.name, &self.alphabet_type).into()
+        compiled.emit(&self.name, &self.alphabet_type, errors).into()
     }
 }
