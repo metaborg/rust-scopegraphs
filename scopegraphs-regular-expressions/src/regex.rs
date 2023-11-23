@@ -168,9 +168,13 @@ impl Regex {
         }
     }
 
-    /// Returns whether this regex is nullable.
+    /// Returns whether this regex is nullable (i.e., accepts the empty string `e`).
     ///
-    /// That's either the empty string `e`, or some regex which has the empty string in the right place, like `e | a` is nullable because `e` is nullable.
+    /// Examples of this include the `e` itself, any 0-ary repeat `A*`, `e | A`, etc.
+    ///
+    /// ```
+    /// assert!(Regex::EmptyString.is_nullable())
+    /// ```
     pub fn is_nullable(&self) -> bool {
         match self {
             Regex::EmptySet => false,
