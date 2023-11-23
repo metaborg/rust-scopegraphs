@@ -955,4 +955,46 @@ mod tests {
             parse_regex("(~A) | ((B*) & C?)").unwrap()
         );
     }
+
+    #[test]
+    fn neg_should_have_argument() {
+        assert!(parse_regex("A ~").is_err());
+    }
+
+    #[test]
+    fn postfix_op_should_have_lhs() {
+        assert!(parse_regex("* A").is_err());
+        assert!(parse_regex("+ A").is_err());
+        assert!(parse_regex("? A").is_err());
+    }
+
+    #[test]
+    fn infix_op_should_have_lhs() {
+        assert!(parse_regex("& A").is_err());
+        assert!(parse_regex("| A").is_err());
+    }
+
+    #[test]
+    fn infix_op_should_have_rhs() {
+        assert!(parse_regex("A &").is_err());
+        assert!(parse_regex("A |").is_err());
+    }
+
+    #[test]
+    fn infix_op_no_double() {
+        assert!(parse_regex("A & & A A").is_err());
+        assert!(parse_regex("A | | A A").is_err());
+        assert!(parse_regex("A | & A A").is_err());
+        assert!(parse_regex("A & | A A").is_err());
+    }
+
+    #[test]
+    fn infix_postfix_mix() {
+        assert!(parse_regex("A & * A A").is_err());
+        assert!(parse_regex("A & + A A").is_err());
+        assert!(parse_regex("A & ? A A").is_err());
+        assert!(parse_regex("A | * A A").is_err());
+        assert!(parse_regex("A | + A A").is_err());
+        assert!(parse_regex("A | ? A A").is_err());
+    }
 }
