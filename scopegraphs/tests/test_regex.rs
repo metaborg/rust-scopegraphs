@@ -108,4 +108,3 @@ fn test_negate_or() {
     assert!(!Machine::new().accepts([B]));
     assert!(Machine::new().accepts([C]));
 }
-

@@ -37,7 +37,17 @@ impl Parse for RegexInput {
             Err(err) => (Regex::Complement(Rc::new(Regex::EmptySet)), vec![err]),
         };
         println!("Parsed regex input: errors: {:?}", _err);
-        Ok(Self { attrs, _type, name, _open, alphabet_type, _close, _equals, regex, _err })
+        Ok(Self {
+            attrs,
+            _type,
+            name,
+            _open,
+            alphabet_type,
+            _close,
+            _equals,
+            regex,
+            _err,
+        })
     }
 }
 
@@ -61,9 +71,7 @@ impl RegexInput {
                 }) if path.is_ident("graph") => {
                     graph = Some(s);
                 }
-                i => {
-                    errors.push(syn::Error::new_spanned(i, "unexpected attribute"))
-                }
+                i => errors.push(syn::Error::new_spanned(i, "unexpected attribute")),
             }
         }
 
@@ -79,6 +87,8 @@ impl RegexInput {
                 .unwrap_or_else(|e| panic!("failed while graphing at {path}: {e}"));
         }
 
-        compiled.emit(&self.name, &self.alphabet_type, errors).into()
+        compiled
+            .emit(&self.name, &self.alphabet_type, errors)
+            .into()
     }
 }

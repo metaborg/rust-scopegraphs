@@ -1,6 +1,6 @@
 use crate::{Automaton, MatchState};
 use proc_macro2::{Ident, TokenStream};
-use quote::quote;
+use quote::{quote, TokenStreamExt};
 use syn::Type;
 
 impl Automaton {
@@ -39,10 +39,13 @@ impl Automaton {
 
         let finals: Vec<_> = states.iter().map(|i| i.is_final).collect();
         let accepting: Vec<_> = states.iter().map(MatchState::is_accepting).collect();
-        let compile_errors: TokenStream = errors.iter().flat_map(syn::Error::to_compile_error).collect();
+        let compile_errors: TokenStream = errors
+            .iter()
+            .flat_map(syn::Error::to_compile_error)
+            .collect();
 
         println!("Emitting code, errors: {:?}", errors);
-        quote!(
+        let mut result = quote!(
             struct #name {
                 state: usize,
             }
@@ -79,14 +82,8 @@ impl Automaton {
                     }
                 }
             }
-
-            // try removing this wrapper: many more errors appear, because no data type is even emitted.
-            impl #name {
-                fn error_container() {
-                    #(let _ = #compile_errors;)
-                    return ();
-                }
-            }
-        )
+        );
+        result.append_all(compile_errors);
+        result
     }
 }
