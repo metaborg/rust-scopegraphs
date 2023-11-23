@@ -80,10 +80,10 @@ impl Automaton {
                 }
             }
 
-            // try removing this wrapper: many more errors appear
+            // try removing this wrapper: many more errors appear, because no data type is even emitted.
             impl #name {
                 fn error_container() {
-                    #(#compile_errors;)
+                    #(let _ = #compile_errors;)
                     return ();
                 }
             }
