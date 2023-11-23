@@ -44,7 +44,6 @@ impl Automaton {
             .flat_map(syn::Error::to_compile_error)
             .collect();
 
-        println!("Emitting code, errors: {:?}", errors);
         let mut result = quote!(
             struct #name {
                 state: usize,

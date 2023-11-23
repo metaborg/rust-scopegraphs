@@ -31,12 +31,10 @@ impl Parse for RegexInput {
         let alphabet_type = input.parse()?;
         let _close = input.parse()?;
         let _equals = input.parse()?;
-        let regex_err = input.parse();
-        let (regex, _err) = match regex_err {
+        let (regex, _err) = match input.parse() {
             Ok(re) => (re, vec![]),
             Err(err) => (Regex::Complement(Rc::new(Regex::EmptySet)), vec![err]),
         };
-        println!("Parsed regex input: errors: {:?}", _err);
         Ok(Self {
             attrs,
             _type,
