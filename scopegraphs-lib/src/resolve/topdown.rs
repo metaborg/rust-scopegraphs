@@ -145,7 +145,8 @@ where
         path_wellformedness.step(label);
         let mut env = Env::new();
         for tgt in self.sg.get_edges(path.target(), label) {
-            env.merge(self.resolve_all(path_wellformedness, &path.step(*label, tgt)))
+            path.step(*label, tgt)
+                .inspect(|p| env.merge(self.resolve_all(path_wellformedness, p)));
         }
 
         env

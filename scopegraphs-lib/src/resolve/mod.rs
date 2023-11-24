@@ -1,9 +1,14 @@
 pub mod topdown;
 
-use std::{collections::HashSet, hash::Hash, sync::Arc};
+use std::{collections::HashSet, fmt::Debug, hash::Hash, sync::Arc};
+
+use prust_lib::hashmap::{empty, HashSet as TrieSet};
 
 #[derive(Hash, PartialEq, Eq, Debug)]
-enum InnerPath<'sg, SCOPE, LABEL> {
+enum InnerPath<'sg, SCOPE, LABEL>
+where
+    SCOPE: PartialEq,
+{
     Start {
         source: &'sg SCOPE,
     },
@@ -14,33 +19,98 @@ enum InnerPath<'sg, SCOPE, LABEL> {
     },
 }
 
-#[derive(Hash, PartialEq, Eq, Debug, Clone)]
-pub struct Path<'sg, SCOPE, LABEL>(Arc<InnerPath<'sg, SCOPE, LABEL>>);
+#[derive(Clone)]
+pub struct Path<'sg, SCOPE, LABEL>
+where
+    SCOPE: PartialEq,
+{
+    inner_path: Arc<InnerPath<'sg, SCOPE, LABEL>>,
+    scopes: TrieSet<&'sg SCOPE>,
+}
+
+impl<'sg, SCOPE, LABEL> PartialEq for Path<'sg, SCOPE, LABEL>
+where
+    SCOPE: PartialEq,
+    LABEL: PartialEq,
+{
+    fn eq(&self, other: &Self) -> bool {
+        self.inner_path == other.inner_path
+    }
+}
+
+impl<'sg, SCOPE, LABEL> Eq for Path<'sg, SCOPE, LABEL>
+where
+    SCOPE: Eq,
+    LABEL: Eq,
+{
+}
+
+impl<'sg, SCOPE, LABEL> Hash for Path<'sg, SCOPE, LABEL>
+where
+    SCOPE: PartialEq + Hash,
+    LABEL: Hash,
+{
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.inner_path.hash(state);
+    }
+}
+
+impl<'sg, SCOPE, LABEL> Debug for Path<'sg, SCOPE, LABEL>
+where
+    SCOPE: PartialEq + Debug,
+    LABEL: Debug,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Path")
+            .field("inner_path", &self.inner_path)
+            .finish()
+    }
+}
 
 #[derive(Hash, PartialEq, Eq, Debug, Clone)]
-pub struct ResolvedPath<'sg, SCOPE, LABEL, DATA> {
+pub struct ResolvedPath<'sg, SCOPE, LABEL, DATA>
+where
+    SCOPE: PartialEq,
+{
     path: Path<'sg, SCOPE, LABEL>,
     data: &'sg DATA,
 }
 
-impl<'sg, SCOPE, LABEL> Path<'sg, SCOPE, LABEL> {
+impl<'sg, SCOPE, LABEL> Path<'sg, SCOPE, LABEL>
+where
+    SCOPE: Eq + Hash,
+    LABEL: Eq,
+{
     pub fn new(source: &'sg SCOPE) -> Self {
-        Self(Arc::new(InnerPath::Start { source }))
+        Self {
+            inner_path: Arc::new(InnerPath::Start { source }),
+            scopes: empty().insert(source),
+        }
     }
 
     pub fn target(&self) -> &SCOPE {
-        match self.0.as_ref() {
+        match self.inner_path.as_ref() {
             InnerPath::Start { source } => source,
             InnerPath::Step { target, .. } => target,
         }
     }
 
-    pub fn step(&self, label: LABEL, target: &'sg SCOPE) -> Self {
-        Self(Arc::new(InnerPath::Step {
-            prefix: Self(self.0.clone()),
-            label,
-            target,
-        }))
+    pub fn step(&self, label: LABEL, target: &'sg SCOPE) -> Option<Self> {
+        if self.scopes.search(&target) {
+            None
+        } else {
+            Some(Self {
+                inner_path: Arc::new(InnerPath::Step {
+                    prefix: Self {
+                        inner_path: self.inner_path.clone(),
+                        scopes: self.scopes.clone(),
+                    },
+                    label,
+                    target,
+                }),
+                scopes: self.scopes.insert(target),
+            })
+        }
     }
 
     pub fn resolve<DATA>(self, data: &'sg DATA) -> ResolvedPath<SCOPE, LABEL, DATA> {
@@ -53,9 +123,9 @@ impl<'sg, SCOPE, LABEL> Path<'sg, SCOPE, LABEL> {
 // - we currently create a lot of new hashmaps, which is not really efficient
 // - efficiency might be dependent on the name resolution (shadowing) strategy
 // Perhaps we will resort to fibbonacy heaps/pairing heaps, and/or make resolution parametric in the environment type.
-pub struct Env<'sg, SCOPE, LABEL, DATA>(HashSet<ResolvedPath<'sg, SCOPE, LABEL, DATA>>);
+pub struct Env<'sg, SCOPE: PartialEq, LABEL, DATA>(HashSet<ResolvedPath<'sg, SCOPE, LABEL, DATA>>);
 
-impl<'sg, SCOPE, LABEL, DATA> IntoIterator for Env<'sg, SCOPE, LABEL, DATA> {
+impl<'sg, SCOPE: PartialEq, LABEL, DATA> IntoIterator for Env<'sg, SCOPE, LABEL, DATA> {
     type Item = ResolvedPath<'sg, SCOPE, LABEL, DATA>;
 
     type IntoIter = std::collections::hash_set::IntoIter<ResolvedPath<'sg, SCOPE, LABEL, DATA>>;
