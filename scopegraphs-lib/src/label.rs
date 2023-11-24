@@ -1,4 +1,4 @@
-pub trait Label: Copy + Eq {
+pub trait Label {
     fn iter() -> impl Iterator<Item = Self>
     where
         Self: Sized;

@@ -1,9 +1,19 @@
 use std::{hash::Hash, iter::once};
 
+use crate::label::Label;
 use scopegraphs_regular_expressions::RegexMatcher;
 
-use super::{Env, Path};
-use crate::{label::Label, scopegraph::ScopeGraph};
+use super::{Env, Path, ResolvedPath};
+use crate::scopegraph::ScopeGraph;
+
+pub trait DataWellformedness<DATA>: for<'sg> Fn(&'sg DATA) -> bool {}
+impl<DATA, T> DataWellformedness<DATA> for T where for<'sg> T: Fn(&'sg DATA) -> bool {}
+
+pub trait LabelOrder<LABEL>: Fn(&EdgeOrData<LABEL>, &EdgeOrData<LABEL>) -> bool {}
+impl<LABEL, T> LabelOrder<LABEL> for T where T: Fn(&EdgeOrData<LABEL>, &EdgeOrData<LABEL>) -> bool {}
+
+pub trait DataOrder<DATA>: for<'sg> Fn(&'sg DATA, &'sg DATA) -> bool {}
+impl<DATA, T> DataOrder<DATA> for T where for<'sg> T: Fn(&'sg DATA, &'sg DATA) -> bool {}
 
 #[derive(Clone, Copy)]
 pub enum EdgeOrData<LABEL> {
@@ -14,15 +24,16 @@ pub enum EdgeOrData<LABEL> {
 pub fn resolve<'sg, SCOPE, LABEL, DATA>(
     sg: &'sg ScopeGraph<SCOPE, LABEL, DATA>,
     path_wellformedness: &mut impl RegexMatcher<LABEL>,
-    data_wellformedness: &impl Fn(&'sg DATA) -> bool,
-    label_order: &impl Fn(&EdgeOrData<LABEL>, &EdgeOrData<LABEL>) -> bool, // FIXME: LabelOrder trait
-    data_order: &impl Fn(&'sg DATA, &'sg DATA) -> bool,
+    data_wellformedness: &impl DataWellformedness<DATA>,
+    label_order: &impl LabelOrder<LABEL>, // FIXME: LabelOrder trait
+    data_order: &impl DataOrder<DATA>,
     source: &'sg SCOPE,
 ) -> Env<'sg, SCOPE, LABEL, DATA>
 where
-    SCOPE: Hash + Eq + Clone,
-    LABEL: Hash + Eq + Label + Copy,
-    DATA: Hash + Eq + Clone,
+    LABEL: Label + Copy,
+    SCOPE: Hash + Eq,
+    ResolvedPath<'sg, SCOPE, LABEL, DATA>: Hash + Eq,
+    Path<'sg, SCOPE, LABEL>: Clone,
 {
     // Ugh: how can I make thos borrowed properly?
     let all_edges: Vec<EdgeOrData<LABEL>> = LABEL::iter()
@@ -41,29 +52,24 @@ where
     context.resolve_all(path_wellformedness, &Path::new(source))
 }
 
-struct ResolutionContext<'sg, 'query, SCOPE, LABEL, DATA, DWF, LO, DO>
-where
-    DATA: 'query,
-    DWF: Fn(&'sg DATA) -> bool,
-    LO: Fn(&EdgeOrData<LABEL>, &EdgeOrData<LABEL>) -> bool,
-    DO: Fn(&'sg DATA, &'sg DATA) -> bool,
-{
+struct ResolutionContext<'sg, 'query, SCOPE, LABEL, DATA, DWF, LO, DO> {
     all_edges: Vec<EdgeOrData<LABEL>>,
     sg: &'sg ScopeGraph<SCOPE, LABEL, DATA>,
     data_wellformedness: &'query DWF,
-    label_order: &'query LO, // FIXME: LabelOrder trait
+    label_order: &'query LO,
     data_order: &'query DO,
 }
 
 impl<'sg, 'query, SCOPE, LABEL, DATA, DWF, LO, DO>
     ResolutionContext<'sg, 'query, SCOPE, LABEL, DATA, DWF, LO, DO>
 where
-    SCOPE: Hash + Eq + Clone,
-    LABEL: Label + Hash + Copy,
-    DATA: Hash + Eq + Clone + 'query,
-    DWF: Fn(&'sg DATA) -> bool,
-    LO: Fn(&EdgeOrData<LABEL>, &EdgeOrData<LABEL>) -> bool,
-    DO: Fn(&'sg DATA, &'sg DATA) -> bool,
+    LABEL: Copy,
+    SCOPE: Eq + Hash,
+    ResolvedPath<'sg, SCOPE, LABEL, DATA>: Hash + Eq,
+    DO: DataOrder<DATA>,
+    DWF: DataWellformedness<DATA>,
+    LO: LabelOrder<LABEL>,
+    Path<'sg, SCOPE, LABEL>: Clone,
 {
     fn resolve_all(
         &self,
