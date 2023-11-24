@@ -19,7 +19,7 @@ fn test_repeat() {
     assert!(!Machine::new().accepts([B, B]));
     assert!(!Machine::new().accepts([B, A]));
     assert!(!Machine::new().accepts([A, B, A]));
-    assert!(!Machine::new().accepts([]));
+    assert!(!Machine::new().accepts([A; 0]));
 }
 
 #[test]
@@ -30,7 +30,7 @@ fn test_concat() {
 
     assert!(Machine::new().accepts([A, B]));
     assert!(!Machine::new().accepts([B, A]));
-    assert!(!Machine::new().accepts([]));
+    assert!(!Machine::new().accepts([A; 0]));
     assert!(!Machine::new().accepts([A]));
     assert!(!Machine::new().accepts([A, B, C]));
 }
@@ -41,7 +41,7 @@ fn test_optional() {
 
     compile_regex!(type Machine<Alphabet> = A B?);
 
-    assert!(!Machine::new().accepts([]));
+    assert!(!Machine::new().accepts([A; 0]));
     assert!(Machine::new().accepts([A]));
     assert!(Machine::new().accepts([A, B]));
     assert!(!Machine::new().accepts([A, B, C]));
@@ -53,7 +53,7 @@ fn test_one_or_more() {
 
     compile_regex!(type Machine<Alphabet> = A+);
 
-    assert!(!Machine::new().accepts([]));
+    assert!(!Machine::new().accepts([A; 0]));
     assert!(Machine::new().accepts([A]));
     assert!(Machine::new().accepts([A, A]));
     assert!(Machine::new().accepts([A, A, A, A]));
@@ -67,7 +67,7 @@ fn test_or_2() {
 
     compile_regex!(type Machine<Alphabet> = A | B);
 
-    assert!(!Machine::new().accepts([]));
+    assert!(!Machine::new().accepts([A; 0]));
     assert!(Machine::new().accepts([A]));
     assert!(Machine::new().accepts([B]));
     assert!(!Machine::new().accepts([C]));
@@ -79,7 +79,7 @@ fn test_or_3() {
 
     compile_regex!(type Machine<Alphabet> = A | B | C);
 
-    assert!(!Machine::new().accepts([]));
+    assert!(!Machine::new().accepts([A; 0]));
     assert!(Machine::new().accepts([A]));
     assert!(Machine::new().accepts([B]));
     assert!(Machine::new().accepts([C]));
@@ -91,7 +91,7 @@ fn test_negate() {
 
     compile_regex!(type Machine<Alphabet> = ~A);
 
-    assert!(Machine::new().accepts([]));
+    assert!(Machine::new().accepts([A; 0]));
     assert!(!Machine::new().accepts([A]));
     assert!(Machine::new().accepts([B]));
     assert!(Machine::new().accepts([C]));
@@ -103,7 +103,7 @@ fn test_negate_or() {
 
     compile_regex!(#[graph="negate_or.dot"] type Machine<Alphabet> = ~(A | B));
 
-    assert!(Machine::new().accepts([]));
+    assert!(Machine::new().accepts([A; 0]));
     assert!(!Machine::new().accepts([A]));
     assert!(!Machine::new().accepts([B]));
     assert!(Machine::new().accepts([C]));
