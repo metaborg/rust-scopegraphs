@@ -1,4 +1,4 @@
-pub trait Label {
+pub trait Label: 'static {
     fn iter() -> impl Iterator<Item = Self>
     where
         Self: Sized;
