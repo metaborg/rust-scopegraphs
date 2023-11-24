@@ -108,16 +108,3 @@ fn test_negate_or() {
     assert!(!Machine::new().accepts([B]));
     assert!(Machine::new().accepts([C]));
 }
-
-#[test]
-fn test_empty() {
-    use Alphabet::*;
-
-    compile_regex!(#[graph="empty.dot"] type Machine<Alphabet> = );
-
-    assert!(Machine::new().accepts([]));
-    assert!(Machine::new().accepts([A]));
-    assert!(Machine::new().accepts([B]));
-    assert!(Machine::new().accepts([C]));
-    assert!(Machine::new().accepts([A, B, C]));
-}

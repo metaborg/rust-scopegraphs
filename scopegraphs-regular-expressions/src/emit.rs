@@ -1,13 +1,13 @@
 use crate::{Automaton, MatchState};
 use proc_macro2::{Ident, TokenStream};
-use quote::quote;
+use quote::{quote, TokenStreamExt};
 use syn::Type;
 
 impl Automaton {
     /// Convert this compiled regex into rust code that accepts this regular expression.
     /// `name` is the name of the type that is emitted, and `alphabet` is the type of symbols
     /// that the machine should accept.
-    pub fn emit(&self, name: &Ident, alphabet: &Type) -> TokenStream {
+    pub fn emit(&self, name: &Ident, alphabet: &Type, errors: Vec<syn::Error>) -> TokenStream {
         let Self {
             states, initial, ..
         } = self;
@@ -39,8 +39,12 @@ impl Automaton {
 
         let finals: Vec<_> = states.iter().map(|i| i.is_final).collect();
         let accepting: Vec<_> = states.iter().map(MatchState::is_accepting).collect();
+        let compile_errors: TokenStream = errors
+            .iter()
+            .flat_map(syn::Error::to_compile_error)
+            .collect();
 
-        quote!(
+        let mut result = quote!(
             struct #name {
                 state: usize,
             }
@@ -77,6 +81,8 @@ impl Automaton {
                     }
                 }
             }
-        )
+        );
+        result.append_all(compile_errors);
+        result
     }
 }
