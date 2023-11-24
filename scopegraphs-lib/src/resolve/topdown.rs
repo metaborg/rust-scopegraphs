@@ -78,10 +78,7 @@ where
             .iter()
             .filter(|e| match e {
                 EdgeOrData::Data => path_wellformedness.is_accepting(),
-                EdgeOrData::Edge(label) => {
-                    path_wellformedness.step(*label);
-                    !path_wellformedness.is_empty()
-                }
+                EdgeOrData::Edge(label) => path_wellformedness.accepts([*label]),
             })
             .copied()
             .collect();
