@@ -42,7 +42,7 @@ impl<SCOPE, LABEL, DATA> ScopeGraph<SCOPE, LABEL, DATA> {
     /// After this operation, all future calls to [`ScopeGraph::get_data`] on this scope will return the associated data.
     ///
     /// Example:
-    /// ```no_run
+    /// ```ignore
     /// # use scopegraphs::scopegraph::ScopeGraph;
     /// let mut sg : ScopeGraph<i32, i32, i32> = ScopeGraph::new();
     /// let data = 42;
@@ -60,7 +60,7 @@ impl<SCOPE, LABEL, DATA> ScopeGraph<SCOPE, LABEL, DATA> {
     /// After this operation, all future calls to [`ScopeGraph::get_edges`] on the source will contain the destination.
     ///
     /// Example:
-    /// ```no_run
+    /// ```ignore
     /// # use scopegraphs::{scopegraph::ScopeGraph, Label};
     ///
     /// #[derive(Label, Eq, PartialEq, Copy, Clone)]

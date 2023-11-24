@@ -3,6 +3,12 @@ resolver = "2"
 members = [
     "scopegraphs-lib",
     "scopegraphs",
-    "scopegraphs-macros"
+    "scopegraphs-macros",
+    "scopegraphs-regular-expressions",
 ]
-default-members = ["scopegraphs", "scopegraphs-lib", "scopegraphs-macros"]
+default-members = [
+    "scopegraphs",
+    "scopegraphs-lib",
+    "scopegraphs-macros",
+    "scopegraphs-regular-expressions",
+]
