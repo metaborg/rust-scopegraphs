@@ -13,7 +13,7 @@ pub enum EdgeOrData<LABEL> {
 
 pub fn resolve<'sg, SCOPE, LABEL, DATA>(
     sg: &'sg ScopeGraph<SCOPE, LABEL, DATA>,
-    path_wellformedness: &mut impl for<'a> RegexMatcher<&'a LABEL>,
+    path_wellformedness: &mut impl RegexMatcher<LABEL>,
     data_wellformedness: &impl Fn(&'sg DATA) -> bool,
     label_order: &impl Fn(&EdgeOrData<LABEL>, &EdgeOrData<LABEL>) -> bool, // FIXME: LabelOrder trait
     data_order: &impl Fn(&'sg DATA, &'sg DATA) -> bool,
@@ -67,7 +67,7 @@ where
 {
     fn resolve_all(
         &self,
-        path_wellformedness: &mut impl for<'a> RegexMatcher<&'a LABEL>,
+        path_wellformedness: &mut impl RegexMatcher<LABEL>,
         path: &Path<'sg, SCOPE, LABEL>,
     ) -> Env<'sg, SCOPE, LABEL, DATA> {
         let edges: Vec<_> = self
@@ -75,7 +75,7 @@ where
             .iter()
             .filter(|e| match e {
                 EdgeOrData::Data => path_wellformedness.is_accepting(),
-                EdgeOrData::Edge(label) => path_wellformedness.accepts([label]),
+                EdgeOrData::Edge(label) => path_wellformedness.accepts([*label]),
             })
             .copied()
             .collect();
@@ -85,7 +85,7 @@ where
 
     fn resolve_edges(
         &self,
-        path_wellformedness: &mut impl for<'a> RegexMatcher<&'a LABEL>,
+        path_wellformedness: &mut impl RegexMatcher<LABEL>,
         edges: &[EdgeOrData<LABEL>],
         path: &Path<'sg, SCOPE, LABEL>,
     ) -> Env<'sg, SCOPE, LABEL, DATA> {
@@ -102,7 +102,7 @@ where
 
     fn resolve_shadow(
         &self,
-        path_wellformedness: &mut impl for<'a> RegexMatcher<&'a LABEL>,
+        path_wellformedness: &mut impl RegexMatcher<LABEL>,
         edge: EdgeOrData<LABEL>,
         edges: &[EdgeOrData<LABEL>],
         path: &Path<'sg, SCOPE, LABEL>,
@@ -123,7 +123,7 @@ where
 
     fn resolve_edge(
         &self,
-        path_wellformedness: &mut impl for<'a> RegexMatcher<&'a LABEL>,
+        path_wellformedness: &mut impl RegexMatcher<LABEL>,
         edge: EdgeOrData<LABEL>,
         path: &Path<'sg, SCOPE, LABEL>,
     ) -> Env<'sg, SCOPE, LABEL, DATA> {
@@ -135,11 +135,11 @@ where
 
     fn resolve_label(
         &self,
-        path_wellformedness: &mut impl for<'a> RegexMatcher<&'a LABEL>,
+        path_wellformedness: &mut impl RegexMatcher<LABEL>,
         label: LABEL,
         path: &Path<'sg, SCOPE, LABEL>,
     ) -> Env<'sg, SCOPE, LABEL, DATA> {
-        path_wellformedness.step(&label);
+        path_wellformedness.step(label);
         let mut env = Env::new();
         for tgt in self.sg.get_edges(path.target(), &label) {
             path.step(label, tgt)
