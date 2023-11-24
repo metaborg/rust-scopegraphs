@@ -300,7 +300,7 @@ fn normalize_and(l: &Rc<Regex>, r: &Rc<Regex>, ab: &AlphabetOrder) -> Rc<Regex> 
         // e & a => e if a.is_nullable()
         (Regex::EmptyString, r) if r.is_nullable() => l,
         // e & a => 0 if !a.is_nullable()
-        (Regex::EmptyString, r) => Regex::EmptySet.into(),
+        (Regex::EmptyString, _) => Regex::EmptySet.into(),
         // (a & b) & c => a & (b & c)
         (Regex::And(il, ir), _) => normalize_and(il, &normalize_and(ir, &r, ab), ab),
         // ~e & a => a
