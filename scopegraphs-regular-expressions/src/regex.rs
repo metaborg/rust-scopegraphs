@@ -270,17 +270,19 @@ fn normalize_or(l: &Rc<Regex>, r: &Rc<Regex>, ab: &AlphabetOrder) -> Rc<Regex> {
     match (l.deref(), r.deref()) {
         // a | a => a
         (a, b) if a == b => l,
-        // e | a => a
+        // 0 | a => a
         (Regex::EmptySet, _) => r,
+        // e | a => a if a.is_nullable()
+        (Regex::EmptyString, rr) if rr.is_nullable() => r,
         // (a | b) | c => a | (b | c)
         (Regex::Or(il, ir), _) => normalize_or(il, &normalize_or(ir, &r, ab), ab),
-        // ~e | a => ~e
+        // ~0 | a => ~0
         (Regex::Complement(c), _) if c.deref() == &Regex::EmptySet => l,
-        // ?
+        // (a | (b | c)) => (b | (a | c)) if b < a
         (_, Regex::Or(il, ir)) if l.compare(il, ab) > 0 => {
             normalize_or(il, &normalize_or(&l, ir, ab), ab)
         }
-        // ?
+        // a | b => b | a if b < a
         _ if l.compare(&r, ab) > 0 => normalize_or(&r, &l, ab),
         _ => Regex::Or(l, r).into(),
     }
@@ -293,17 +295,21 @@ fn normalize_and(l: &Rc<Regex>, r: &Rc<Regex>, ab: &AlphabetOrder) -> Rc<Regex> 
     match (l.deref(), r.deref()) {
         // a & a => a
         (a, b) if a == b => l,
-        // e & a => e
+        // 0 & a => 0
         (Regex::EmptySet, _) => l,
+        // e & a => e if a.is_nullable()
+        (Regex::EmptyString, r) if r.is_nullable() => l,
+        // e & a => 0 if !a.is_nullable()
+        (Regex::EmptyString, r) => Regex::EmptySet.into(),
         // (a & b) & c => a & (b & c)
         (Regex::And(il, ir), _) => normalize_and(il, &normalize_and(ir, &r, ab), ab),
         // ~e & a => a
-        (Regex::Complement(c), _) if c.deref() == &Regex::EmptySet => r,
-        // ?
+        (Regex::Complement(c), _) if c.normalize(ab).deref() == &Regex::EmptySet => r,
+        // (a & (b & c)) => (b & (a & c)) if b < a
         (_, Regex::And(il, ir)) if l.compare(ir, ab) > 0 => {
             normalize_and(il, &normalize_and(&l, ir, ab), ab)
         }
-        // ?
+        // a & b => b & a if b < a
         _ if l.compare(&r, ab) > 0 => normalize_and(&r, &l, ab),
         _ => Regex::And(l, r).into(),
     }
