@@ -14,9 +14,9 @@ pub enum EdgeOrData<LABEL> {
 pub fn resolve<'sg, SCOPE, LABEL, DATA>(
     sg: &'sg ScopeGraph<SCOPE, LABEL, DATA>,
     path_wellformedness: &mut impl for<'a> RegexMatcher<&'a LABEL>,
-    data_wellformedness: &impl for<'a> Fn(&'a DATA) -> bool,
+    data_wellformedness: &impl Fn(&'sg DATA) -> bool,
     label_order: &impl Fn(&EdgeOrData<LABEL>, &EdgeOrData<LABEL>) -> bool, // FIXME: LabelOrder trait
-    data_order: &impl for<'a> Fn(&'a DATA, &'a DATA) -> bool,
+    data_order: &impl Fn(&'sg DATA, &'sg DATA) -> bool,
     source: &'sg SCOPE,
 ) -> Env<'sg, SCOPE, LABEL, DATA>
 where
@@ -44,9 +44,9 @@ where
 struct ResolutionContext<'sg, 'query, SCOPE, LABEL, DATA, DWF, LO, DO>
 where
     DATA: 'query,
-    DWF: for<'a> Fn(&'a DATA) -> bool,
+    DWF: Fn(&'sg DATA) -> bool,
     LO: Fn(&EdgeOrData<LABEL>, &EdgeOrData<LABEL>) -> bool,
-    DO: for<'a> Fn(&'a DATA, &'a DATA) -> bool,
+    DO: Fn(&'sg DATA, &'sg DATA) -> bool,
 {
     all_edges: Vec<EdgeOrData<LABEL>>,
     sg: &'sg ScopeGraph<SCOPE, LABEL, DATA>,
@@ -61,9 +61,9 @@ where
     SCOPE: Hash + Eq + Clone,
     LABEL: Label + Hash + Copy,
     DATA: Hash + Eq + Clone + 'query,
-    DWF: for<'a> Fn(&'a DATA) -> bool,
+    DWF: Fn(&'sg DATA) -> bool,
     LO: Fn(&EdgeOrData<LABEL>, &EdgeOrData<LABEL>) -> bool,
-    DO: for<'a> Fn(&'a DATA, &'a DATA) -> bool,
+    DO: Fn(&'sg DATA, &'sg DATA) -> bool,
 {
     fn resolve_all(
         &self,
