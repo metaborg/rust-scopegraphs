@@ -19,7 +19,7 @@ pub(crate) struct RegexInput {
     _close: Token![>],
     _equals: Token![=],
     regex: Regex,
-    _err: Vec<syn::Error>,
+    errors: Vec<syn::Error>,
 }
 
 impl Parse for RegexInput {
@@ -31,7 +31,7 @@ impl Parse for RegexInput {
         let alphabet_type = input.parse()?;
         let _close = input.parse()?;
         let _equals = input.parse()?;
-        let (regex, _err) = match input.parse() {
+        let (regex, errors) = match input.parse() {
             Ok(re) => (re, vec![]),
             Err(err) => (Regex::Complement(Rc::new(Regex::EmptySet)), vec![err]),
         };
@@ -44,14 +44,14 @@ impl Parse for RegexInput {
             _close,
             _equals,
             regex,
-            _err,
+            errors,
         })
     }
 }
 
 impl RegexInput {
     pub fn compile(self) -> TokenStream {
-        let mut errors = self._err;
+        let mut errors = self.errors;
         #[cfg(feature = "dot")]
         let mut graph = None;
 
