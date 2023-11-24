@@ -24,15 +24,14 @@ pub struct ResolvedPath<'sg, SCOPE, LABEL, DATA> {
 }
 
 impl<'sg, SCOPE, LABEL> Path<'sg, SCOPE, LABEL> {
-
     pub fn new(source: &'sg SCOPE) -> Self {
         Self(Arc::new(InnerPath::Start { source }))
     }
 
     pub fn target(&self) -> &SCOPE {
         match self.0.as_ref() {
-            InnerPath::Start { source} => source,
-            InnerPath::Step { target, .. } => target
+            InnerPath::Start { source } => source,
+            InnerPath::Step { target, .. } => target,
         }
     }
 
@@ -49,7 +48,7 @@ impl<'sg, SCOPE, LABEL> Path<'sg, SCOPE, LABEL> {
     }
 }
 
-// For now, we stick with hashmaps because they are easy. 
+// For now, we stick with hashmaps because they are easy.
 // We might however want to change that in the future, because:
 // - we currently create a lot of new hashmaps, which is not really efficient
 // - efficiency might be dependent on the name resolution (shadowing) strategy
