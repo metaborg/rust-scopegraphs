@@ -14,10 +14,10 @@ enum InnerPath<'sg, SCOPE, LABEL> {
     },
 }
 
-#[derive(Hash, PartialEq, Eq, Debug)]
+#[derive(Hash, PartialEq, Eq, Debug, Clone)]
 pub struct Path<'sg, SCOPE, LABEL>(Arc<InnerPath<'sg, SCOPE, LABEL>>);
 
-#[derive(Hash, PartialEq, Eq, Debug)]
+#[derive(Hash, PartialEq, Eq, Debug, Clone)]
 pub struct ResolvedPath<'sg, SCOPE, LABEL, DATA> {
     path: Path<'sg, SCOPE, LABEL>,
     data: &'sg DATA,
@@ -55,6 +55,16 @@ impl<'sg, SCOPE, LABEL> Path<'sg, SCOPE, LABEL> {
 // Perhaps we will resort to fibbonacy heaps/pairing heaps, and/or make resolution parametric in the environment type.
 pub struct Env<'sg, SCOPE, LABEL, DATA>(HashSet<ResolvedPath<'sg, SCOPE, LABEL, DATA>>);
 
+impl<'sg, SCOPE, LABEL, DATA> IntoIterator for Env<'sg, SCOPE, LABEL, DATA> {
+    type Item = ResolvedPath<'sg, SCOPE, LABEL, DATA>;
+
+    type IntoIter = std::collections::hash_set::IntoIter<ResolvedPath<'sg, SCOPE, LABEL, DATA>>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+
 impl<'sg, SCOPE, LABEL, DATA> Default for Env<'sg, SCOPE, LABEL, DATA>
 where
     SCOPE: Hash + Eq,
@@ -74,6 +84,12 @@ where
 {
     pub fn new() -> Self {
         Self(HashSet::new())
+    }
+
+    pub fn single(path: ResolvedPath<'sg, SCOPE, LABEL, DATA>) -> Self {
+        let mut env = Env::new();
+        env.insert(path);
+        env
     }
 
     pub fn insert(&mut self, path: ResolvedPath<'sg, SCOPE, LABEL, DATA>) {
