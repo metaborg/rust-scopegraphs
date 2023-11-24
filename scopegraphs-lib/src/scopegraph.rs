@@ -86,7 +86,7 @@ impl<SCOPE, LABEL, DATA> ScopeGraph<SCOPE, LABEL, DATA> {
     }
 
     /// Returns the targets of the outgoing edges of `src` with label `lbl`.
-    pub fn get_edges(&self, _scope: &SCOPE, _lbl: &LABEL) -> impl Iterator<Item = SCOPE> {
+    pub fn get_edges(&self, _scope: &SCOPE, _lbl: &LABEL) -> impl Iterator<Item = &SCOPE> {
         std::iter::empty()
     }
 }
