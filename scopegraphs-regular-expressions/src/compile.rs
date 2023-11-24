@@ -1,63 +1,133 @@
-use crate::regex::Symbol;
+use crate::parse::Symbol;
 use crate::Regex;
-#[cfg(feature = "dynamic")]
-use quote::quote;
+use std::borrow::Borrow;
+use std::hash::Hash;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::rc::Rc;
 
 pub type StateID = usize;
 
-pub struct MatchState {
+#[derive(Debug, Clone)]
+pub struct MatchState<L> {
     pub is_final: bool,
     nullable: bool,
-    pub transition_table: HashMap<Rc<Symbol>, StateID>,
-    #[cfg(feature = "dynamic")]
-    pub string_transition_table: HashMap<String, StateID>,
+    pub transition_table: HashMap<Rc<L>, StateID>,
+    // #[cfg(feature = "dynamic")]
+    // pub string_transition_table: HashMap<String, StateID>,
     pub default_transition: StateID,
-    pub regex: Rc<Regex>,
+    pub regex: Rc<Regex<L>>,
 }
 
-impl MatchState {
+impl<L> MatchState<L> {
     pub fn is_accepting(&self) -> bool {
         self.nullable
     }
 }
 
-pub struct Automaton {
-    pub regex: Rc<Regex>,
-    pub states: Vec<MatchState>,
+impl<'a, L: 'a> MatchState<L> {
+    pub fn convert<T: Hash + Eq + From<&'a L>>(&self) -> MatchState<T> {
+        MatchState { 
+            is_final: self.is_final,
+            nullable: self.nullable,
+            transition_table: self.transition_table.clone().into_iter().map(|(k, v)| (Rc::new(k.as_ref().into()), v)).collect(),
+            default_transition: self.default_transition,
+            regex: Rc::new(self.regex.convert()),
+        }
+    }
+    pub fn try_convert<T: Hash + Eq + TryFrom<&'a L>>(&self) -> Result<MatchState<T>, T::Error>
+        where T: std::fmt::Debug, T::Error : std::fmt::Debug + Clone
+    {
+        let trans_results: Vec<Result<(Rc<T>, StateID), T::Error>> = self
+            .transition_table
+            .clone()
+            .into_iter()
+            .map(|(l, st)| l.as_ref().try_into().map(|t| (Rc::new(t), st)))
+            .collect();
+        let err = trans_results.clone().into_iter().find(|s| s.is_err());
+
+        match err {
+            Some(err) => return Err(err.unwrap_err()),
+            None => {
+                Ok(MatchState { 
+                    is_final: self.is_final,
+                    nullable: self.nullable,
+                    transition_table: trans_results.clone().into_iter().map(|r| r.unwrap()).collect(),
+                    default_transition: self.default_transition,
+                    regex: Rc::new(self.regex.try_convert()?),
+                })
+            },
+        }
+        
+    }
+}
+
+pub struct Automaton<L> {
+    pub regex: Rc<Regex<L>>,
+    pub states: Vec<MatchState<L>>,
     pub initial: StateID,
 }
 
-pub struct AlphabetOrder {
-    order: HashMap<Rc<Symbol>, i64>,
+impl<'a, L: 'a> Automaton<L> {
+    pub fn convert<T: Hash + Eq + From<&'a L>>(&self) -> Automaton<T> {
+        Automaton { 
+            regex: Rc::new(self.regex.convert()), 
+            states: self.states.iter().map(MatchState::convert).collect(), 
+            initial: self.initial,
+        }
+    }
+    pub fn try_convert<T: Hash + Eq + TryFrom<&'a L>>(&self) -> Result<Automaton<T>, T::Error>
+        where L: Clone, T: std::fmt::Debug + Clone, T::Error : std::fmt::Debug + Clone
+    {
+        let state_results: Vec<_> = self.states.clone().into_iter().map(|st| st.try_convert()).collect();
+        let err = state_results.clone().into_iter().find(|s| s.is_err());
+        match err {
+            Some(err) => return Err(err.unwrap_err()),
+            None => {
+                let states = state_results.into_iter().map(|s| s.unwrap()).collect();
+                Ok(Automaton { 
+                    regex: Rc::new(self.regex.try_convert()?), 
+                    states, 
+                    initial: self.initial,
+                })
+            },
+        }
+        
+    }
 }
 
-impl AlphabetOrder {
-    pub fn new(alphabet: &HashSet<Rc<Symbol>>) -> Self {
+pub struct AlphabetOrder<L> {
+    order: HashMap<Rc<L>, i64>,
+}
+
+impl<L> AlphabetOrder<L> 
+    where L: Hash + PartialEq + Eq 
+{
+    pub fn new(alphabet: &HashSet<Rc<L>>) -> Self {
         Self {
             order: alphabet.iter().cloned().zip(0..).collect(),
         }
     }
 
-    pub fn get(&self, symbol: &Rc<Symbol>) -> i64 {
+    pub fn get(&self, symbol: &Rc<L>) -> i64 {
         *self.order.get(symbol).expect("not in alphabet")
     }
 }
 
-type State = Rc<Regex>;
+type State<L> = Rc<Regex<L>>;
 
-struct RegexCompiler {
-    alphabet: HashSet<Rc<Symbol>>,
-    regex: Rc<Regex>,
-    state_transitions: HashMap<State, HashMap<Rc<Symbol>, State>>,
-    default_transitions: HashMap<State, State>,
-    reverse_transitions: HashMap<State, HashSet<State>>,
-    alphabet_order: AlphabetOrder,
+struct RegexCompiler<L> {
+    alphabet: HashSet<Rc<L>>,
+    regex: Rc<Regex<L>>,
+    state_transitions: HashMap<State<L>, HashMap<Rc<L>, State<L>>>,
+    default_transitions: HashMap<State<L>, State<L>>,
+    reverse_transitions: HashMap<State<L>, HashSet<State<L>>>,
+    alphabet_order: AlphabetOrder<L>,
 }
 
-impl RegexCompiler {
-    fn new(regex: Regex) -> Self {
+impl<L> RegexCompiler<L> 
+    where L: Hash + PartialEq + Eq + Borrow<L> 
+{
+    fn new(regex: Regex<L>) -> Self {
         let alphabet = regex.alphabet();
 
         Self {
@@ -70,7 +140,7 @@ impl RegexCompiler {
         }
     }
 
-    fn create_transitions_step(&mut self, state: State, work_list: &mut VecDeque<State>) {
+    fn create_transitions_step(&mut self, state: State<L>, work_list: &mut VecDeque<State<L>>) {
         // if we've already seen this state, we are done instantly
         if self.state_transitions.contains_key(&state) {
             return;
@@ -100,7 +170,7 @@ impl RegexCompiler {
         self.state_transitions.insert(state, transitions);
     }
 
-    fn step_default_state(&mut self, state: &State, work_list: &mut VecDeque<State>) {
+    fn step_default_state(&mut self, state: &State<L>, work_list: &mut VecDeque<State<L>>) {
         let default_state = state.derive(None).normalize(&self.alphabet_order);
 
         // put it in reverse states
@@ -128,7 +198,7 @@ impl RegexCompiler {
         }
     }
 
-    fn find_non_final(&self) -> HashSet<&State> {
+    fn find_non_final(&self) -> HashSet<&State<L>> {
         let mut work_list = VecDeque::new();
         for state in self.state_transitions.keys() {
             if state.is_nullable() {
@@ -149,7 +219,7 @@ impl RegexCompiler {
         non_final
     }
 
-    fn find_state_ids(&self) -> HashMap<&State, StateID> {
+    fn find_state_ids(&self) -> HashMap<&State<L>, StateID> {
         let mut state_ids = HashMap::new();
         for (state_id_counter, state) in self.state_transitions.keys().enumerate() {
             state_ids.insert(state, state_id_counter);
@@ -157,7 +227,7 @@ impl RegexCompiler {
         state_ids
     }
 
-    fn compile(mut self) -> Automaton {
+    fn compile(mut self) -> Automaton<L> {
         self.create_transitions();
 
         let non_final = self.find_non_final();
@@ -178,14 +248,14 @@ impl RegexCompiler {
                 MatchState {
                     is_final: !non_final,
                     nullable,
-                    #[cfg(feature = "dynamic")]
+                    /* #[cfg(feature = "dynamic")]
                     string_transition_table: transition_table
                         .iter()
                         .map(|(label, dst)| {
                             let path = &label.name;
                             (format!("{}", quote!(#path)), *dst)
                         })
-                        .collect(),
+                        .collect(), */
                     transition_table,
                     default_transition: *state_ids
                         .get(self.default_transitions.get(state).unwrap())
@@ -218,8 +288,8 @@ impl RegexCompiler {
     }
 }
 
-impl Regex {
-    pub fn compile(self) -> Automaton {
+impl Regex<Symbol> {
+    pub fn compile(self) -> Automaton<Symbol> {
         let compiler = RegexCompiler::new(self);
         compiler.compile()
     }

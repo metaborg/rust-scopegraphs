@@ -1,3 +1,4 @@
+use parse::Symbol;
 use proc_macro2::{LexError, TokenStream};
 use thiserror::Error;
 
@@ -61,12 +62,12 @@ pub enum ParseError {
 }
 
 /// parse a string to a regular expression
-pub fn parse_regex(input: impl AsRef<str>) -> Result<Regex, ParseError> {
+pub fn parse_regex(input: impl AsRef<str>) -> Result<Regex<Symbol>, ParseError> {
     let stream: TokenStream = input.as_ref().parse()?;
     Ok(parse_regex_token_stream(stream)?)
 }
 
 /// parse a rust [`TokenStream`](TokenStream) to a regular expression
-pub fn parse_regex_token_stream(input: TokenStream) -> syn::Result<Regex> {
+pub fn parse_regex_token_stream(input: TokenStream) -> syn::Result<Regex<Symbol>> {
     syn::parse2(input)
 }

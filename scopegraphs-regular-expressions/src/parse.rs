@@ -134,13 +134,61 @@
 //!
 //! [^4a]: shift/reduce conflict with `s11`: resolved as a `r10` because `&` has priority over `|`.
 
-use crate::regex::Symbol;
 use crate::Regex;
-use std::fmt::Debug;
+use std::error::Error;
+use std::fmt::{Debug, Display, Formatter};
 use std::ops::Deref;
 use std::rc::Rc;
+use proc_macro2::TokenStream;
 use syn::parse::{Parse, ParseStream};
 use syn::{parenthesized, Path, Token};
+
+#[derive(Hash, Debug, Clone, PartialEq, Eq)]
+pub struct Symbol {
+    pub(super) name: Path,
+}
+
+#[cfg(feature = "pretty-print")]
+impl Display for Symbol {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let name = &self.name;
+        write!(f, "{}", quote::quote!(#name))
+    }
+}
+
+impl From<&str> for Symbol {
+    fn from(value: &str) -> Self {
+        Self {
+            name: syn::parse2(value.parse::<TokenStream>().unwrap()).unwrap(),
+        }
+    }
+}
+
+impl From<&Symbol> for String {
+    fn from(value: &Symbol) -> Self {
+        value.to_string()
+    }
+}
+
+impl<'a> From<&'a Symbol> for &'a str {
+    fn from(value: &Symbol) -> Self {
+        &value.to_string()
+    }
+}
+
+impl TryFrom<&Symbol> for char {
+    type Error = String;
+
+    fn try_from(value: &Symbol) -> Result<Self, Self::Error> {
+        let string_val = value.to_string();
+        if string_val.len() == 1 {
+            Ok(string_val.chars().next().unwrap())
+        } else {
+            Err("string does not have single character".to_owned())
+        }
+    }
+}
+
 
 #[derive(Clone, PartialEq, Eq)]
 enum Token {
@@ -152,7 +200,7 @@ enum Token {
     Optional,
     Or,
     And,
-    Regex(Rc<Regex>), // used for labels and parenthesized expressions
+    Regex(Rc<Regex<Symbol>>), // used for labels and parenthesized expressions
     End,
 }
 
@@ -558,7 +606,7 @@ impl<'a> Parser<'a> {
     }
 
     /// Get last token shifted to the stack, and assert it is a [`Token::Regex`] variant.
-    fn pop_stack_regex(&mut self) -> syn::Result<Rc<Regex>> {
+    fn pop_stack_regex(&mut self) -> syn::Result<Rc<Regex<Symbol>>> {
         if let Token::Regex(regex) = self.pop_stack_token()? {
             Ok(regex)
         } else {
@@ -577,7 +625,7 @@ impl<'a> Parser<'a> {
 
     // reduce atoms
 
-    fn reduce_atom(&mut self, expected: Token, result: Regex) -> syn::Result<bool> {
+    fn reduce_atom(&mut self, expected: Token, result: Regex<Symbol>) -> syn::Result<bool> {
         self.expect_token(expected)?;
         self.goto(Rc::new(result))
     }
@@ -603,7 +651,7 @@ impl<'a> Parser<'a> {
     fn reduce_unary_prefix(
         &mut self,
         expected: Token,
-        build: impl Fn(Rc<Regex>) -> Regex,
+        build: impl Fn(Rc<Regex<Symbol>>) -> Regex<Symbol>,
     ) -> syn::Result<bool> {
         let re = self.pop_stack_regex()?;
         self.reduce_atom(expected, build(re))
@@ -617,7 +665,7 @@ impl<'a> Parser<'a> {
     fn reduce_unary_postfix(
         &mut self,
         expected: Token,
-        build: impl Fn(Rc<Regex>) -> Regex,
+        build: impl Fn(Rc<Regex<Symbol>>) -> Regex<Symbol>,
     ) -> syn::Result<bool> {
         self.expect_token(expected)?;
         let re = self.pop_stack_regex()?;
@@ -660,7 +708,7 @@ impl<'a> Parser<'a> {
     fn reduce_binary_infix(
         &mut self,
         expected: Token,
-        build: impl Fn(Rc<Regex>, Rc<Regex>) -> Regex,
+        build: impl Fn(Rc<Regex<Symbol>>, Rc<Regex<Symbol>>) -> Regex<Symbol>,
     ) -> syn::Result<bool> {
         // right-hand-side is on top of stack ...
         let r = self.pop_stack_regex()?;
@@ -686,7 +734,7 @@ impl<'a> Parser<'a> {
     ///
     /// It peeks the state `S` on top of the stack (assuming `0` in case of an empty stack).
     /// Then it finds the `GOTO[S, E]` entry, and pushes the result and the new state to the stack.
-    fn goto(&mut self, result: Rc<Regex>) -> syn::Result<bool> {
+    fn goto(&mut self, result: Rc<Regex<Symbol>>) -> syn::Result<bool> {
         // compute state that has a new regex pushed to the stack
         let state = match self.state() {
             ParseState::Initial => ParseState::Regex,
@@ -823,7 +871,7 @@ impl<'a> Parser<'a> {
     }
 
     /// Extracts parsing result from the stack.
-    fn finalize(mut self) -> syn::Result<Regex> {
+    fn finalize(mut self) -> syn::Result<Regex<Symbol>> {
         let regex = self.pop_stack_regex()?;
         if self.parse_stack.is_empty() {
             Ok(regex.deref().clone())
@@ -833,7 +881,7 @@ impl<'a> Parser<'a> {
     }
 
     /// Entry point: parses the `input` to a [`Regex`].
-    pub fn parse_regex(input: ParseStream) -> syn::Result<Regex> {
+    pub fn parse_regex(input: ParseStream) -> syn::Result<Regex<Symbol>> {
         if input.is_empty() {
             return Ok(Regex::Complement(Rc::new(Regex::EmptySet)));
         }
@@ -847,7 +895,7 @@ impl<'a> Parser<'a> {
     }
 }
 
-impl Parse for Regex {
+impl Parse for Regex<Symbol> {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         Parser::parse_regex(input)
     }

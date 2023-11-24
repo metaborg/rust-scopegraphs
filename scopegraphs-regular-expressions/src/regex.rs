@@ -1,5 +1,5 @@
 use crate::compile::AlphabetOrder;
-use proc_macro2::TokenStream;
+use std::hash::Hash;
 use std::collections::HashSet;
 use std::fmt::Debug;
 #[cfg(feature = "pretty-print")]
@@ -7,66 +7,31 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 use std::ops::Deref;
 use std::rc::Rc;
-use syn::Path;
-
-#[derive(Hash, Debug, Clone, PartialEq, Eq)]
-pub struct Symbol {
-    pub(super) name: Path,
-}
-
-#[cfg(feature = "pretty-print")]
-impl Display for Symbol {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let name = &self.name;
-        write!(f, "{}", quote::quote!(#name))
-    }
-}
-
-impl From<&str> for Symbol {
-    fn from(value: &str) -> Self {
-        Self {
-            name: syn::parse2(value.parse::<TokenStream>().unwrap()).unwrap(),
-        }
-    }
-}
 
 /// A regular expression over a scope graph
-#[derive(Hash, Clone, PartialEq, Eq)]
-pub enum Regex {
+#[derive(Hash, Clone, PartialEq, Eq, Debug)]
+pub enum Regex<L> {
     /// `e`
     EmptyString,
     /// `0`
     EmptySet,
     /// A symbol like `a`
-    Symbol(Rc<Symbol>),
+    Symbol(Rc<L>),
     /// x*
-    Repeat(Rc<Regex>),
+    Repeat(Rc<Regex<L>>),
     /// ~x
-    Complement(Rc<Regex>),
+    Complement(Rc<Regex<L>>),
     /// x | y
-    Or(Rc<Regex>, Rc<Regex>),
+    Or(Rc<Regex<L>>, Rc<Regex<L>>),
     /// x & y
-    And(Rc<Regex>, Rc<Regex>),
+    And(Rc<Regex<L>>, Rc<Regex<L>>),
     /// x y
-    Concat(Rc<Regex>, Rc<Regex>),
+    Concat(Rc<Regex<L>>, Rc<Regex<L>>),
 }
 
-impl Debug for Regex {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::EmptyString => write!(f, "e"),
-            Self::EmptySet => write!(f, "0"),
-            Self::Symbol(sym) => write!(f, "{:?}", sym.name.get_ident()),
-            Self::Repeat(re) => write!(f, "{:?}*", *re),
-            Self::Complement(re) => write!(f, "~{:?}", *re),
-            Self::Or(l, r) => write!(f, "{:?} | {:?}", *l, *r),
-            Self::And(l, r) => write!(f, "{:?} & {:?}", *l, *r),
-            Self::Concat(l, r) => write!(f, "{:?} {:?}", *l, *r),
-        }
-    }
-}
-
-impl Regex {
+impl<L> Regex<L>
+    where L : Hash + PartialEq + Eq
+{
     /// Applies a symbol to a regex. When a symbol is applied to a regex, a new regex
     /// is returned that matches everything after this symbol.
     /// Essentially this "strips" one symbol off of the regex, like from
@@ -77,7 +42,7 @@ impl Regex {
     ///
     /// This is called the Brzozowski derivative
     /// Janusz A. Brzozowski (1964). "Derivatives of Regular Expressions". J ACM. 11 (4): 481–494. doi:10.1145/321239.321249
-    pub fn derive(&self, symbol: Option<&Rc<Symbol>>) -> Rc<Regex> {
+    pub fn derive(&self, symbol: Option<&Rc<L>>) -> Rc<Regex<L>> {
         match self {
             // a: 0 => 0
             Regex::EmptySet => Regex::EmptySet.into(),
@@ -118,7 +83,7 @@ impl Regex {
     /// Normalizes a regex to a standard form.
     ///
     /// For example, `a e` is equivalent to `a`, and this transformation is made here.
-    pub fn normalize(self: &Rc<Self>, ab: &AlphabetOrder) -> Rc<Regex> {
+    pub fn normalize(self: &Rc<Self>, ab: &AlphabetOrder<L>) -> Rc<Self> {
         match self.deref() {
             Regex::EmptyString => self.clone(),
             Regex::EmptySet => self.clone(),
@@ -191,13 +156,13 @@ impl Regex {
     /// Searches for the alphabet used in this regular expression.
     ///
     /// Uses depth-first search to traverse the regex to get the alphabet in use.
-    pub fn alphabet(&self) -> HashSet<Rc<Symbol>> {
+    pub fn alphabet(&self) -> HashSet<Rc<L>> {
         let mut alphabet = HashSet::new();
         self.search_alphabet(&mut alphabet);
         alphabet
     }
 
-    fn search_alphabet(&self, alphabet: &mut HashSet<Rc<Symbol>>) {
+    fn search_alphabet(&self, alphabet: &mut HashSet<Rc<L>>) {
         match self {
             Regex::EmptyString => {}
             Regex::EmptySet => {}
@@ -212,7 +177,7 @@ impl Regex {
         }
     }
 
-    fn order(&self, ab: &AlphabetOrder) -> i64 {
+    fn order(&self, ab: &AlphabetOrder<L>) -> i64 {
         // ordering of these variants is the same as the one in the java implementation of spoofax
         // at https://github.com/metaborg/nabl/blob/802559782da2216b66d290f90179c2ac8f21ba3f/scopegraph/src/main/java/mb/scopegraph/regexp/impl/RegExpNormalizingBuilder.java#L164.
         // The exact order is likely not necessary for correctness, and it's unclear if it's a good
@@ -229,7 +194,7 @@ impl Regex {
         }
     }
 
-    fn compare(&self, other: &Regex, ab: &AlphabetOrder) -> i64 {
+    fn compare(&self, other: &Regex<L>, ab: &AlphabetOrder<L>) -> i64 {
         match (self, other) {
             (Regex::Concat(l1, r1), Regex::Concat(l2, r2)) => {
                 let ans = l1.compare(l2, ab);
@@ -262,7 +227,55 @@ impl Regex {
     }
 }
 
-fn normalize_or(l: &Rc<Regex>, r: &Rc<Regex>, ab: &AlphabetOrder) -> Rc<Regex> {
+impl<'a, L: 'a> Regex<L> {
+    pub fn convert<T: From<&'a L>>(&self) -> Regex<T> {
+        match &self {
+            Regex::EmptyString => Regex::EmptyString,
+            Regex::EmptySet => Regex::EmptySet,
+            Regex::Symbol(s) => Regex::Symbol(Rc::new(s.as_ref().into())),
+            Regex::Repeat(re) => Regex::Repeat(Rc::new(re.convert())),
+            Regex::Complement(re) => Regex::Complement(Rc::new(re.convert())),
+            Regex::Or(l, r) => Regex::Or(
+                Rc::new(l.convert()),
+                Rc::new(r.convert())),
+            Regex::And(l, r) => Regex::And(
+                Rc::new(l.convert()),
+                Rc::new(r.convert())),
+            Regex::Concat(l, r) => Regex::Concat(
+                Rc::new(l.convert()),
+                Rc::new(r.convert())),
+        }
+    }
+    pub fn try_convert<T: TryFrom<&'a L>>(&self) -> Result<Regex<T>, T::Error> {
+        match &self {
+            Regex::EmptyString => Ok(Regex::EmptyString),
+            Regex::EmptySet => Ok(Regex::EmptySet),
+            Regex::Symbol(s) => Ok(Regex::Symbol(Rc::new(s.as_ref().try_into()?))),
+            Regex::Repeat(re) => Ok(Regex::Repeat(Rc::new(re.try_convert()?))),
+            Regex::Complement(re) => Ok(Regex::Complement(Rc::new(re.try_convert()?))),
+            Regex::Or(l, r) => Ok(Regex::Or(
+                Rc::new(l.try_convert()?),
+                Rc::new(r.try_convert()?))),
+            Regex::And(l, r) => Ok(Regex::And(
+                Rc::new(l.try_convert()?),
+                Rc::new(r.try_convert()?))),
+            Regex::Concat(l, r) => Ok(Regex::Concat(
+                Rc::new(l.try_convert()?),
+                Rc::new(r.try_convert()?))),
+        }
+    }
+}
+
+// FIXME: following gives invalid trait bound errors:
+// impl<L, T> From<Regex<T>> for Regex<L>
+//     where T: for<'a> From<&'a L>
+// {
+//     fn from(value: Regex<T>) -> Self {
+//         value.convert()
+//     }
+// }
+
+fn normalize_or<L: Hash + PartialEq + Eq>(l: &Rc<Regex<L>>, r: &Rc<Regex<L>>, ab: &AlphabetOrder<L>) -> Rc<Regex<L>> {
     let l = l.normalize(ab);
     let r = r.normalize(ab);
 
@@ -285,7 +298,7 @@ fn normalize_or(l: &Rc<Regex>, r: &Rc<Regex>, ab: &AlphabetOrder) -> Rc<Regex> {
     }
 }
 
-fn normalize_and(l: &Rc<Regex>, r: &Rc<Regex>, ab: &AlphabetOrder) -> Rc<Regex> {
+fn normalize_and<L: Hash + PartialEq + Eq>(l: &Rc<Regex<L>>, r: &Rc<Regex<L>>, ab: &AlphabetOrder<L>) -> Rc<Regex<L>> {
     let l = l.normalize(ab);
     let r = r.normalize(ab);
 
@@ -309,7 +322,9 @@ fn normalize_and(l: &Rc<Regex>, r: &Rc<Regex>, ab: &AlphabetOrder) -> Rc<Regex> 
 }
 
 #[cfg(feature = "pretty-print")]
-impl Display for Regex {
+impl<L> Display for Regex<L> 
+    where L : Display
+{
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Regex::EmptyString => write!(f, "e"),
@@ -328,7 +343,6 @@ impl Display for Regex {
 mod tests {
     use crate::compile::AlphabetOrder;
     use crate::parse_regex;
-    use crate::regex::Symbol;
     use std::rc::Rc;
 
     #[test]
@@ -358,18 +372,18 @@ mod tests {
 
     #[test]
     fn apply_symbol() {
-        let a = Rc::new(Symbol::from("a"));
-        let b = Rc::new(Symbol::from("b"));
-        let c = Rc::new(Symbol::from("c"));
+        let a = Rc::new(String::from("a"));
+        let b = Rc::new(String::from("b"));
+        let c = Rc::new(String::from("c"));
         let ab = AlphabetOrder::new(&[a.clone(), b.clone(), c.clone()].into_iter().collect());
 
         assert_eq!(
-            parse_regex("a b").unwrap().derive(Some(&a)).normalize(&ab),
-            parse_regex("b").unwrap().into()
+            parse_regex("a b").unwrap().convert().derive(Some(&a)).normalize(&ab),
+            parse_regex("b").unwrap().convert().into()
         );
         assert_eq!(
-            parse_regex("a b").unwrap().derive(Some(&b)).normalize(&ab),
-            parse_regex("0").unwrap().into()
+            parse_regex("a b").unwrap().convert().derive(Some(&b)).normalize(&ab),
+            parse_regex("0").unwrap().convert().into()
         );
     }
 }

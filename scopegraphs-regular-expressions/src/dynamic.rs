@@ -6,13 +6,15 @@
 use crate::compile::StateID;
 use crate::{Automaton, MatchState, RegexMatcher};
 
-pub struct DynamicMatcher<'a> {
-    compiled_regex: &'a Automaton,
+use std::hash::Hash;
+
+pub struct DynamicMatcher<'a, L> {
+    compiled_regex: &'a Automaton<L>,
     current_state: StateID,
 }
 
-impl Automaton {
-    pub fn matcher(&self) -> DynamicMatcher {
+impl<L> Automaton<L> {
+    pub fn matcher(&self) -> DynamicMatcher<L> {
         DynamicMatcher {
             compiled_regex: self,
             current_state: self.initial,
@@ -20,11 +22,13 @@ impl Automaton {
     }
 }
 
-impl<'a> RegexMatcher<&'a str> for DynamicMatcher<'_> {
-    fn step(&mut self, inp: &'a str) {
+impl<'a, L> RegexMatcher<&'a L> for DynamicMatcher<'_, L> 
+    where L: Hash + PartialEq + Eq
+{
+    fn step(&mut self, inp: &'a L) {
         let current_state = &self.compiled_regex.states[self.current_state];
         self.current_state = current_state
-            .string_transition_table
+            .transition_table
             .get(inp)
             .copied()
             .unwrap_or(current_state.default_transition);
@@ -47,29 +51,14 @@ impl<'a> RegexMatcher<&'a str> for DynamicMatcher<'_> {
     }
 }
 
-impl RegexMatcher<char> for DynamicMatcher<'_> {
-    fn step(&mut self, inp: char) {
-        let mut data = [0; 4];
-        self.step(&*inp.encode_utf8(&mut data))
-    }
-
-    fn is_final(&self) -> bool {
-        RegexMatcher::<&str>::is_final(self)
-    }
-
-    fn is_accepting(&self) -> bool {
-        RegexMatcher::<&str>::is_accepting(self)
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use crate::{parse_regex, RegexMatcher};
+    use crate::{parse_regex, RegexMatcher, Regex, Automaton};
 
     #[test]
     fn test_dynamic_regex() {
         let r = parse_regex("a b*").unwrap();
-        let c = r.compile();
+        let c: Automaton<char> = r.compile().try_convert().unwrap();
 
         assert!(c.matcher().accepts("a".chars()));
         assert!(c.matcher().accepts("ab".chars()));
