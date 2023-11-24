@@ -1,3 +1,4 @@
+use prust_lib::hashmap::HashSet as TrieSet;
 use std::collections::HashSet;
 use std::fmt::Debug;
 use std::hash::Hash;
@@ -20,7 +21,7 @@ enum InnerPath<'sg, SCOPE, LABEL> {
 #[derive(Clone)]
 pub struct Path<'sg, SCOPE, LABEL> {
     inner_path: Arc<InnerPath<'sg, SCOPE, LABEL>>,
-    scopes: im::HashSet<&'sg SCOPE>,
+    scopes: TrieSet<&'sg SCOPE>,
 }
 
 impl<'sg, SCOPE, LABEL> PartialEq for Path<'sg, SCOPE, LABEL>
@@ -75,7 +76,7 @@ where
     pub fn new(source: &'sg SCOPE) -> Self {
         Self {
             inner_path: Arc::new(InnerPath::Start { source }),
-            scopes: im::HashSet::unit(source),
+            scopes: TrieSet::new().insert(source),
         }
     }
 
@@ -87,7 +88,7 @@ where
     }
 
     pub fn step(&self, label: LABEL, target: &'sg SCOPE) -> Option<Self> {
-        if self.scopes.contains(&target) {
+        if self.scopes.search(&target) {
             None
         } else {
             Some(Self {
@@ -99,7 +100,7 @@ where
                     label,
                     target,
                 }),
-                scopes: self.scopes.update(target),
+                scopes: self.scopes.insert(target),
             })
         }
     }
