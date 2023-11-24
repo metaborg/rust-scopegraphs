@@ -185,10 +185,8 @@ impl<'a> Lexer<'a> {
             return Ok(Token::End);
         }
 
-        let lookahead = input.lookahead1();
-
         // Rust performs parenthesis matching: leverage that here.
-        if lookahead.peek(syn::token::Paren) {
+        if input.peek(syn::token::Paren) {
             let inner;
             parenthesized!(inner in input);
             return Regex::parse(&inner).map(|re| Token::Regex(Rc::new(re)));
@@ -241,7 +239,10 @@ impl<'a> Lexer<'a> {
             return Ok(Token::And);
         }
 
-        Err(lookahead.error())
+        Err(syn::Error::new(
+            input.span(),
+            "expected '0', 'e', '~', '*', '+', '?', '|', '&', '(' or label here.",
+        ))
     }
 
     /// Peeks the first token in the stream.

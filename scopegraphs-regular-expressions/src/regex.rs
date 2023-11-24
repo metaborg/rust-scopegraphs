@@ -173,6 +173,7 @@ impl Regex {
     /// Examples of this include the `e` itself, any 0-ary repeat `A*`, `e | A`, etc.
     ///
     /// ```
+    /// # use scopegraphs_regular_expressions::Regex;
     /// assert!(Regex::EmptyString.is_nullable())
     /// ```
     pub fn is_nullable(&self) -> bool {
