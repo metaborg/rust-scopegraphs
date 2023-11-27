@@ -38,7 +38,7 @@ pub fn resolve<'sg, 'lbl, SCOPE, LABEL: 'lbl, DATA>(
     source: &'sg SCOPE,
 ) -> Env<'sg, 'lbl, SCOPE, LABEL, DATA>
 where
-    LABEL: Label,
+    LABEL: Label<'lbl>,
     SCOPE: Hash + Eq,
     ResolvedPath<'sg, 'lbl, SCOPE, LABEL, DATA>: Hash + Eq,
     Path<'sg, 'lbl, SCOPE, LABEL>: Clone,
@@ -67,7 +67,7 @@ struct ResolutionContext<'sg, 'lbl, 'query, SCOPE, LABEL, DATA, DWF, LO, DO> {
     data_order: &'query DO,
 }
 
-impl<'sg, 'lbl, 'query, SCOPE, LABEL: 'static, DATA, DWF, LO, DO>
+impl<'sg, 'lbl, 'query, SCOPE, LABEL: 'lbl, DATA, DWF, LO, DO>
     ResolutionContext<'sg, 'lbl, 'query, SCOPE, LABEL, DATA, DWF, LO, DO>
 where
     SCOPE: Eq + Hash,
