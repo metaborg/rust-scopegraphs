@@ -1,4 +1,80 @@
-use std::marker::PhantomData;
+use std::{
+    collections::{HashMap, HashSet},
+    hash::Hash,
+    marker::PhantomData,
+};
+
+#[derive(Debug)]
+pub struct Scope<'sg, 'lbl, LABEL, DATA> {
+    id: u64,
+    _data: Option<&'sg DATA>,
+    _edges: HashMap<&'lbl LABEL, HashSet<&'sg Scope<'sg, 'lbl, LABEL, DATA>>>,
+}
+
+impl<LABEL, DATA> PartialEq for Scope<'_, '_, LABEL, DATA> {
+    fn eq(&self, other: &Self) -> bool {
+        // id should uniquely define scope identity
+        self.id == other.id
+    }
+}
+
+impl<LABEL, DATA> Eq for Scope<'_, '_, LABEL, DATA> {}
+
+impl<LABEL, DATA> Hash for Scope<'_, '_, LABEL, DATA> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.id.hash(state);
+    }
+}
+
+impl<'sg, LABEL, DATA> Scope<'sg, '_, LABEL, DATA> {
+    fn _new(id: u64) -> Self {
+        Self {
+            id,
+            _data: None,
+            _edges: HashMap::new(),
+        }
+    }
+
+    fn _set_data(&mut self, data: &'sg DATA) -> Result<(), ScopeGraphDataError> {
+        if self._data.is_none() {
+            Err(ScopeGraphDataError::OverrideData)
+        } else {
+            self._data = Some(data);
+            Ok(())
+        }
+    }
+}
+
+impl<'sg, 'lbl, LABEL, DATA> Scope<'sg, 'lbl, LABEL, DATA>
+where
+    LABEL: Hash + Eq,
+    DATA: Hash + Eq,
+{
+    fn _add_edge(&mut self, label: &'lbl LABEL, target: &'sg Scope<'sg, 'lbl, LABEL, DATA>) {
+        match self._edges.get_mut(label) {
+            Some(targets) => {
+                targets.insert(target);
+            }
+            None => {
+                let mut target_set = HashSet::new();
+                target_set.insert(target);
+                self._edges.insert(label, target_set);
+            }
+        };
+    }
+
+    fn _get_edges(
+        &'sg self,
+        label: &'lbl LABEL,
+    ) -> Option<impl Iterator<Item = &&'sg Scope<'sg, 'lbl, LABEL, DATA>>> {
+        self._edges.get(label).map(HashSet::iter) // FIXME: How to turn a `None` value into an interator with cirrect type and lifetime
+    }
+}
+
+/// Overriding scope graph data is not allowed,
+pub enum ScopeGraphDataError {
+    OverrideData,
+}
 
 /// Scope Graph operations.
 ///
@@ -52,7 +128,7 @@ impl<SCOPE, LABEL, DATA> ScopeGraph<SCOPE, LABEL, DATA> {
     /// let newData = sg.get_data(scope);
     /// assert_eq!(data, *newData);
     /// ```
-    pub fn add_scope(&mut self, _data: &DATA) -> &SCOPE {
+    pub fn add_scope(&mut self) -> &SCOPE {
         todo!()
     }
 
@@ -76,12 +152,10 @@ impl<SCOPE, LABEL, DATA> ScopeGraph<SCOPE, LABEL, DATA> {
     /// assert!(dst_iter.any(|d| d == *dst));
     /// ```
     ///
-    pub fn add_edge(&mut self, _src: &SCOPE, _lbl: &LABEL, _dst: &SCOPE) {
-        todo!()
-    }
+    pub fn add_edge(&mut self, _src: &SCOPE, _lbl: &LABEL, _dst: &SCOPE) {}
 
     /// Returns the data associated with the `scope` argument.
-    pub fn get_data(&self, _scope: &SCOPE) -> &DATA {
+    pub fn get_data(&self, _scope: &SCOPE) -> Option<&DATA> {
         todo!()
     }
 

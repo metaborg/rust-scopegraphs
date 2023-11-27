@@ -166,12 +166,13 @@ where
         &self,
         path: &Path<'sg, 'lbl, SCOPE, LABEL>,
     ) -> Env<'sg, 'lbl, SCOPE, LABEL, DATA> {
-        let data = self.sg.get_data(path.target());
-        if (self.data_wellformedness)(data) {
-            Env::single(path.clone().resolve(data))
-        } else {
-            Env::new()
+        if let Some(data) = self.sg.get_data(path.target()) {
+            if (self.data_wellformedness)(data) {
+                return Env::single(path.clone().resolve(data));
+            }
         }
+
+        Env::new()
     }
 
     fn max(&self, edges: &[EdgeOrData<'lbl, LABEL>]) -> Vec<EdgeOrData<'lbl, LABEL>> {
