@@ -21,6 +21,15 @@ enum InnerPath<'sg, 'lbl, SCOPE, LABEL: 'lbl> {
 #[derive(Clone)]
 pub struct Path<'sg, 'lbl, SCOPE, LABEL> {
     inner_path: Arc<InnerPath<'sg, 'lbl, SCOPE, LABEL>>,
+    /// Set of all scopes in this path.
+    ///
+    /// Paths are alternating sequences of scopes and labels.
+    /// In scope graphs, paths may not be cyclic.
+    /// To check whether a possible _path extension_ is cyclic, we maintain a separate set of all scopes in a path.
+    /// The [`Path::step`] function will check whether the new scope is in this set, and only return an extended oath if this is not the case.
+    /// This is cheaper than traversing the [`Path::inner_path`], at the cost of some more memory usage.
+    ///
+    /// In order to make paths cheap to extend multiple times, we use a persistent data structure.
     scopes: TrieSet<&'sg SCOPE>,
 }
 
@@ -30,6 +39,7 @@ where
     LABEL: PartialEq,
 {
     fn eq(&self, other: &Self) -> bool {
+        // `self.scopes` is determined by the `inner_path`, so no need to check for equality there.
         self.inner_path == other.inner_path
     }
 }
@@ -47,6 +57,7 @@ where
     LABEL: Hash,
 {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        // `self.scopes` is determined by the `inner_path`, so no need to check separately hash it.
         self.inner_path.hash(state);
     }
 }
@@ -58,6 +69,7 @@ where
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Path")
+            // `self.scopes` is determined by the `inner_path`, so no need to include it in the debug representation.
             .field("inner_path", &self.inner_path)
             .finish()
     }
