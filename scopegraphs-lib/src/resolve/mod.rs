@@ -57,7 +57,7 @@ where
     LABEL: Hash,
 {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        // `self.scopes` is determined by the `inner_path`, so no need to check separately hash it.
+        // `self.scopes` is determined by the `inner_path`, so no need to separately hash it.
         self.inner_path.hash(state);
     }
 }
