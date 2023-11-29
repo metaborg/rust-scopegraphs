@@ -1,7 +1,9 @@
+#![allow(unused)]
+
 use std::{
     collections::{HashMap, HashSet},
-    future::Future,
     hash::Hash,
+    iter,
     marker::PhantomData,
 };
 
@@ -9,9 +11,9 @@ use bumpalo::Bump;
 
 #[derive(Debug)]
 pub struct Scope<'sg, 'lbl, LABEL, DATA> {
-    id: u64,
+    id: u64, // TODO: by_address?
     data: Option<&'sg DATA>,
-    _edges: HashMap<&'lbl LABEL, HashSet<&'sg Scope<'sg, 'lbl, LABEL, DATA>>>,
+    edges: HashMap<&'lbl LABEL, HashSet<&'sg Scope<'sg, 'lbl, LABEL, DATA>>>, // FIXME: Vec?
 }
 
 pub type ScopeRef<'sg, 'lbl, LABEL, DATA> = &'sg Scope<'sg, 'lbl, LABEL, DATA>;
@@ -36,12 +38,13 @@ impl<'sg, LABEL, DATA> Scope<'sg, '_, LABEL, DATA> {
         Self {
             id,
             data: None,
-            _edges: HashMap::new(),
+            edges: HashMap::new(),
         }
     }
 
-    fn _set_data(&mut self, data: &'sg DATA) -> Result<(), ScopeGraphDataError> {
-        if self.data.is_none() {
+    // FIXME: Scope always has data immediately
+    fn set_data(&mut self, data: &'sg DATA) -> Result<(), ScopeGraphDataError> {
+        if self.data.is_some() {
             Err(ScopeGraphDataError::OverrideData)
         } else {
             self.data = Some(data);
@@ -55,24 +58,15 @@ where
     LABEL: Hash + Eq,
     DATA: Hash + Eq,
 {
-    fn _add_edge(&mut self, label: &'lbl LABEL, target: ScopeRef<'sg, 'lbl, LABEL, DATA>) {
-        match self._edges.get_mut(label) {
-            Some(targets) => {
-                targets.insert(target);
-            }
-            None => {
-                let mut target_set = HashSet::new();
-                target_set.insert(target);
-                self._edges.insert(label, target_set);
-            }
-        };
+    fn add_edge(&mut self, label: &'lbl LABEL, target: ScopeRef<'sg, 'lbl, LABEL, DATA>) {
+        self.edges.entry(label).or_default().insert(target);
     }
 
-    fn _get_edges(
+    fn get_edges(
         &'sg self,
         label: &'lbl LABEL,
-    ) -> Option<impl Iterator<Item = &ScopeRef<'sg, 'lbl, LABEL, DATA>>> {
-        self._edges.get(label).map(HashSet::iter) // FIXME: How to turn a `None` value into an interator with cirrect type and lifetime
+    ) -> impl Iterator<Item = &ScopeRef<'sg, 'lbl, LABEL, DATA>> {
+        self.edges.get(label).into_iter().flatten()
     }
 }
 
@@ -102,23 +96,17 @@ pub enum ScopeGraphDataError {
 /// - [`SCOPE`] Type of nodes.
 /// - [`LABEL`] Type of edge labels.
 /// - [`DATA`] Type of data associated with nodes.
-pub struct ScopeGraph<LABEL, DATA> {
+pub struct ScopeGraph<'sg, LABEL, DATA> {
     id_counter: u64,
-    allocator: Bump,
+    allocator: &'sg Bump,
     phantom: PhantomData<(LABEL, DATA)>,
 }
 
-impl<LABEL, DATA> Default for ScopeGraph<LABEL, DATA> {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl<LABEL, DATA> ScopeGraph<LABEL, DATA> {
-    pub fn new() -> Self {
+impl<'sg, LABEL, DATA> ScopeGraph<'sg, LABEL, DATA> {
+    pub fn new(allocator: &'sg Bump) -> Self {
         Self {
             id_counter: 0,
-            allocator: Bump::new(), // FIXME: set proper allocation limits?
+            allocator,
             phantom: PhantomData,
         }
     }
@@ -137,7 +125,7 @@ impl<LABEL, DATA> ScopeGraph<LABEL, DATA> {
     /// let newData = sg.get_data(scope);
     /// assert_eq!(data, *newData);
     /// ```
-    fn _add_scope(&mut self) -> &mut Scope<'_, '_, LABEL, DATA> {
+    fn add_scope(&mut self) -> &mut Scope<'_, '_, LABEL, DATA> {
         let id = self.id_counter;
         self.id_counter += 1;
         self.allocator.alloc(Scope::new(id))
@@ -209,6 +197,7 @@ impl<'sg, 'lbl: 'sg, LABEL: 'lbl, DATA: 'sg> Accessor<'sg, 'lbl, LABEL, DATA>
     }
 }
 
+#[cfg(any())]
 mod api_examples {
 
     use std::collections::{HashMap, HashSet};
