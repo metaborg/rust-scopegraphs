@@ -4,7 +4,8 @@ use std::fmt::Debug;
 use std::hash::Hash;
 use std::sync::Arc;
 
-pub mod topdown;
+// pub mod topdown;
+pub mod generic_resolution;
 
 #[derive(Hash, PartialEq, Eq, Debug)]
 enum InnerPath<'sg, 'lbl, SCOPE, LABEL: 'lbl> {

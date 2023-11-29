@@ -1,5 +1,7 @@
 #![allow(unused)]
 
+mod completeness;
+
 use std::{
     collections::{HashMap, HashSet},
     hash::Hash,
@@ -9,71 +11,13 @@ use std::{
 
 use bumpalo::Bump;
 
-#[derive(Debug)]
-pub struct Scope<'sg, 'lbl, LABEL, DATA> {
-    id: u64, // TODO: by_address?
-    data: Option<&'sg DATA>,
-    edges: HashMap<&'lbl LABEL, HashSet<&'sg Scope<'sg, 'lbl, LABEL, DATA>>>, // FIXME: Vec?
-}
+use self::{completeness::Completeness, private::Sealed};
 
-pub type ScopeRef<'sg, 'lbl, LABEL, DATA> = &'sg Scope<'sg, 'lbl, LABEL, DATA>;
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Scope(usize);
 
-impl<LABEL, DATA> PartialEq for Scope<'_, '_, LABEL, DATA> {
-    fn eq(&self, other: &Self) -> bool {
-        // id should uniquely define scope identity
-        self.id == other.id
-    }
-}
-
-impl<LABEL, DATA> Eq for Scope<'_, '_, LABEL, DATA> {}
-
-impl<'sg, 'lbl, LABEL, DATA> Hash for Scope<'sg, 'lbl, LABEL, DATA> {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.id.hash(state);
-    }
-}
-
-impl<'sg, LABEL, DATA> Scope<'sg, '_, LABEL, DATA> {
-    fn new(id: u64) -> Self {
-        Self {
-            id,
-            data: None,
-            edges: HashMap::new(),
-        }
-    }
-
-    // FIXME: Scope always has data immediately
-    fn set_data(&mut self, data: &'sg DATA) -> Result<(), ScopeGraphDataError> {
-        if self.data.is_some() {
-            Err(ScopeGraphDataError::OverrideData)
-        } else {
-            self.data = Some(data);
-            Ok(())
-        }
-    }
-}
-
-impl<'sg, 'lbl, LABEL, DATA> Scope<'sg, 'lbl, LABEL, DATA>
-where
-    LABEL: Hash + Eq,
-    DATA: Hash + Eq,
-{
-    fn add_edge(&mut self, label: &'lbl LABEL, target: ScopeRef<'sg, 'lbl, LABEL, DATA>) {
-        self.edges.entry(label).or_default().insert(target);
-    }
-
-    fn get_edges(
-        &'sg self,
-        label: &'lbl LABEL,
-    ) -> impl Iterator<Item = &ScopeRef<'sg, 'lbl, LABEL, DATA>> {
-        self.edges.get(label).into_iter().flatten()
-    }
-}
-
-/// Overriding scope graph data is not allowed,
-pub enum ScopeGraphDataError {
-    OverrideData,
-}
+// Mutability: RefCell in Scope, not Scope in RefCell
+// Concurrency: RW-lock on edges
 
 /// Scope Graph operations.
 ///
@@ -81,14 +25,14 @@ pub enum ScopeGraphDataError {
 /// As a data structure, scope graphs are simple graphs with labeled nodes and labeled, directed edges.
 ///
 /// This trait has three associated types:
-/// - [`ScopeGraph::Scope`]: the type of the nodes.
-/// - [`ScopeGraph::Label`]: the type of the edge labels.
-/// - [`ScopeGraph::Data`]: the type of the scope/node labels.
+/// - [`InnerScopeGraph::Scope`]: the type of the nodes.
+/// - [`InnerScopeGraph::Label`]: the type of the edge labels.
+/// - [`InnerScopeGraph::Data`]: the type of the scope/node labels.
 ///
 /// The data structure has been designed for typical scope graph usage scenario's.
 /// For example, there is no support for _removing_ scopes or edges, as this usually does not happen in scope graphs.
 /// In addition, there is no data type for edges, as edges should only be traversed, but never leak outside the scope graph structure.
-/// Finally, although not made explicit, [`ScopeGraph::Label`] should be a finite, iterable set.
+/// Finally, although not made explicit, [`InnerScopeGraph::Label`] should be a finite, iterable set.
 ///
 /// Typical scope graph implementations will take ownership of the nodes, but only store references to the data that is associated with them.
 ///
@@ -96,28 +40,31 @@ pub enum ScopeGraphDataError {
 /// - [`SCOPE`] Type of nodes.
 /// - [`LABEL`] Type of edge labels.
 /// - [`DATA`] Type of data associated with nodes.
-pub struct ScopeGraph<'sg, LABEL, DATA> {
+#[derive(Default)]
+pub struct InnerScopeGraph<LABEL, DATA /*, META */> {
     id_counter: u64,
-    allocator: &'sg Bump,
-    phantom: PhantomData<(LABEL, DATA)>,
+    edges: Vec<HashMap<LABEL, HashSet<Scope>>>, // FIXME: BTreeMap? Vectors? Whatever?
+    data: Vec<DATA>,
 }
 
-impl<'sg, LABEL, DATA> ScopeGraph<'sg, LABEL, DATA> {
-    pub fn new(allocator: &'sg Bump) -> Self {
+impl<LABEL, DATA> InnerScopeGraph<LABEL, DATA> {
+    pub fn new() -> Self {
         Self {
             id_counter: 0,
-            allocator,
-            phantom: PhantomData,
+            edges: Vec::new(),
+            data: Vec::new(),
         }
     }
+}
 
+impl<LABEL: Hash + Eq, DATA> InnerScopeGraph<LABEL, DATA> {
     /// Adds a new scope to the graph, with `data` as its associated data.
-    /// After this operation, all future calls to [`ScopeGraph::get_data`] on this scope will return the associated data.
+    /// After this operation, all future calls to [`InnerScopeGraph::get_data`] on this scope will return the associated data.
     ///
     /// Example:
     /// ```ignore
-    /// # use scopegraphs::scopegraph::ScopeGraph;
-    /// let mut sg : ScopeGraph<i32, i32, i32> = ScopeGraph::new();
+    /// # use InnerScopeGraphs::InnerScopeGraph::InnerScopeGraph;
+    /// let mut sg : InnerScopeGraph<i32, i32, i32> = InnerScopeGraph::new();
     /// let data = 42;
     ///
     /// let scope = sg.add_scope(&data);
@@ -125,22 +72,24 @@ impl<'sg, LABEL, DATA> ScopeGraph<'sg, LABEL, DATA> {
     /// let newData = sg.get_data(scope);
     /// assert_eq!(data, *newData);
     /// ```
-    fn add_scope(&mut self) -> &mut Scope<'_, '_, LABEL, DATA> {
-        let id = self.id_counter;
-        self.id_counter += 1;
-        self.allocator.alloc(Scope::new(id))
+    pub fn add_scope(&mut self, data: DATA) -> Scope {
+        let id = self.data.len();
+        self.data.push(data);
+        self.edges.push(HashMap::with_capacity(0));
+        // TODO: Metadata updaten
+        Scope(id)
     }
 
     /// Adds a new edge from `src`, to `dst`, with label `lbl` to the scope graph.
-    /// After this operation, all future calls to [`ScopeGraph::get_edges`] on the source will contain the destination.
+    /// After this operation, all future calls to [`InnerScopeGraph::get_edges`] on the source will contain the destination.
     ///
     /// Example:
     /// ```ignore
-    /// # use scopegraphs::{scopegraph::ScopeGraph, Label};
+    /// # use InnerScopeGraphs::{InnerScopeGraph::InnerScopeGraph, Label};
     ///
     /// #[derive(Label, Eq, PartialEq, Copy, Clone)]
     /// enum Label { LEX }
-    /// let mut sg : ScopeGraph<i32, Label, i32> = ScopeGraph::new();
+    /// let mut sg : InnerScopeGraph<i32, Label, i32> = InnerScopeGraph::new();
     /// let data = 42;
     ///
     /// let src = sg.add_scope(&data);
@@ -151,48 +100,66 @@ impl<'sg, LABEL, DATA> ScopeGraph<'sg, LABEL, DATA> {
     /// assert!(dst_iter.any(|d| d == *dst));
     /// ```
     ///
-    pub fn add_edge(
-        &mut self,
-        _src: ScopeRef<'_, '_, LABEL, DATA>,
-        _lbl: &LABEL,
-        _dst: &ScopeRef<'_, '_, LABEL, DATA>,
-    ) {
+    pub fn add_edge(&mut self, src: Scope, lbl: LABEL, dst: Scope) {
+        self.edges[src.0].entry(lbl).or_default().insert(dst);
+        // FIXME: Update metadata
     }
 
     /// Returns the data associated with the `scope` argument.
-    pub fn get_data(&self, _scope: ScopeRef<'_, '_, LABEL, DATA>) -> Option<&DATA> {
-        todo!()
+    fn get_data(&self, scope: Scope) -> &DATA {
+        &self.data[scope.0]
     }
 
     /// Returns the targets of the outgoing edges of `src` with label `lbl`.
-    pub fn get_edges(
-        &self,
-        _scope: ScopeRef<'_, '_, LABEL, DATA>,
-        _lbl: &LABEL,
-    ) -> impl Iterator<Item = ScopeRef<'_, '_, LABEL, DATA>> {
-        std::iter::empty()
+    fn get_edges<'a>(&'a self, scope: Scope, lbl: &LABEL) -> impl Iterator<Item = Scope> + 'a {
+        self.edges[scope.0].get(lbl).into_iter().flatten().copied()
+        // FIXME: update metadata
     }
 }
 
-trait Accessor<'sg, 'lbl, LABEL, DATA> {
+mod private {
+    pub trait Sealed {}
+}
+
+trait Accessor<'sg, 'lbl, LABEL, DATA>: Sealed {
     type DataResult;
     // type EdgeResult;
 
-    fn get_data(&'sg mut self, scope: ScopeRef<'sg, 'lbl, LABEL, DATA>) -> Self::DataResult;
+    fn get_data(&'sg mut self, scope: Scope) -> Self::DataResult;
+}
+
+pub struct ScopeGraph<LABEL, DATA, CMPL> {
+    inner_scope_graph: InnerScopeGraph<LABEL, DATA>,
+    completeness: CMPL,
+}
+
+impl<LABEL, DATA, CMPL> ScopeGraph<LABEL, DATA, CMPL>
+where
+    CMPL: Completeness<LABEL, DATA>,
+{
+    fn get_edges(&mut self, src: Scope, lbl: LABEL) -> CMPL::GetEdgesResult {
+        self.completeness
+            .get_edges(&self.inner_scope_graph, src, lbl)
+    }
 }
 
 // Example implementations:
 
+#[cfg(any())]
 struct RawAccessor<'sg, 'lbl, LABEL, DATA> {
     phantom: &'sg &'lbl PhantomData<(LABEL, DATA)>,
 }
 
+#[cfg(any())]
+impl<'sg, 'lbl, LABEL, DATA> Sealed for RawAccessor<'sg, 'lbl, LABEL, DATA> {}
+
+#[cfg(any())]
 impl<'sg, 'lbl: 'sg, LABEL: 'lbl, DATA: 'sg> Accessor<'sg, 'lbl, LABEL, DATA>
     for RawAccessor<'sg, 'lbl, LABEL, DATA>
 {
     type DataResult = Option<&'sg DATA>;
 
-    fn get_data(&mut self, scope: &Scope<'sg, 'lbl, LABEL, DATA>) -> Self::DataResult {
+    fn get_data(&mut self, scope: Scope) -> Self::DataResult {
         scope.data
     }
 }
@@ -210,7 +177,7 @@ mod api_examples {
     use super::{Accessor, ScopeRef};
 
     struct WeaklyCriticalEdgeAccessor<'sg, 'lbl, LABEL, DATA> {
-        open_edges: HashMap<ScopeRef<'sg, 'lbl, LABEL, DATA>, HashSet<EdgeOrData<'lbl, LABEL>>>,
+        open_edges: HashMap<Scope, HashSet<EdgeOrData<'lbl, LABEL>>>,
     }
 
     enum WCEData<'sg, DATA> {
@@ -226,7 +193,7 @@ mod api_examples {
     {
         type DataResult = WCEData<'sg, DATA>;
 
-        fn get_data(&mut self, scope: ScopeRef<'sg, 'lbl, LABEL, DATA>) -> Self::DataResult {
+        fn get_data(&mut self, scope: Scope) -> Self::DataResult {
             // Check if data is closed already or not yet.
             if self
                 .open_edges
@@ -234,7 +201,7 @@ mod api_examples {
                 .map(|o| o.contains(&EdgeOrData::Data))
                 .unwrap_or(false)
             {
-                WCEData::NoData
+                WCEData::Open
             } else {
                 scope
                     .data
@@ -245,22 +212,19 @@ mod api_examples {
     }
 
     struct AsyncAccessor<'sg, 'lbl, LABEL, DATA> {
-        open_edges: HashMap<ScopeRef<'sg, 'lbl, LABEL, DATA>, HashSet<EdgeOrData<'lbl, LABEL>>>,
-        futures: HashMap<
-            (ScopeRef<'sg, 'lbl, LABEL, DATA>, EdgeOrData<'lbl, LABEL>),
-            Vec<Rc<Pending<Option<&'sg DATA>>>>,
-        >,
+        open_edges: HashMap<Scope, HashSet<EdgeOrData<'lbl, LABEL>>>,
+        futures: HashMap<(Scope, EdgeOrData<'lbl, LABEL>), Vec<Rc<Pending<Option<&'sg DATA>>>>>,
     }
 
     impl<'sg, 'lbl: 'sg, LABEL: 'lbl, DATA: 'sg> Accessor<'sg, 'lbl, LABEL, DATA>
         for AsyncAccessor<'sg, 'lbl, LABEL, DATA>
     where
-        ScopeRef<'sg, 'lbl, LABEL, DATA>: Hash + Eq,
+        Scope: Hash + Eq,
         EdgeOrData<'lbl, LABEL>: Hash + Eq,
     {
         type DataResult = Rc<dyn Future<Output = Option<&'sg DATA>>>;
 
-        fn get_data(&'sg mut self, scope: ScopeRef<'sg, 'lbl, LABEL, DATA>) -> Self::DataResult {
+        fn get_data(&'sg mut self, scope: Scope) -> Self::DataResult {
             // Check if data is closed already or not yet.
             if self
                 .open_edges
