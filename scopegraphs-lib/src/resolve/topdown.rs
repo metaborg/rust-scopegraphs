@@ -170,7 +170,7 @@ where
         env
     }
 
-    fn resolve_data(&mut self, path: &Path<'sg, LABEL>) -> Env<'sg, LABEL, DATA> {
+    fn resolve_data(&self, path: &Path<'sg, LABEL>) -> Env<'sg, LABEL, DATA> {
         let data = self.sg.borrow().get_data(path.target());
         if (self.data_wellformedness)(data) {
             Env::single(path.clone().resolve(data))
