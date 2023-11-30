@@ -11,7 +11,7 @@ use std::{
 
 use bumpalo::Bump;
 
-use self::{completeness::Completeness, private::Sealed};
+use completeness::Completeness;
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Scope(usize);
@@ -55,9 +55,7 @@ impl<LABEL, DATA> InnerScopeGraph<LABEL, DATA> {
             data: Vec::new(),
         }
     }
-}
 
-impl<LABEL: Hash + Eq, DATA> InnerScopeGraph<LABEL, DATA> {
     /// Adds a new scope to the graph, with `data` as its associated data.
     /// After this operation, all future calls to [`InnerScopeGraph::get_data`] on this scope will return the associated data.
     ///
@@ -76,10 +74,11 @@ impl<LABEL: Hash + Eq, DATA> InnerScopeGraph<LABEL, DATA> {
         let id = self.data.len();
         self.data.push(data);
         self.edges.push(HashMap::with_capacity(0));
-        // TODO: Metadata updaten
         Scope(id)
     }
+}
 
+impl<LABEL: Hash + Eq, DATA> InnerScopeGraph<LABEL, DATA> {
     /// Adds a new edge from `src`, to `dst`, with label `lbl` to the scope graph.
     /// After this operation, all future calls to [`InnerScopeGraph::get_edges`] on the source will contain the destination.
     ///
@@ -102,7 +101,6 @@ impl<LABEL: Hash + Eq, DATA> InnerScopeGraph<LABEL, DATA> {
     ///
     pub fn add_edge(&mut self, src: Scope, lbl: LABEL, dst: Scope) {
         self.edges[src.0].entry(lbl).or_default().insert(dst);
-        // FIXME: Update metadata
     }
 
     /// Returns the data associated with the `scope` argument.
@@ -111,21 +109,9 @@ impl<LABEL: Hash + Eq, DATA> InnerScopeGraph<LABEL, DATA> {
     }
 
     /// Returns the targets of the outgoing edges of `src` with label `lbl`.
-    fn get_edges<'a>(&'a self, scope: Scope, lbl: &LABEL) -> impl Iterator<Item = Scope> + 'a {
-        self.edges[scope.0].get(lbl).into_iter().flatten().copied()
-        // FIXME: update metadata
+    fn get_edges(&self, scope: Scope, lbl: LABEL) -> impl Iterator<Item = Scope> + '_ {
+        self.edges[scope.0].get(&lbl).into_iter().flatten().copied()
     }
-}
-
-mod private {
-    pub trait Sealed {}
-}
-
-trait Accessor<'sg, 'lbl, LABEL, DATA>: Sealed {
-    type DataResult;
-    // type EdgeResult;
-
-    fn get_data(&'sg mut self, scope: Scope) -> Self::DataResult;
 }
 
 pub struct ScopeGraph<LABEL, DATA, CMPL> {
@@ -137,117 +123,23 @@ impl<LABEL, DATA, CMPL> ScopeGraph<LABEL, DATA, CMPL>
 where
     CMPL: Completeness<LABEL, DATA>,
 {
-    fn get_edges(&mut self, src: Scope, lbl: LABEL) -> CMPL::GetEdgesResult {
+    pub fn new_scope(&mut self, data: DATA) -> Scope {
+        let scope = self.inner_scope_graph.add_scope(data);
+        self.completeness.new_scope(&self.inner_scope_graph, scope);
+        scope
+    }
+
+    pub fn new_edge(&mut self, src: Scope, lbl: LABEL, dst: Scope) -> CMPL::NewEdgeResult {
+        self.completeness
+            .new_edge(&mut self.inner_scope_graph, src, lbl, dst)
+    }
+
+    pub fn get_data(&self, scope: Scope) -> &DATA {
+        &self.inner_scope_graph.data[scope.0]
+    }
+
+    pub fn get_edges(&mut self, src: Scope, lbl: LABEL) -> CMPL::GetEdgesResult<'_> {
         self.completeness
             .get_edges(&self.inner_scope_graph, src, lbl)
-    }
-}
-
-// Example implementations:
-
-#[cfg(any())]
-struct RawAccessor<'sg, 'lbl, LABEL, DATA> {
-    phantom: &'sg &'lbl PhantomData<(LABEL, DATA)>,
-}
-
-#[cfg(any())]
-impl<'sg, 'lbl, LABEL, DATA> Sealed for RawAccessor<'sg, 'lbl, LABEL, DATA> {}
-
-#[cfg(any())]
-impl<'sg, 'lbl: 'sg, LABEL: 'lbl, DATA: 'sg> Accessor<'sg, 'lbl, LABEL, DATA>
-    for RawAccessor<'sg, 'lbl, LABEL, DATA>
-{
-    type DataResult = Option<&'sg DATA>;
-
-    fn get_data(&mut self, scope: Scope) -> Self::DataResult {
-        scope.data
-    }
-}
-
-#[cfg(any())]
-mod api_examples {
-
-    use std::collections::{HashMap, HashSet};
-    use std::future::{self, Future, Pending};
-    use std::hash::Hash;
-    use std::rc::Rc;
-
-    use crate::resolve::topdown::EdgeOrData;
-
-    use super::{Accessor, ScopeRef};
-
-    struct WeaklyCriticalEdgeAccessor<'sg, 'lbl, LABEL, DATA> {
-        open_edges: HashMap<Scope, HashSet<EdgeOrData<'lbl, LABEL>>>,
-    }
-
-    enum WCEData<'sg, DATA> {
-        NoData,
-        Open,
-        Data(&'sg DATA),
-    }
-
-    impl<'sg, 'lbl: 'sg, LABEL: 'lbl, DATA: 'sg> Accessor<'sg, 'lbl, LABEL, DATA>
-        for WeaklyCriticalEdgeAccessor<'sg, 'lbl, LABEL, DATA>
-    where
-        LABEL: Hash + Eq,
-    {
-        type DataResult = WCEData<'sg, DATA>;
-
-        fn get_data(&mut self, scope: Scope) -> Self::DataResult {
-            // Check if data is closed already or not yet.
-            if self
-                .open_edges
-                .get(scope)
-                .map(|o| o.contains(&EdgeOrData::Data))
-                .unwrap_or(false)
-            {
-                WCEData::Open
-            } else {
-                scope
-                    .data
-                    .map(|d| WCEData::Data(d))
-                    .unwrap_or(WCEData::NoData)
-            }
-        }
-    }
-
-    struct AsyncAccessor<'sg, 'lbl, LABEL, DATA> {
-        open_edges: HashMap<Scope, HashSet<EdgeOrData<'lbl, LABEL>>>,
-        futures: HashMap<(Scope, EdgeOrData<'lbl, LABEL>), Vec<Rc<Pending<Option<&'sg DATA>>>>>,
-    }
-
-    impl<'sg, 'lbl: 'sg, LABEL: 'lbl, DATA: 'sg> Accessor<'sg, 'lbl, LABEL, DATA>
-        for AsyncAccessor<'sg, 'lbl, LABEL, DATA>
-    where
-        Scope: Hash + Eq,
-        EdgeOrData<'lbl, LABEL>: Hash + Eq,
-    {
-        type DataResult = Rc<dyn Future<Output = Option<&'sg DATA>>>;
-
-        fn get_data(&'sg mut self, scope: Scope) -> Self::DataResult {
-            // Check if data is closed already or not yet.
-            if self
-                .open_edges
-                .get(scope)
-                .map(|o| o.contains(&EdgeOrData::Data))
-                .unwrap_or(false)
-            {
-                let future: Rc<Pending<Option<&'sg DATA>>> = Rc::new(future::pending());
-                match self.futures.get_mut(&(scope, EdgeOrData::Data)) {
-                    Some(futures) => {
-                        futures.push(future.clone());
-                    }
-                    None => {
-                        let futures = vec![future.clone()];
-                        self.futures.insert((scope, EdgeOrData::Data), futures);
-                    }
-                }
-                return future;
-            } else {
-                return Rc::new(future::ready(scope.data));
-            }
-        }
-
-        // when setting data, complete all open futures
     }
 }
