@@ -1,4 +1,4 @@
-use std::{collections::HashSet, future, hash::Hash};
+use std::{arch::x86_64::__m128, collections::HashSet, future, hash::Hash};
 
 use crate::label::Label;
 
@@ -15,14 +15,18 @@ use private::Sealed;
 pub trait Completeness<LABEL, DATA>: Sealed {
     fn new_scope(&mut self, inner_scope_graph: &InnerScopeGraph<LABEL, DATA>, scope: Scope); // FIXME `scope` needed?
 
-    type NewEdgeResult;
-    fn new_edge(
+    type NewEdgeResult<'a>
+    where
+        Self: 'a,
+        LABEL: 'a,
+        DATA: 'a;
+    fn new_edge<'a>(
         &mut self,
-        inner_scope_graph: &mut InnerScopeGraph<LABEL, DATA>,
+        inner_scope_graph: &'a mut InnerScopeGraph<'a, LABEL, DATA>,
         src: Scope,
-        lbl: LABEL,
+        lbl: &'a LABEL,
         dst: Scope,
-    ) -> Self::NewEdgeResult;
+    ) -> Self::NewEdgeResult<'a>;
 
     // type GetDataResult;
     // fn get_data(&mut self, inner_scope_graph: &InnerScopeGraph<LABEL, DATA>, scope: Scope) -> Self::GetDataResult;
@@ -32,11 +36,11 @@ pub trait Completeness<LABEL, DATA>: Sealed {
         Self: 'a,
         DATA: 'a,
         LABEL: 'a;
-    fn get_edges<'a>(
+    fn get_edges<'a, 'b: 'a>(
         &mut self,
         inner_scope_graph: &'a InnerScopeGraph<LABEL, DATA>,
         src: Scope,
-        lbl: LABEL,
+        lbl: &'b LABEL,
     ) -> Self::GetEdgesResult<'a>;
 }
 
@@ -48,25 +52,25 @@ impl Sealed for UncheckedCompleteness {}
 impl<LABEL: Hash + Eq, DATA> Completeness<LABEL, DATA> for UncheckedCompleteness {
     fn new_scope(&mut self, inner_scope_graph: &InnerScopeGraph<LABEL, DATA>, scope: Scope) {}
 
-    type NewEdgeResult = ();
+    type NewEdgeResult<'a> = () where DATA: 'a, LABEL: 'a;
 
-    fn new_edge(
+    fn new_edge<'a>(
         &mut self,
-        inner_scope_graph: &mut InnerScopeGraph<LABEL, DATA>,
+        inner_scope_graph: &'a mut InnerScopeGraph<'a, LABEL, DATA>,
         src: Scope,
-        lbl: LABEL,
+        lbl: &'a LABEL,
         dst: Scope,
-    ) -> Self::NewEdgeResult {
+    ) -> Self::NewEdgeResult<'a> {
         inner_scope_graph.add_edge(src, lbl, dst)
     }
 
     type GetEdgesResult<'a> = Box<dyn Iterator<Item = Scope> + 'a> where DATA: 'a, LABEL: 'a;
 
-    fn get_edges<'a>(
+    fn get_edges<'a, 'b: 'a>(
         &mut self,
         inner_scope_graph: &'a InnerScopeGraph<LABEL, DATA>,
         src: Scope,
-        lbl: LABEL,
+        lbl: &'b LABEL,
     ) -> Self::GetEdgesResult<'a> {
         Box::new(inner_scope_graph.get_edges(src, lbl))
     }
@@ -94,13 +98,13 @@ impl<LABEL: Hash + Eq> CriticalEdgeSet<LABEL> {
     }
 }
 
-pub enum EdgeClosedError<LABEL> {
-    EdgeClosed { scope: Scope, label: LABEL },
+pub enum EdgeClosedError<'a, LABEL> {
+    EdgeClosed { scope: Scope, label: &'a LABEL },
 }
 
-pub enum EdgesOrDelay<EDGES, LABEL> {
+pub enum EdgesOrDelay<'a, EDGES, LABEL> {
     Edges { edges: EDGES },
-    Delay { scope: Scope, label: LABEL },
+    Delay { scope: Scope, label: &'a LABEL },
 }
 
 /*** Weakly-Critical-Edge Based Completeness Checking with Explicit Closing ***/
@@ -119,15 +123,15 @@ impl<LABEL: Hash + Eq + for<'a> Label<'a>, DATA> Completeness<LABEL, DATA>
             .init_scope(HashSet::from_iter(LABEL::iter()))
     }
 
-    type NewEdgeResult = Result<(), EdgeClosedError<LABEL>>;
+    type NewEdgeResult<'a> = Result<(), EdgeClosedError<'a, LABEL>> where LABEL: 'a, DATA: 'a;
 
-    fn new_edge(
+    fn new_edge<'a>(
         &mut self,
-        inner_scope_graph: &mut InnerScopeGraph<LABEL, DATA>,
+        inner_scope_graph: &'a mut InnerScopeGraph<'a, LABEL, DATA>,
         src: Scope,
-        lbl: LABEL,
+        lbl: &'a LABEL,
         dst: Scope,
-    ) -> Self::NewEdgeResult {
+    ) -> Self::NewEdgeResult<'a> {
         if self.critical_edges.is_open(src, &lbl) {
             Err(EdgeClosedError::EdgeClosed {
                 scope: src,
@@ -139,13 +143,13 @@ impl<LABEL: Hash + Eq + for<'a> Label<'a>, DATA> Completeness<LABEL, DATA>
         }
     }
 
-    type GetEdgesResult<'a> = EdgesOrDelay<Box<dyn Iterator<Item = Scope> + 'a>, LABEL> where DATA: 'a, LABEL: 'a;
+    type GetEdgesResult<'a> = EdgesOrDelay<'a, Box<dyn Iterator<Item = Scope> + 'a>, LABEL> where DATA: 'a, LABEL: 'a;
 
-    fn get_edges<'a>(
+    fn get_edges<'a, 'b: 'a>(
         &mut self,
         inner_scope_graph: &'a InnerScopeGraph<LABEL, DATA>,
         src: Scope,
-        lbl: LABEL,
+        lbl: &'b LABEL,
     ) -> Self::GetEdgesResult<'a> {
         if self.critical_edges.is_open(src, &lbl) {
             EdgesOrDelay::Delay {
@@ -165,6 +169,7 @@ impl<LABEL: Hash + Eq + for<'a> Label<'a>, DATA> Completeness<LABEL, DATA>
 struct ImplicitClose<LABEL> {
     critical_edges: CriticalEdgeSet<LABEL>,
 }
+
 impl<LABEL> Sealed for ImplicitClose<LABEL> {}
 
 impl<LABEL: Hash + Eq + for<'a> Label<'a>, DATA> Completeness<LABEL, DATA>
@@ -175,16 +180,16 @@ impl<LABEL: Hash + Eq + for<'a> Label<'a>, DATA> Completeness<LABEL, DATA>
             .init_scope(HashSet::from_iter(LABEL::iter()))
     }
 
-    type NewEdgeResult = Result<(), EdgeClosedError<LABEL>>;
+    type NewEdgeResult<'a> = Result<(), EdgeClosedError<'a, LABEL>> where DATA: 'a, LABEL: 'a;
 
     // FIXME: identical to `ExplicitClose` impl.
-    fn new_edge(
+    fn new_edge<'a>(
         &mut self,
-        inner_scope_graph: &mut InnerScopeGraph<LABEL, DATA>,
+        inner_scope_graph: &'a mut InnerScopeGraph<'a, LABEL, DATA>,
         src: Scope,
-        lbl: LABEL,
+        lbl: &'a LABEL,
         dst: Scope,
-    ) -> Self::NewEdgeResult {
+    ) -> Self::NewEdgeResult<'a> {
         if self.critical_edges.is_open(src, &lbl) {
             // FIXME: provide reason (queries) that made this edge closed?
             Err(EdgeClosedError::EdgeClosed {
@@ -199,11 +204,11 @@ impl<LABEL: Hash + Eq + for<'a> Label<'a>, DATA> Completeness<LABEL, DATA>
 
     type GetEdgesResult<'a> = Box<dyn Iterator<Item = Scope> + 'a> where DATA: 'a, LABEL: 'a;
 
-    fn get_edges<'a>(
+    fn get_edges<'a, 'b: 'a>(
         &mut self,
         inner_scope_graph: &'a InnerScopeGraph<LABEL, DATA>,
         src: Scope,
-        lbl: LABEL,
+        lbl: &'b LABEL,
     ) -> Self::GetEdgesResult<'a> {
         self.critical_edges.close(src, &lbl);
         Box::new(inner_scope_graph.get_edges(src, lbl))

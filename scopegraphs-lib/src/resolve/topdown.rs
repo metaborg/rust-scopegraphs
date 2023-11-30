@@ -3,7 +3,7 @@ use std::iter;
 
 use crate::{
     label::Label,
-    scopegraph::{Scope, ScopeRef},
+    scopegraph::{Completeness, Scope},
 };
 use scopegraphs_regular_expressions::RegexMatcher;
 
@@ -33,25 +33,27 @@ impl<LABEL> Clone for EdgeOrData<'_, LABEL> {
 }
 impl<LABEL> Copy for EdgeOrData<'_, LABEL> {}
 
-pub fn resolve<'sg, LABEL: 'sg, DATA>(
-    sg: &'sg ScopeGraph<LABEL, DATA>,
+pub fn resolve<'sg, LABEL: 'sg, DATA, CMPL>(
+    sg: &'sg mut ScopeGraph<'sg, LABEL, DATA, CMPL>,
     path_wellformedness: &mut impl RegexMatcher<&'sg LABEL>,
     data_wellformedness: &impl DataWellformedness<DATA>,
     label_order: &impl LabelOrder<LABEL>,
     data_order: &impl DataOrder<DATA>,
-    source: ScopeRef<'sg, 'sg, LABEL, DATA>,
-) -> Env<'sg, 'sg, Scope<'sg, 'sg, LABEL, DATA>, LABEL, DATA>
+    source: &'sg Scope,
+) -> Env<'sg, LABEL, DATA>
 where
     LABEL: Label<'sg>,
-    ResolvedPath<'sg, 'sg, Scope<'sg, 'sg, LABEL, DATA>, LABEL, DATA>: Hash + Eq,
-    Path<'sg, 'sg, Scope<'sg, 'sg, LABEL, DATA>, LABEL>: Clone,
+    CMPL: Completeness<LABEL, DATA>,
+    for<'a> CMPL::GetEdgesResult<'a>: Iterator<Item = Scope>,
+    ResolvedPath<'sg, LABEL, DATA>: Hash + Eq,
+    Path<'sg, LABEL>: Clone,
 {
     let all_edges: Vec<EdgeOrData<LABEL>> = LABEL::iter_ref()
         .map(EdgeOrData::Edge)
         .chain(iter::once(EdgeOrData::Data))
         .collect();
 
-    let context = ResolutionContext {
+    let mut context = ResolutionContext {
         all_edges,
         sg,
         data_wellformedness,
@@ -59,32 +61,33 @@ where
         data_order,
     };
 
-    context.resolve_all(path_wellformedness, &Path::new(source))
+    context.resolve_all(path_wellformedness, &Path::new(*source))
 }
 
-struct ResolutionContext<'sg, 'query, LABEL, DATA, DWF, LO, DO> {
+struct ResolutionContext<'sg, 'query, LABEL, DATA, CMPL, DWF, LO, DO> {
     all_edges: Vec<EdgeOrData<'sg, LABEL>>,
-    sg: &'sg ScopeGraph<LABEL, DATA>,
+    sg: &'sg mut ScopeGraph<'sg, LABEL, DATA, CMPL>,
     data_wellformedness: &'query DWF,
     label_order: &'query LO,
     data_order: &'query DO,
 }
 
-impl<'sg, 'query, LABEL: 'sg, DATA, DWF, LO, DO>
-    ResolutionContext<'sg, 'query, LABEL, DATA, DWF, LO, DO>
+impl<'sg, 'query, LABEL: 'sg, DATA, CMPL, DWF, LO, DO>
+    ResolutionContext<'sg, 'query, LABEL, DATA, CMPL, DWF, LO, DO>
 where
-    Scope<'sg, 'sg, LABEL, DATA>: Hash + Eq,
-    ResolvedPath<'sg, 'sg, Scope<'sg, 'sg, LABEL, DATA>, LABEL, DATA>: Hash + Eq,
+    ResolvedPath<'sg, LABEL, DATA>: Hash + Eq,
+    CMPL: Completeness<LABEL, DATA>,
+    for<'a> CMPL::GetEdgesResult<'a>: Iterator<Item = Scope>,
     DO: DataOrder<DATA>,
     DWF: DataWellformedness<DATA>,
     LO: LabelOrder<LABEL>,
-    Path<'sg, 'sg, Scope<'sg, 'sg, LABEL, DATA>, LABEL>: Clone,
+    Path<'sg, LABEL>: Clone,
 {
     fn resolve_all(
-        &self,
+        &mut self,
         path_wellformedness: &mut impl RegexMatcher<&'sg LABEL>,
-        path: &Path<'sg, 'sg, Scope<'sg, 'sg, LABEL, DATA>, LABEL>,
-    ) -> Env<'sg, 'sg, Scope<'sg, 'sg, LABEL, DATA>, LABEL, DATA> {
+        path: &Path<'sg, LABEL>,
+    ) -> Env<'sg, LABEL, DATA> {
         let edges: Vec<_> = self
             .all_edges
             .iter()
@@ -99,13 +102,13 @@ where
     }
 
     fn resolve_edges(
-        &self,
+        &mut self,
         path_wellformedness: &mut impl RegexMatcher<&'sg LABEL>,
         edges: &[EdgeOrData<'sg, LABEL>],
-        path: &Path<'sg, 'sg, Scope<'sg, 'sg, LABEL, DATA>, LABEL>,
-    ) -> Env<'sg, 'sg, Scope<'sg, 'sg, LABEL, DATA>, LABEL, DATA> {
+        path: &Path<'sg, LABEL>,
+    ) -> Env<'sg, LABEL, DATA> {
         let max = self.max(edges);
-        let mut env: Env<Scope<'sg, 'sg, LABEL, DATA>, LABEL, DATA> = Env::new();
+        let mut env: Env<LABEL, DATA> = Env::new();
 
         for edge in max {
             let smaller = self.smaller(edge, edges);
@@ -116,12 +119,12 @@ where
     }
 
     fn resolve_shadow(
-        &self,
+        &mut self,
         path_wellformedness: &mut impl RegexMatcher<&'sg LABEL>,
         edge: EdgeOrData<'sg, LABEL>,
         edges: &[EdgeOrData<'sg, LABEL>],
-        path: &Path<'sg, 'sg, Scope<'sg, 'sg, LABEL, DATA>, LABEL>,
-    ) -> Env<'sg, 'sg, Scope<'sg, 'sg, LABEL, DATA>, LABEL, DATA> {
+        path: &Path<'sg, LABEL>,
+    ) -> Env<'sg, LABEL, DATA> {
         let mut env = Env::new();
         env.merge(self.resolve_edges(path_wellformedness, edges, path));
         let new = self
@@ -137,11 +140,11 @@ where
     }
 
     fn resolve_edge(
-        &self,
+        &mut self,
         path_wellformedness: &mut impl RegexMatcher<&'sg LABEL>,
         edge: EdgeOrData<'sg, LABEL>,
-        path: &Path<'sg, 'sg, Scope<'sg, 'sg, LABEL, DATA>, LABEL>,
-    ) -> Env<'sg, 'sg, Scope<'sg, 'sg, LABEL, DATA>, LABEL, DATA> {
+        path: &Path<'sg, LABEL>,
+    ) -> Env<'sg, LABEL, DATA> {
         match edge {
             EdgeOrData::Edge(label) => self.resolve_label(path_wellformedness, label, path),
             EdgeOrData::Data => self.resolve_data(path),
@@ -149,14 +152,16 @@ where
     }
 
     fn resolve_label(
-        &self,
+        &mut self,
         path_wellformedness: &mut impl RegexMatcher<&'sg LABEL>,
         label: &'sg LABEL,
-        path: &Path<'sg, 'sg, Scope<'sg, 'sg, LABEL, DATA>, LABEL>,
-    ) -> Env<'sg, 'sg, Scope<'sg, 'sg, LABEL, DATA>, LABEL, DATA> {
+        path: &Path<'sg, LABEL>,
+    ) -> Env<'sg, LABEL, DATA> {
         path_wellformedness.step(label);
         let mut env = Env::new();
-        for tgt in self.sg.get_edges(path.target(), label) {
+        let sg: &mut ScopeGraph<'sg, LABEL, DATA, _> = self.sg;
+        let targets = sg.get_edges(path.target(), label);
+        for tgt in targets {
             if let Some(p) = path.step(label, tgt) {
                 env.merge(self.resolve_all(path_wellformedness, &p))
             }
@@ -165,17 +170,15 @@ where
         env
     }
 
-    fn resolve_data(
-        &self,
-        path: &Path<'sg, 'sg, Scope<'sg, 'sg, LABEL, DATA>, LABEL>,
-    ) -> Env<'sg, 'sg, Scope<'sg, 'sg, LABEL, DATA>, LABEL, DATA> {
-        if let Some(data) = self.sg.get_data(path.target()) {
-            if (self.data_wellformedness)(data) {
-                return Env::single(path.clone().resolve(data));
-            }
+    fn resolve_data(&mut self, path: &Path<'sg, LABEL>) -> Env<'sg, LABEL, DATA> {
+        // `self.sg` has data
+        let sg: &mut ScopeGraph<'sg, LABEL, DATA, _> = self.sg;
+        let data: &DATA = sg.get_data(path.target());
+        if (self.data_wellformedness)(data) {
+            Env::single(path.clone().resolve(data))
+        } else {
+            Env::new()
         }
-
-        Env::new()
     }
 
     fn max(&self, edges: &[EdgeOrData<'sg, LABEL>]) -> Vec<EdgeOrData<'sg, LABEL>> {
