@@ -60,7 +60,7 @@ impl<LABEL: Hash + Eq, DATA> Completeness<LABEL, DATA> for UncheckedCompleteness
         inner_scope_graph.add_edge(src, lbl, dst)
     }
 
-    type GetEdgesResult<'a> = impl Iterator<Item = Scope> + 'a where DATA: 'a, LABEL: 'a;
+    type GetEdgesResult<'a> = Box<dyn Iterator<Item = Scope> + 'a> where DATA: 'a, LABEL: 'a;
 
     fn get_edges<'a>(
         &mut self,
@@ -68,7 +68,7 @@ impl<LABEL: Hash + Eq, DATA> Completeness<LABEL, DATA> for UncheckedCompleteness
         src: Scope,
         lbl: LABEL,
     ) -> Self::GetEdgesResult<'a> {
-        inner_scope_graph.get_edges(src, lbl)
+        Box::new(inner_scope_graph.get_edges(src, lbl))
     }
 }
 
@@ -139,7 +139,7 @@ impl<LABEL: Hash + Eq + for<'a> Label<'a>, DATA> Completeness<LABEL, DATA>
         }
     }
 
-    type GetEdgesResult<'a> = EdgesOrDelay<impl Iterator<Item = Scope>, LABEL> where DATA: 'a, LABEL: 'a;
+    type GetEdgesResult<'a> = EdgesOrDelay<Box<dyn Iterator<Item = Scope> + 'a>, LABEL> where DATA: 'a, LABEL: 'a;
 
     fn get_edges<'a>(
         &mut self,
@@ -154,7 +154,7 @@ impl<LABEL: Hash + Eq + for<'a> Label<'a>, DATA> Completeness<LABEL, DATA>
             }
         } else {
             EdgesOrDelay::Edges {
-                edges: inner_scope_graph.get_edges(src, lbl),
+                edges: Box::new(inner_scope_graph.get_edges(src, lbl)),
             }
         }
     }
@@ -197,7 +197,7 @@ impl<LABEL: Hash + Eq + for<'a> Label<'a>, DATA> Completeness<LABEL, DATA>
         }
     }
 
-    type GetEdgesResult<'a> = impl Iterator<Item = Scope> where DATA: 'a, LABEL: 'a;
+    type GetEdgesResult<'a> = Box<dyn Iterator<Item = Scope> + 'a> where DATA: 'a, LABEL: 'a;
 
     fn get_edges<'a>(
         &mut self,
@@ -206,7 +206,7 @@ impl<LABEL: Hash + Eq + for<'a> Label<'a>, DATA> Completeness<LABEL, DATA>
         lbl: LABEL,
     ) -> Self::GetEdgesResult<'a> {
         self.critical_edges.close(src, &lbl);
-        inner_scope_graph.get_edges(src, lbl)
+        Box::new(inner_scope_graph.get_edges(src, lbl))
     }
 }
 
