@@ -53,7 +53,7 @@ where
         .chain(iter::once(EdgeOrData::Data))
         .collect();
 
-    let mut context = ResolutionContext {
+    let context = ResolutionContext {
         all_edges,
         sg: RefCell::new(sg),
         data_wellformedness,
