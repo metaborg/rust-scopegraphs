@@ -4,24 +4,26 @@ use std::fmt::Debug;
 use std::hash::Hash;
 use std::sync::Arc;
 
-// pub mod topdown;
+use crate::scopegraph::Scope;
+
 pub mod generic_resolution;
+pub mod topdown;
 
 #[derive(Hash, PartialEq, Eq, Debug)]
-enum InnerPath<'sg, 'lbl, SCOPE, LABEL: 'lbl> {
+enum InnerPath<'sg, LABEL: 'sg> {
     Start {
-        source: &'sg SCOPE,
+        source: Scope,
     },
     Step {
-        prefix: Path<'sg, 'lbl, SCOPE, LABEL>,
-        label: &'lbl LABEL,
-        target: &'sg SCOPE,
+        prefix: Path<'sg, LABEL>,
+        label: &'sg LABEL,
+        target: Scope,
     },
 }
 
 #[derive(Clone)]
-pub struct Path<'sg, 'lbl, SCOPE, LABEL> {
-    inner_path: Arc<InnerPath<'sg, 'lbl, SCOPE, LABEL>>,
+pub struct Path<'sg, LABEL> {
+    inner_path: Arc<InnerPath<'sg, LABEL>>,
     /// Set of all scopes in this path.
     ///
     /// Paths are alternating sequences of scopes and labels.
@@ -31,12 +33,12 @@ pub struct Path<'sg, 'lbl, SCOPE, LABEL> {
     /// This is cheaper than traversing the [`Path::inner_path`], at the cost of some more memory usage.
     ///
     /// In order to make paths cheap to extend multiple times, we use a persistent data structure.
-    scopes: TrieSet<&'sg SCOPE>,
+    scopes: TrieSet<Scope>,
 }
 
-impl<SCOPE, LABEL> PartialEq for Path<'_, '_, SCOPE, LABEL>
+impl<LABEL> PartialEq for Path<'_, LABEL>
 where
-    SCOPE: PartialEq,
+    Scope: PartialEq,
     LABEL: PartialEq,
 {
     fn eq(&self, other: &Self) -> bool {
@@ -45,16 +47,16 @@ where
     }
 }
 
-impl<SCOPE, LABEL> Eq for Path<'_, '_, SCOPE, LABEL>
+impl<LABEL> Eq for Path<'_, LABEL>
 where
-    SCOPE: Eq,
+    Scope: Eq,
     LABEL: Eq,
 {
 }
 
-impl<SCOPE, LABEL> Hash for Path<'_, '_, SCOPE, LABEL>
+impl<LABEL> Hash for Path<'_, LABEL>
 where
-    SCOPE: Hash,
+    Scope: Hash,
     LABEL: Hash,
 {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
@@ -63,9 +65,8 @@ where
     }
 }
 
-impl<SCOPE, LABEL> Debug for Path<'_, '_, SCOPE, LABEL>
+impl<LABEL> Debug for Path<'_, LABEL>
 where
-    SCOPE: Debug,
     LABEL: Debug,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -77,31 +78,28 @@ where
 }
 
 #[derive(Hash, PartialEq, Eq, Debug, Clone)]
-pub struct ResolvedPath<'sg, 'lbl, SCOPE, LABEL: 'lbl, DATA> {
-    path: Path<'sg, 'lbl, SCOPE, LABEL>,
+pub struct ResolvedPath<'sg, LABEL: 'sg, DATA> {
+    path: Path<'sg, LABEL>,
     data: &'sg DATA,
 }
 
-impl<'sg, 'lbl, SCOPE, LABEL> Path<'sg, 'lbl, SCOPE, LABEL>
-where
-    SCOPE: Eq + Hash,
-{
-    pub fn new(source: &'sg SCOPE) -> Self {
+impl<'sg, LABEL> Path<'sg, LABEL> {
+    pub fn new(source: Scope) -> Self {
         Self {
             inner_path: Arc::new(InnerPath::Start { source }),
             scopes: TrieSet::new().insert(source),
         }
     }
 
-    pub fn target(&self) -> &SCOPE {
+    pub fn target(&self) -> Scope {
         match self.inner_path.as_ref() {
-            InnerPath::Start { source } => source,
-            InnerPath::Step { target, .. } => target,
+            InnerPath::Start { source } => *source,
+            InnerPath::Step { target, .. } => *target,
         }
     }
 
-    pub fn step(&self, label: &'lbl LABEL, target: &'sg SCOPE) -> Option<Self> {
-        if self.scopes.search(&target) {
+    pub fn step(&self, label: &'sg LABEL, target: Scope) -> Option<Self> {
+        if self.scopes.search(&&target) {
             None
         } else {
             Some(Self {
@@ -118,7 +116,7 @@ where
         }
     }
 
-    pub fn resolve<DATA>(self, data: &'sg DATA) -> ResolvedPath<'sg, 'lbl, SCOPE, LABEL, DATA> {
+    pub fn resolve<DATA>(self, data: &'sg DATA) -> ResolvedPath<'sg, LABEL, DATA> {
         ResolvedPath { path: self, data }
     }
 }
@@ -128,50 +126,45 @@ where
 // - we currently create a lot of new hashmaps, which is not really efficient
 // - efficiency might be dependent on the name resolution (shadowing) strategy
 // Perhaps we will resort to fibbonacy heaps/pairing heaps, and/or make resolution parametric in the environment type.
-pub struct Env<'sg, 'lbl, SCOPE, LABEL: 'lbl, DATA>(
-    HashSet<ResolvedPath<'sg, 'lbl, SCOPE, LABEL, DATA>>,
-);
+pub struct Env<'sg, LABEL: 'sg, DATA>(HashSet<ResolvedPath<'sg, LABEL, DATA>>);
 
-impl<'sg, 'lbl, SCOPE, LABEL, DATA> IntoIterator for Env<'sg, 'lbl, SCOPE, LABEL, DATA> {
-    type Item = ResolvedPath<'sg, 'lbl, SCOPE, LABEL, DATA>;
+impl<'sg, 'lbl, LABEL, DATA> IntoIterator for Env<'sg, LABEL, DATA> {
+    type Item = ResolvedPath<'sg, LABEL, DATA>;
 
-    type IntoIter =
-        <HashSet<ResolvedPath<'sg, 'lbl, SCOPE, LABEL, DATA>> as IntoIterator>::IntoIter;
+    type IntoIter = <HashSet<ResolvedPath<'sg, LABEL, DATA>> as IntoIterator>::IntoIter;
 
     fn into_iter(self) -> Self::IntoIter {
         self.0.into_iter()
     }
 }
 
-impl<SCOPE, LABEL, DATA> Default for Env<'_, '_, SCOPE, LABEL, DATA> {
+impl<LABEL, DATA> Default for Env<'_, LABEL, DATA> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<'sg, 'lbl, SCOPE, LABEL, DATA> Env<'sg, 'lbl, SCOPE, LABEL, DATA> {
+impl<'sg, LABEL, DATA> Env<'sg, LABEL, DATA> {
     pub fn new() -> Self {
         Self(HashSet::new())
     }
 
-    pub fn iter<'a>(
-        &'a self,
-    ) -> impl Iterator<Item = &'a ResolvedPath<'sg, 'lbl, SCOPE, LABEL, DATA>> + 'a {
+    pub fn iter<'a>(&'a self) -> impl Iterator<Item = &'a ResolvedPath<'sg, LABEL, DATA>> + 'a {
         self.0.iter()
     }
 }
 
-impl<'sg, 'lbl, SCOPE, LABEL, DATA> Env<'sg, 'lbl, SCOPE, LABEL, DATA>
+impl<'sg, 'lbl, LABEL, DATA> Env<'sg, LABEL, DATA>
 where
-    ResolvedPath<'sg, 'lbl, SCOPE, LABEL, DATA>: Eq + Hash,
+    ResolvedPath<'sg, LABEL, DATA>: Eq + Hash,
 {
-    pub fn single(path: ResolvedPath<'sg, 'lbl, SCOPE, LABEL, DATA>) -> Self {
+    pub fn single(path: ResolvedPath<'sg, LABEL, DATA>) -> Self {
         let mut env = Env::new();
         env.insert(path);
         env
     }
 
-    pub fn insert(&mut self, path: ResolvedPath<'sg, 'lbl, SCOPE, LABEL, DATA>) {
+    pub fn insert(&mut self, path: ResolvedPath<'sg, LABEL, DATA>) {
         self.0.insert(path);
     }
 

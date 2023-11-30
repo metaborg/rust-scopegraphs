@@ -3,6 +3,7 @@
 mod completeness;
 
 use std::{
+    cell::RefCell,
     collections::{HashMap, HashSet},
     hash::Hash,
     iter,
@@ -11,9 +12,9 @@ use std::{
 
 use bumpalo::Bump;
 
-use completeness::Completeness;
+pub use completeness::Completeness;
 
-#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 pub struct Scope(usize);
 
 // Mutability: RefCell in Scope, not Scope in RefCell
@@ -41,13 +42,13 @@ pub struct Scope(usize);
 /// - [`LABEL`] Type of edge labels.
 /// - [`DATA`] Type of data associated with nodes.
 #[derive(Default)]
-pub struct InnerScopeGraph<LABEL, DATA /*, META */> {
+pub struct InnerScopeGraph<'a, LABEL, DATA /*, META */> {
     id_counter: u64,
-    edges: Vec<HashMap<LABEL, HashSet<Scope>>>, // FIXME: BTreeMap? Vectors? Whatever?
+    edges: Vec<HashMap<&'a LABEL, HashSet<Scope>>>, // FIXME: BTreeMap? Vectors? Whatever?
     data: Vec<DATA>,
 }
 
-impl<LABEL, DATA> InnerScopeGraph<LABEL, DATA> {
+impl<LABEL, DATA> InnerScopeGraph<'_, LABEL, DATA> {
     pub fn new() -> Self {
         Self {
             id_counter: 0,
@@ -78,7 +79,7 @@ impl<LABEL, DATA> InnerScopeGraph<LABEL, DATA> {
     }
 }
 
-impl<LABEL: Hash + Eq, DATA> InnerScopeGraph<LABEL, DATA> {
+impl<'a, LABEL: Hash + Eq, DATA> InnerScopeGraph<'a, LABEL, DATA> {
     /// Adds a new edge from `src`, to `dst`, with label `lbl` to the scope graph.
     /// After this operation, all future calls to [`InnerScopeGraph::get_edges`] on the source will contain the destination.
     ///
@@ -99,7 +100,7 @@ impl<LABEL: Hash + Eq, DATA> InnerScopeGraph<LABEL, DATA> {
     /// assert!(dst_iter.any(|d| d == *dst));
     /// ```
     ///
-    pub fn add_edge(&mut self, src: Scope, lbl: LABEL, dst: Scope) {
+    pub fn add_edge(&'a mut self, src: Scope, lbl: &'a LABEL, dst: Scope) {
         self.edges[src.0].entry(lbl).or_default().insert(dst);
     }
 
@@ -109,37 +110,46 @@ impl<LABEL: Hash + Eq, DATA> InnerScopeGraph<LABEL, DATA> {
     }
 
     /// Returns the targets of the outgoing edges of `src` with label `lbl`.
-    fn get_edges(&self, scope: Scope, lbl: LABEL) -> impl Iterator<Item = Scope> + '_ {
-        self.edges[scope.0].get(&lbl).into_iter().flatten().copied()
+    fn get_edges<'b>(&'a self, scope: Scope, lbl: &'b LABEL) -> impl Iterator<Item = Scope> + 'a
+    where
+        'b: 'a,
+    {
+        self.edges[scope.0].get(lbl).into_iter().flatten().copied()
     }
 }
 
-pub struct ScopeGraph<LABEL, DATA, CMPL> {
-    inner_scope_graph: InnerScopeGraph<LABEL, DATA>,
+pub struct ScopeGraph<'a, LABEL, DATA, CMPL> {
+    inner_scope_graph: RefCell<InnerScopeGraph<'a, LABEL, DATA>>,
     completeness: CMPL,
 }
 
-impl<LABEL, DATA, CMPL> ScopeGraph<LABEL, DATA, CMPL>
+impl<'a, LABEL, DATA, CMPL> ScopeGraph<'a, LABEL, DATA, CMPL>
 where
     CMPL: Completeness<LABEL, DATA>,
 {
     pub fn new_scope(&mut self, data: DATA) -> Scope {
-        let scope = self.inner_scope_graph.add_scope(data);
-        self.completeness.new_scope(&self.inner_scope_graph, scope);
+        let scope = self.inner_scope_graph.borrow_mut().add_scope(data);
+        self.completeness
+            .new_scope(&self.inner_scope_graph.borrow_mut(), scope);
         scope
     }
 
-    pub fn new_edge(&mut self, src: Scope, lbl: LABEL, dst: Scope) -> CMPL::NewEdgeResult {
+    pub fn new_edge<'b: 'a>(
+        &'a mut self,
+        src: Scope,
+        lbl: &'b LABEL,
+        dst: Scope,
+    ) -> CMPL::NewEdgeResult<'a> {
         self.completeness
-            .new_edge(&mut self.inner_scope_graph, src, lbl, dst)
+            .new_edge(&mut self.inner_scope_graph.borrow_mut(), src, lbl, dst)
     }
 
-    pub fn get_data(&self, scope: Scope) -> &DATA {
-        &self.inner_scope_graph.data[scope.0]
+    pub fn get_data(&'a self, scope: Scope) -> &'a DATA {
+        &self.inner_scope_graph.borrow().data[scope.0]
     }
 
-    pub fn get_edges(&mut self, src: Scope, lbl: LABEL) -> CMPL::GetEdgesResult<'_> {
-        self.completeness
-            .get_edges(&self.inner_scope_graph, src, lbl)
+    pub fn get_edges<'b: 'a>(&'a mut self, src: Scope, lbl: &'b LABEL) -> CMPL::GetEdgesResult<'a> {
+        let isg = self.inner_scope_graph.borrow();
+        self.completeness.get_edges(&isg, src, lbl)
     }
 }
