@@ -120,7 +120,7 @@ impl<'a, LABEL: Hash + Eq, DATA> InnerScopeGraph<LABEL, DATA> {
 
 pub struct ScopeGraph<LABEL, DATA, CMPL> {
     inner_scope_graph: InnerScopeGraph<LABEL, DATA>,
-    completeness: CMPL,
+    completeness: RefCell<CMPL>,
 }
 
 impl<'a, LABEL, DATA, CMPL> ScopeGraph<LABEL, DATA, CMPL>
@@ -129,21 +129,21 @@ where
 {
     pub fn new_scope(&mut self, data: DATA) -> Scope {
         let scope = self.inner_scope_graph.add_scope(data);
-        self.completeness.new_scope(&self.inner_scope_graph, scope);
+        self.completeness.borrow_mut().new_scope(&self.inner_scope_graph, scope);
         scope
     }
 
     pub fn new_edge(&mut self, src: Scope, lbl: LABEL, dst: Scope) -> CMPL::NewEdgeResult {
-        self.completeness
+        self.completeness.borrow_mut()
             .new_edge(&mut self.inner_scope_graph, src, lbl, dst)
     }
 
-    pub fn get_data(&'a self, scope: Scope) -> &'a DATA {
+    pub fn get_data(&self, scope: Scope) -> &DATA {
         &self.inner_scope_graph.data[scope.0]
     }
 
-    pub fn get_edges<'b: 'a>(&'a mut self, src: Scope, lbl: &'b LABEL) -> CMPL::GetEdgesResult<'a> {
-        self.completeness
+    pub fn get_edges<'b: 'a>(&'a self, src: Scope, lbl: &'b LABEL) -> CMPL::GetEdgesResult<'a> {
+        self.completeness.borrow_mut()
             .get_edges(&self.inner_scope_graph, src, lbl)
     }
 }

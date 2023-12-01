@@ -1,5 +1,5 @@
 use std::iter;
-use std::{cell::RefCell, hash::Hash};
+use std::hash::Hash;
 
 use crate::{
     label::Label,
@@ -55,7 +55,7 @@ where
 
     let context = ResolutionContext {
         all_edges,
-        sg: RefCell::new(sg),
+        sg,
         data_wellformedness,
         label_order,
         data_order,
@@ -66,13 +66,13 @@ where
 
 struct ResolutionContext<'sg: 'query, 'query, LABEL, DATA, CMPL, DWF, LO, DO> {
     all_edges: Vec<EdgeOrData<'query, LABEL>>,
-    sg: RefCell<&'sg mut ScopeGraph<LABEL, DATA, CMPL>>,
+    sg: &'sg ScopeGraph<LABEL, DATA, CMPL>,
     data_wellformedness: &'query DWF,
     label_order: &'query LO,
     data_order: &'query DO,
 }
 
-impl<'sg, 'query, LABEL: 'sg, DATA, CMPL, DWF, LO, DO>
+impl<'sg, 'query, LABEL, DATA, CMPL, DWF, LO, DO>
     ResolutionContext<'sg, 'query, LABEL, DATA, CMPL, DWF, LO, DO>
 where
     ResolvedPath<'sg, LABEL, DATA>: Hash + Eq,
@@ -153,17 +153,17 @@ where
 
     fn resolve_label(
         &self,
-        path_wellformedness: &mut impl RegexMatcher<&'sg LABEL>,
-        label: &'sg LABEL,
+        path_wellformedness: &mut impl RegexMatcher<&'query LABEL>,
+        label: &'query LABEL,
         path: &Path<'sg, LABEL>,
     ) -> Env<'sg, LABEL, DATA> {
         path_wellformedness.step(label);
         let mut env = Env::new();
-        let mut sg = self.sg.borrow_mut();
-        let targets = sg.get_edges(path.target(), label);
+        let targets =self.sg.get_edges(path.target(), label);
         for tgt in targets {
             if let Some(p) = path.step(label, tgt) {
-                env.merge(self.resolve_all(path_wellformedness, &p))
+                let sub_env = self.resolve_all(path_wellformedness, &p);
+                env.merge(sub_env)
             }
         }
 
@@ -171,7 +171,7 @@ where
     }
 
     fn resolve_data(&self, path: &Path<'sg, LABEL>) -> Env<'sg, LABEL, DATA> {
-        let data = self.sg.borrow().get_data(path.target());
+        let data = self.sg.get_data(path.target());
         if (self.data_wellformedness)(data) {
             Env::single(path.clone().resolve(data))
         } else {

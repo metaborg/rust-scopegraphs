@@ -147,7 +147,7 @@ impl<LABEL: Hash + Eq + for<'a> Label<'a>, DATA> Completeness<LABEL, DATA>
         src: Scope,
         lbl: &'b LABEL,
     ) -> Self::GetEdgesResult<'a> {
-        if self.critical_edges.is_open(src, &lbl) {
+        if self.critical_edges.is_open(src, lbl) {
             EdgesOrDelay::Delay {
                 scope: src,
                 label: lbl,
@@ -206,7 +206,7 @@ impl<LABEL: Hash + Eq + for<'a> Label<'a>, DATA> Completeness<LABEL, DATA>
         src: Scope,
         lbl: &'b LABEL,
     ) -> Self::GetEdgesResult<'a> {
-        self.critical_edges.close(src, &lbl);
+        self.critical_edges.close(src, lbl);
         Box::new(inner_scope_graph.get_edges(src, lbl))
     }
 }

@@ -99,7 +99,7 @@ impl<'sg, LABEL> Path<'sg, LABEL> {
     }
 
     pub fn step(&self, label: &'sg LABEL, target: Scope) -> Option<Self> {
-        if self.scopes.search(&&target) {
+        if self.scopes.search(&target) {
             None
         } else {
             Some(Self {
@@ -128,7 +128,7 @@ impl<'sg, LABEL> Path<'sg, LABEL> {
 // Perhaps we will resort to fibbonacy heaps/pairing heaps, and/or make resolution parametric in the environment type.
 pub struct Env<'sg, LABEL: 'sg, DATA>(HashSet<ResolvedPath<'sg, LABEL, DATA>>);
 
-impl<'sg, 'lbl, LABEL, DATA> IntoIterator for Env<'sg, LABEL, DATA> {
+impl<'sg, LABEL, DATA> IntoIterator for Env<'sg, LABEL, DATA> {
     type Item = ResolvedPath<'sg, LABEL, DATA>;
 
     type IntoIter = <HashSet<ResolvedPath<'sg, LABEL, DATA>> as IntoIterator>::IntoIter;
@@ -154,7 +154,7 @@ impl<'sg, LABEL, DATA> Env<'sg, LABEL, DATA> {
     }
 }
 
-impl<'sg, 'lbl, LABEL, DATA> Env<'sg, LABEL, DATA>
+impl<'sg, LABEL, DATA> Env<'sg, LABEL, DATA>
 where
     ResolvedPath<'sg, LABEL, DATA>: Eq + Hash,
 {
