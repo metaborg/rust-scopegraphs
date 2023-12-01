@@ -10,20 +10,20 @@ pub mod generic_resolution;
 pub mod topdown;
 
 #[derive(Hash, PartialEq, Eq, Debug)]
-enum InnerPath<'sg, LABEL: 'sg> {
+enum InnerPath<LABEL> {
     Start {
         source: Scope,
     },
     Step {
-        prefix: Path<'sg, LABEL>,
-        label: &'sg LABEL,
+        prefix: Path<LABEL>,
+        label: LABEL,
         target: Scope,
     },
 }
 
 #[derive(Clone)]
-pub struct Path<'sg, LABEL> {
-    inner_path: Arc<InnerPath<'sg, LABEL>>,
+pub struct Path<LABEL> {
+    inner_path: Arc<InnerPath<LABEL>>,
     /// Set of all scopes in this path.
     ///
     /// Paths are alternating sequences of scopes and labels.
@@ -36,7 +36,7 @@ pub struct Path<'sg, LABEL> {
     scopes: TrieSet<Scope>,
 }
 
-impl<LABEL> PartialEq for Path<'_, LABEL>
+impl<LABEL> PartialEq for Path<LABEL>
 where
     Scope: PartialEq,
     LABEL: PartialEq,
@@ -47,14 +47,14 @@ where
     }
 }
 
-impl<LABEL> Eq for Path<'_, LABEL>
+impl<LABEL> Eq for Path<LABEL>
 where
     Scope: Eq,
     LABEL: Eq,
 {
 }
 
-impl<LABEL> Hash for Path<'_, LABEL>
+impl<LABEL> Hash for Path<LABEL>
 where
     Scope: Hash,
     LABEL: Hash,
@@ -65,7 +65,7 @@ where
     }
 }
 
-impl<LABEL> Debug for Path<'_, LABEL>
+impl<LABEL> Debug for Path<LABEL>
 where
     LABEL: Debug,
 {
@@ -78,12 +78,12 @@ where
 }
 
 #[derive(Hash, PartialEq, Eq, Debug, Clone)]
-pub struct ResolvedPath<'sg, LABEL: 'sg, DATA> {
-    path: Path<'sg, LABEL>,
+pub struct ResolvedPath<'sg, LABEL, DATA> {
+    path: Path<LABEL>,
     data: &'sg DATA,
 }
 
-impl<'sg, LABEL> Path<'sg, LABEL> {
+impl<LABEL> Path<LABEL> {
     pub fn new(source: Scope) -> Self {
         Self {
             inner_path: Arc::new(InnerPath::Start { source }),
@@ -98,7 +98,7 @@ impl<'sg, LABEL> Path<'sg, LABEL> {
         }
     }
 
-    pub fn step(&self, label: &'sg LABEL, target: Scope) -> Option<Self> {
+    pub fn step(&self, label: LABEL, target: Scope) -> Option<Self> {
         if self.scopes.search(&target) {
             None
         } else {
@@ -116,7 +116,7 @@ impl<'sg, LABEL> Path<'sg, LABEL> {
         }
     }
 
-    pub fn resolve<DATA>(self, data: &'sg DATA) -> ResolvedPath<'sg, LABEL, DATA> {
+    pub fn resolve<DATA>(self, data: &DATA) -> ResolvedPath<'_, LABEL, DATA> {
         ResolvedPath { path: self, data }
     }
 }

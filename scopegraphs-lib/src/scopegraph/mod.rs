@@ -129,12 +129,15 @@ where
 {
     pub fn new_scope(&mut self, data: DATA) -> Scope {
         let scope = self.inner_scope_graph.add_scope(data);
-        self.completeness.borrow_mut().new_scope(&self.inner_scope_graph, scope);
+        self.completeness
+            .borrow_mut()
+            .new_scope(&self.inner_scope_graph, scope);
         scope
     }
 
     pub fn new_edge(&mut self, src: Scope, lbl: LABEL, dst: Scope) -> CMPL::NewEdgeResult {
-        self.completeness.borrow_mut()
+        self.completeness
+            .borrow_mut()
             .new_edge(&mut self.inner_scope_graph, src, lbl, dst)
     }
 
@@ -143,7 +146,8 @@ where
     }
 
     pub fn get_edges<'b: 'a>(&'a self, src: Scope, lbl: &'b LABEL) -> CMPL::GetEdgesResult<'a> {
-        self.completeness.borrow_mut()
+        self.completeness
+            .borrow_mut()
             .get_edges(&self.inner_scope_graph, src, lbl)
     }
 }
