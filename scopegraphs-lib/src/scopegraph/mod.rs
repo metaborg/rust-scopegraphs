@@ -162,3 +162,56 @@ where
             .cmpl_get_edges(&self.inner_scope_graph, src, lbl)
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::{completeness::UncheckedCompleteness, Scope, ScopeGraph};
+
+    #[test]
+    fn test_create_scope() {
+        let mut sg: ScopeGraph<usize, usize, _> = ScopeGraph::new(UncheckedCompleteness::default());
+        let scope = sg.new_scope(42);
+        assert_eq!(42, *sg.get_data(scope));
+    }
+
+    #[test]
+    fn test_create_two_scopes() {
+        let mut sg: ScopeGraph<usize, usize, _> = ScopeGraph::new(UncheckedCompleteness::default());
+
+        let s1 = sg.new_scope(1);
+        let s2 = sg.new_scope(2);
+
+        assert_eq!(1, *sg.get_data(s1));
+        assert_eq!(2, *sg.get_data(s2));
+    }
+
+    #[test]
+    fn test_create_edge() {
+        let mut sg: ScopeGraph<usize, usize, _> = ScopeGraph::new(UncheckedCompleteness::default());
+
+        let s1 = sg.new_scope(1);
+        let s2 = sg.new_scope(2);
+
+        sg.new_edge(s1, 1, s2);
+
+        assert_eq!(vec![s2], sg.get_edges(s1, 1));
+        assert_eq!(Vec::<Scope>::new(), sg.get_edges(s1, 2));
+    }
+
+    #[test]
+    fn test_create_edges() {
+        let mut sg: ScopeGraph<usize, usize, _> = ScopeGraph::new(UncheckedCompleteness::default());
+
+        let s1 = sg.new_scope(1);
+        let s2 = sg.new_scope(2);
+        let s3 = sg.new_scope(3);
+
+        sg.new_edge(s1, 1, s2);
+        sg.new_edge(s1, 1, s3);
+
+        assert!(sg.get_edges(s1, 1).contains(&s2));
+        assert!(sg.get_edges(s1, 1).contains(&s3));
+
+        assert_eq!(Vec::<Scope>::new(), sg.get_edges(s1, 2));
+    }
+}
