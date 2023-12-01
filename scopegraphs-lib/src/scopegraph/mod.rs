@@ -1,6 +1,6 @@
 #![allow(unused)]
 
-mod completeness;
+pub mod completeness;
 
 use std::{
     cell::RefCell,
@@ -12,7 +12,7 @@ use std::{
 
 use bumpalo::Bump;
 
-pub use completeness::Completeness;
+use completeness::Completeness;
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 pub struct Scope(usize);
@@ -123,7 +123,16 @@ pub struct ScopeGraph<LABEL, DATA, CMPL> {
     completeness: RefCell<CMPL>,
 }
 
-impl<'a, LABEL, DATA, CMPL> ScopeGraph<LABEL, DATA, CMPL>
+impl<LABEL, DATA, CMPL> ScopeGraph<LABEL, DATA, CMPL> {
+    pub fn new(completeness: CMPL) -> Self {
+        ScopeGraph {
+            inner_scope_graph: InnerScopeGraph::new(),
+            completeness: RefCell::new(completeness),
+        }
+    }
+}
+
+impl<LABEL, DATA, CMPL> ScopeGraph<LABEL, DATA, CMPL>
 where
     CMPL: Completeness<LABEL, DATA>,
 {
@@ -131,23 +140,23 @@ where
         let scope = self.inner_scope_graph.add_scope(data);
         self.completeness
             .borrow_mut()
-            .new_scope(&self.inner_scope_graph, scope);
+            .cmpl_new_scope(&self.inner_scope_graph, scope);
         scope
     }
 
     pub fn new_edge(&mut self, src: Scope, lbl: LABEL, dst: Scope) -> CMPL::NewEdgeResult {
         self.completeness
             .borrow_mut()
-            .new_edge(&mut self.inner_scope_graph, src, lbl, dst)
+            .cmpl_new_edge(&mut self.inner_scope_graph, src, lbl, dst)
     }
 
     pub fn get_data(&self, scope: Scope) -> &DATA {
         &self.inner_scope_graph.data[scope.0]
     }
 
-    pub fn get_edges<'b: 'a>(&'a self, src: Scope, lbl: &'b LABEL) -> CMPL::GetEdgesResult<'a> {
+    pub fn get_edges<'a>(&'a self, src: Scope, lbl: &'a LABEL) -> CMPL::GetEdgesResult<'a> {
         self.completeness
             .borrow_mut()
-            .get_edges(&self.inner_scope_graph, src, lbl)
+            .cmpl_get_edges(&self.inner_scope_graph, src, lbl)
     }
 }

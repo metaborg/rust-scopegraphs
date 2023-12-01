@@ -12,3 +12,4 @@ scopegraphs-regular-expressions = {path = "../scopegraphs-regular-expressions"}
 
 [dev-dependencies]
 scopegraphs = {path = "../scopegraphs"}
+scopegraphs-macros = {path = "../scopegraphs-macros"}

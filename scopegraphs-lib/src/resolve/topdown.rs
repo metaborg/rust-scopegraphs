@@ -3,7 +3,7 @@ use std::iter;
 
 use crate::{
     label::Label,
-    scopegraph::{Completeness, Scope},
+    scopegraph::{completeness::Completeness, Scope},
 };
 use scopegraphs_regular_expressions::RegexMatcher;
 
@@ -20,18 +20,18 @@ pub trait DataOrder<DATA>: for<'sg> Fn(&'sg DATA, &'sg DATA) -> bool {}
 impl<DATA, T> DataOrder<DATA> for T where for<'sg> T: Fn(&'sg DATA, &'sg DATA) -> bool {}
 
 #[derive(Debug, Hash, PartialEq, Eq)]
-pub enum EdgeOrData<'sg, LABEL> {
+pub enum EdgeOrData<LABEL> {
     Data,
-    Edge(&'sg LABEL),
+    Edge(LABEL),
 }
 
 // custom implementation not to impose LABEL: Copy
-impl<LABEL> Clone for EdgeOrData<'_, LABEL> {
+impl<LABEL: Copy> Clone for EdgeOrData<LABEL> {
     fn clone(&self) -> Self {
         *self
     }
 }
-impl<LABEL> Copy for EdgeOrData<'_, LABEL> {}
+impl<LABEL: Copy> Copy for EdgeOrData<LABEL> {}
 
 pub fn resolve<'sg: 'query, 'query, LABEL, DATA, CMPL>(
     sg: &'sg mut ScopeGraph<LABEL, DATA, CMPL>,
@@ -42,13 +42,13 @@ pub fn resolve<'sg: 'query, 'query, LABEL, DATA, CMPL>(
     source: Scope,
 ) -> Env<'sg, LABEL, DATA>
 where
-    LABEL: Label<'sg> + Copy + 'sg,
+    LABEL: Label + Copy,
     CMPL: Completeness<LABEL, DATA>,
     for<'a> CMPL::GetEdgesResult<'a>: Iterator<Item = Scope>,
     ResolvedPath<'sg, LABEL, DATA>: Hash + Eq,
     Path<LABEL>: Clone,
 {
-    let all_edges: Vec<EdgeOrData<LABEL>> = LABEL::iter_ref()
+    let all_edges: Vec<EdgeOrData<LABEL>> = LABEL::iter()
         .map(EdgeOrData::Edge)
         .chain(iter::once(EdgeOrData::Data))
         .collect();
@@ -65,7 +65,7 @@ where
 }
 
 struct ResolutionContext<'sg: 'query, 'query, LABEL, DATA, CMPL, DWF, LO, DO> {
-    all_edges: Vec<EdgeOrData<'query, LABEL>>,
+    all_edges: Vec<EdgeOrData<LABEL>>,
     sg: &'sg ScopeGraph<LABEL, DATA, CMPL>,
     data_wellformedness: &'query DWF,
     label_order: &'query LO,
@@ -95,7 +95,7 @@ where
             .copied()
             .filter(|e| match *e {
                 EdgeOrData::Data => path_wellformedness.is_accepting(),
-                EdgeOrData::Edge(label) => path_wellformedness.accepts([label]),
+                EdgeOrData::Edge(label) => path_wellformedness.accepts([&label]),
             })
             .collect();
 
@@ -105,7 +105,7 @@ where
     fn resolve_edges(
         &self,
         path_wellformedness: &mut impl for<'a> RegexMatcher<&'a LABEL>,
-        edges: &[EdgeOrData<'query, LABEL>],
+        edges: &[EdgeOrData<LABEL>],
         path: &Path<LABEL>,
     ) -> Env<'sg, LABEL, DATA> {
         let max = self.max(edges);
@@ -122,8 +122,8 @@ where
     fn resolve_shadow(
         &self,
         path_wellformedness: &mut impl for<'a> RegexMatcher<&'a LABEL>,
-        edge: EdgeOrData<'query, LABEL>,
-        edges: &[EdgeOrData<'query, LABEL>],
+        edge: EdgeOrData<LABEL>,
+        edges: &[EdgeOrData<LABEL>],
         path: &Path<LABEL>,
     ) -> Env<'sg, LABEL, DATA> {
         let mut env = Env::new();
@@ -143,11 +143,11 @@ where
     fn resolve_edge(
         &self,
         path_wellformedness: &mut impl for<'a> RegexMatcher<&'a LABEL>,
-        edge: EdgeOrData<'query, LABEL>,
+        edge: EdgeOrData<LABEL>,
         path: &Path<LABEL>,
     ) -> Env<'sg, LABEL, DATA> {
         match edge {
-            EdgeOrData::Edge(label) => self.resolve_label(path_wellformedness, *label, path),
+            EdgeOrData::Edge(label) => self.resolve_label(path_wellformedness, label, path),
             EdgeOrData::Data => self.resolve_data(path),
         }
     }
@@ -180,7 +180,7 @@ where
         }
     }
 
-    fn max(&self, edges: &[EdgeOrData<'query, LABEL>]) -> Vec<EdgeOrData<'query, LABEL>> {
+    fn max(&self, edges: &[EdgeOrData<LABEL>]) -> Vec<EdgeOrData<LABEL>> {
         edges
             .iter()
             .filter(|l| !edges.iter().any(|ll| (self.label_order)(l, ll)))
@@ -190,13 +190,34 @@ where
 
     fn smaller(
         &self,
-        edge: EdgeOrData<'query, LABEL>,
-        edges: &[EdgeOrData<'query, LABEL>],
-    ) -> Vec<EdgeOrData<'query, LABEL>> {
+        edge: EdgeOrData<LABEL>,
+        edges: &[EdgeOrData<LABEL>],
+    ) -> Vec<EdgeOrData<LABEL>> {
         edges
             .iter()
             .filter(|l| (self.label_order)(l, &edge))
             .copied()
             .collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use scopegraphs_macros::Label;
+
+    use crate::scopegraph::{completeness::ImplicitClose, ScopeGraph};
+
+    #[test]
+    fn test_traverse_single() {
+        #[derive(Label, Hash, PartialEq, Eq)]
+        enum Lbl {
+            Lex,
+            Def,
+        }
+
+        let mut scope_graph: ScopeGraph<Lbl, usize, ImplicitClose<Lbl>> =
+            ScopeGraph::new(ImplicitClose::default());
+
+        let s1 = scope_graph.new_scope(42);
     }
 }
