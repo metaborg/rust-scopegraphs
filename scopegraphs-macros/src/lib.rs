@@ -7,6 +7,23 @@ use syn::{parse_macro_input, DeriveInput};
 mod label;
 mod regex;
 
+/// Derive [`Label`] implementation.
+///
+/// ```rust
+/// # use std::borrow;
+/// use scopegraphs::*;
+/// use scopegraphs::label::Label;
+///
+/// #[derive(Label, Debug, PartialEq, Eq)]
+/// pub enum Alphabet {
+///     A,
+///     B,
+///     C,
+/// }
+/// use Alphabet::*;
+///
+/// assert_eq!(vec![A, B, C], Alphabet::iter().collect::<Vec<_>>());
+/// ```
 #[proc_macro_derive(Label)]
 pub fn label_derive(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
