@@ -83,6 +83,16 @@ pub struct ResolvedPath<'sg, LABEL, DATA> {
     data: &'sg DATA,
 }
 
+impl<'sg, LABEL, DATA> ResolvedPath<'sg, LABEL, DATA> {
+    pub fn path(&self) -> &Path<LABEL> {
+        &self.path
+    }
+
+    pub fn data(&self) -> &DATA {
+        self.data
+    }
+}
+
 impl<LABEL> Path<LABEL> {
     pub fn new(source: Scope) -> Self {
         Self {

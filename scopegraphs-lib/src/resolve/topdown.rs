@@ -1,5 +1,5 @@
-use std::hash::Hash;
 use std::iter;
+use std::{borrow::Borrow, hash::Hash};
 
 use crate::{
     label::Label,
@@ -34,7 +34,7 @@ impl<LABEL: Copy> Clone for EdgeOrData<LABEL> {
 impl<LABEL: Copy> Copy for EdgeOrData<LABEL> {}
 
 pub fn resolve<'sg: 'query, 'query, LABEL, DATA, CMPL>(
-    sg: &'sg mut ScopeGraph<LABEL, DATA, CMPL>,
+    sg: &'sg ScopeGraph<LABEL, DATA, CMPL>,
     path_wellformedness: &'query mut impl for<'a> RegexMatcher<&'a LABEL>,
     data_wellformedness: &'query impl DataWellformedness<DATA>,
     label_order: &'query impl LabelOrder<LABEL>,
@@ -44,7 +44,7 @@ pub fn resolve<'sg: 'query, 'query, LABEL, DATA, CMPL>(
 where
     LABEL: Label + Copy,
     CMPL: Completeness<LABEL, DATA>,
-    for<'a> CMPL::GetEdgesResult<'a>: Iterator<Item = Scope>,
+    CMPL::GetEdgesResult: Borrow<[Scope]>,
     ResolvedPath<'sg, LABEL, DATA>: Hash + Eq,
     Path<LABEL>: Clone,
 {
@@ -78,7 +78,7 @@ where
     LABEL: Copy,
     ResolvedPath<'sg, LABEL, DATA>: Hash + Eq,
     CMPL: Completeness<LABEL, DATA>,
-    for<'a> CMPL::GetEdgesResult<'a>: Iterator<Item = Scope>,
+    CMPL::GetEdgesResult: Borrow<[Scope]>,
     DO: DataOrder<DATA>,
     DWF: DataWellformedness<DATA>,
     LO: LabelOrder<LABEL>,
@@ -160,9 +160,10 @@ where
     ) -> Env<'sg, LABEL, DATA> {
         path_wellformedness.step(&label);
         let mut env = Env::new();
-        let targets = self.sg.get_edges(path.target(), &label);
-        for tgt in targets {
-            if let Some(p) = path.step(label, tgt) {
+        let targets = self.sg.get_edges(path.target(), label);
+        // targets.cloned()
+        for tgt in targets.borrow() {
+            if let Some(p) = path.step(label, *tgt) {
                 let sub_env = self.resolve_all(path_wellformedness, &p);
                 env.merge(sub_env)
             }
@@ -203,21 +204,51 @@ where
 
 #[cfg(test)]
 mod tests {
-    use scopegraphs_macros::Label;
+    use scopegraphs_macros::{compile_regex, Label};
 
-    use crate::scopegraph::{completeness::ImplicitClose, ScopeGraph};
+    use scopegraphs::{
+        resolve::{
+            topdown::{resolve, EdgeOrData},
+            ResolvedPath,
+        },
+        scopegraph::{completeness::UncheckedCompleteness, ScopeGraph},
+    };
 
     #[test]
     fn test_traverse_single() {
-        #[derive(Label, Hash, PartialEq, Eq)]
+        #[derive(Label, Hash, PartialEq, Eq, Debug, Clone, Copy)]
         enum Lbl {
             Lex,
             Def,
         }
+        use Lbl::*;
 
-        let mut scope_graph: ScopeGraph<Lbl, usize, ImplicitClose<Lbl>> =
-            ScopeGraph::new(ImplicitClose::default());
+        let mut scope_graph: ScopeGraph<Lbl, usize, UncheckedCompleteness> =
+            ScopeGraph::new(UncheckedCompleteness::default());
 
+        let s0 = scope_graph.new_scope(0);
         let s1 = scope_graph.new_scope(42);
+
+        scope_graph.new_edge(s0, Lex, s1); //.expect("edge erroneously closed");
+
+        compile_regex!(type Machine<Lbl> = Lex+);
+
+        let env = resolve(
+            &scope_graph,
+            &mut Machine::new(),
+            &|_x| true,
+            &|l1, l2| match (l1, l2) {
+                (EdgeOrData::Data, EdgeOrData::Edge(_)) => true,
+                _ => true,
+            },
+            &|_, _| true,
+            s0,
+        );
+
+        let env_vec = env.into_iter().collect::<Vec<_>>();
+        assert_eq!(1, env_vec.len());
+
+        let path: &ResolvedPath<'_, Lbl, usize> = &env_vec[0];
+        assert_eq!(42, *path.data())
     }
 }

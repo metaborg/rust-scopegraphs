@@ -110,11 +110,13 @@ impl<'a, LABEL: Hash + Eq, DATA> InnerScopeGraph<LABEL, DATA> {
     }
 
     /// Returns the targets of the outgoing edges of `src` with label `lbl`.
-    fn get_edges<'b>(&'a self, scope: Scope, lbl: &'b LABEL) -> impl Iterator<Item = Scope> + 'a
-    where
-        'b: 'a,
-    {
-        self.edges[scope.0].get(lbl).into_iter().flatten().copied()
+    fn get_edges(&'a self, scope: Scope, lbl: LABEL) -> Vec<Scope> {
+        self.edges[scope.0]
+            .get(&lbl)
+            .into_iter()
+            .flatten()
+            .copied()
+            .collect()
     }
 }
 
@@ -154,7 +156,7 @@ where
         &self.inner_scope_graph.data[scope.0]
     }
 
-    pub fn get_edges<'a>(&'a self, src: Scope, lbl: &'a LABEL) -> CMPL::GetEdgesResult<'a> {
+    pub fn get_edges(&self, src: Scope, lbl: LABEL) -> CMPL::GetEdgesResult {
         self.completeness
             .borrow_mut()
             .cmpl_get_edges(&self.inner_scope_graph, src, lbl)
