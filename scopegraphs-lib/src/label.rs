@@ -1,9 +1,9 @@
-pub trait Label<'lbl>: 'lbl {
+pub trait Label {
     fn iter() -> impl Iterator<Item = Self>
     where
         Self: Sized;
 
-    fn iter_ref() -> impl Iterator<Item = &'lbl Self>
+    fn iter_ref() -> impl Iterator<Item = &'static Self>
     where
-        Self: Sized;
+        Self: Sized + 'static;
 }
