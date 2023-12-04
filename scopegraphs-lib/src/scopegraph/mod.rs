@@ -14,6 +14,8 @@ use bumpalo::Bump;
 
 use completeness::Completeness;
 
+use self::completeness::UncheckedCompleteness;
+
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 pub struct Scope(usize);
 
@@ -133,6 +135,11 @@ impl<LABEL, DATA, CMPL> ScopeGraph<LABEL, DATA, CMPL> {
         }
     }
 }
+impl<LABEL, DATA> ScopeGraph<LABEL, DATA, UncheckedCompleteness> {
+    pub fn raw() -> Self {
+        Self::new(UncheckedCompleteness::default())
+    }
+}
 
 impl<LABEL, DATA, CMPL> ScopeGraph<LABEL, DATA, CMPL>
 where
@@ -169,14 +176,14 @@ mod test {
 
     #[test]
     fn test_create_scope() {
-        let mut sg: ScopeGraph<usize, usize, _> = ScopeGraph::new(UncheckedCompleteness::default());
+        let mut sg: ScopeGraph<usize, usize, _> = ScopeGraph::raw();
         let scope = sg.new_scope(42);
         assert_eq!(42, *sg.get_data(scope));
     }
 
     #[test]
     fn test_create_two_scopes() {
-        let mut sg: ScopeGraph<usize, usize, _> = ScopeGraph::new(UncheckedCompleteness::default());
+        let mut sg: ScopeGraph<usize, usize, _> = ScopeGraph::raw();
 
         let s1 = sg.new_scope(1);
         let s2 = sg.new_scope(2);
@@ -187,7 +194,7 @@ mod test {
 
     #[test]
     fn test_create_edge() {
-        let mut sg: ScopeGraph<usize, usize, _> = ScopeGraph::new(UncheckedCompleteness::default());
+        let mut sg: ScopeGraph<usize, usize, _> = ScopeGraph::raw();
 
         let s1 = sg.new_scope(1);
         let s2 = sg.new_scope(2);
@@ -200,7 +207,7 @@ mod test {
 
     #[test]
     fn test_create_edges() {
-        let mut sg: ScopeGraph<usize, usize, _> = ScopeGraph::new(UncheckedCompleteness::default());
+        let mut sg: ScopeGraph<usize, usize, _> = ScopeGraph::raw();
 
         let s1 = sg.new_scope(1);
         let s2 = sg.new_scope(2);
