@@ -136,6 +136,7 @@ impl<LABEL> Path<LABEL> {
 // - we currently create a lot of new hashmaps, which is not really efficient
 // - efficiency might be dependent on the name resolution (shadowing) strategy
 // Perhaps we will resort to fibbonacy heaps/pairing heaps, and/or make resolution parametric in the environment type.
+#[derive(Debug)]
 pub struct Env<'sg, LABEL: 'sg, DATA>(HashSet<ResolvedPath<'sg, LABEL, DATA>>);
 
 impl<'sg, LABEL, DATA> IntoIterator for Env<'sg, LABEL, DATA> {

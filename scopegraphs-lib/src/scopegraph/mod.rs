@@ -2,6 +2,7 @@
 
 pub mod completeness;
 
+use std::fmt::{write, Debug, Display, Formatter};
 use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
@@ -16,8 +17,14 @@ use completeness::Completeness;
 
 use self::completeness::UncheckedCompleteness;
 
-#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Scope(usize);
+
+impl Debug for Scope {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "#{}", self.0)
+    }
+}
 
 // Mutability: RefCell in Scope, not Scope in RefCell
 // Concurrency: RW-lock on edges
@@ -167,6 +174,11 @@ where
         self.completeness
             .borrow_mut()
             .cmpl_get_edges(&self.inner_scope_graph, src, lbl)
+    }
+
+    pub fn new_decl(&mut self, src: Scope, lbl: LABEL, data: DATA) -> CMPL::NewEdgeResult {
+        let s_data = self.new_scope(data);
+        self.new_edge(src, lbl, s_data)
     }
 }
 
