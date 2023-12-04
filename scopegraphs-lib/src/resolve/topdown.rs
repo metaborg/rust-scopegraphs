@@ -95,7 +95,7 @@ where
             .copied()
             .filter(|e| match *e {
                 EdgeOrData::Data => path_wellformedness.is_accepting(),
-                EdgeOrData::Edge(label) => path_wellformedness.accepts([&label]),
+                EdgeOrData::Edge(label) => path_wellformedness.accepts_prefix([&label]),
             })
             .collect();
 
@@ -207,10 +207,7 @@ mod tests {
     use scopegraphs_macros::{compile_regex, Label};
 
     use scopegraphs::{
-        resolve::{
-            topdown::{resolve, EdgeOrData},
-            ResolvedPath,
-        },
+        resolve::{topdown::resolve, ResolvedPath},
         scopegraph::{completeness::UncheckedCompleteness, ScopeGraph},
     };
 
@@ -229,7 +226,7 @@ mod tests {
         let s0 = scope_graph.new_scope(0);
         let s1 = scope_graph.new_scope(42);
 
-        scope_graph.new_edge(s0, Lex, s1); //.expect("edge erroneously closed");
+        scope_graph.new_edge(s0, Lex, s1);
 
         compile_regex!(type Machine<Lbl> = Lex+);
 
@@ -237,11 +234,8 @@ mod tests {
             &scope_graph,
             &mut Machine::new(),
             &|_x| true,
-            &|l1, l2| match (l1, l2) {
-                (EdgeOrData::Data, EdgeOrData::Edge(_)) => true,
-                _ => true,
-            },
-            &|_, _| true,
+            &|_, _| false,
+            &|_, _| false,
             s0,
         );
 
