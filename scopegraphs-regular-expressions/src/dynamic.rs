@@ -6,6 +6,7 @@
 use crate::compile::StateID;
 use crate::{Automaton, MatchState, RegexMatcher};
 
+#[derive(Clone)]
 pub struct DynamicMatcher<'a> {
     compiled_regex: &'a Automaton,
     current_state: StateID,

@@ -7,6 +7,7 @@ use std::rc::Rc;
 
 pub type StateID = usize;
 
+#[derive(Clone)]
 pub struct MatchState {
     pub is_final: bool,
     nullable: bool,
@@ -23,6 +24,7 @@ impl MatchState {
     }
 }
 
+#[derive(Clone)]
 pub struct Automaton {
     pub regex: Rc<Regex>,
     pub states: Vec<MatchState>,

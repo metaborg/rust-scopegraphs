@@ -45,6 +45,7 @@ impl Automaton {
             .collect();
 
         let mut result = quote!(
+            #[derive(Clone)]
             struct #name {
                 state: usize,
             }

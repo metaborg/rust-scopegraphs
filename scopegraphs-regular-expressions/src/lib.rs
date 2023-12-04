@@ -19,7 +19,7 @@ pub use regex::Regex;
 /// A type that can match a regex. Can be created at compile time
 /// through the [`compile_regex`](scopegraphs::compile_regex) macro,
 /// or at runtime with the [`dynamic`] feature through [`Automaton::matcher`].
-pub trait RegexMatcher<A> {
+pub trait RegexMatcher<A>: Clone {
     /// Takes a transition in the state machine, accepting a single symbol.
     ///
     /// If the symbol was not accepted, because the regex doesn't allow it, the new state is empty,
@@ -34,15 +34,29 @@ pub trait RegexMatcher<A> {
     }
 
     /// Returns true if the regular expression accepts the input iterator
-    fn accepts(&mut self, iter: impl IntoIterator<Item = A>) -> bool {
+    fn accepts(&self, iter: impl IntoIterator<Item = A>) -> bool {
+        let mut this = self.clone();
         for i in iter {
-            self.step(i);
-            if self.is_empty() {
+            this.step(i);
+            if this.is_empty() {
                 return false;
             }
         }
 
-        self.is_accepting()
+        this.is_accepting()
+    }
+
+    /// Returns true if the regular expression accepts a word of which the input iterator is a prefix
+    fn accepts_prefix(&self, iter: impl IntoIterator<Item = A>) -> bool {
+        let mut this = self.clone();
+        for i in iter {
+            this.step(i);
+            if this.is_empty() {
+                return false;
+            }
+        }
+
+        true
     }
 
     fn is_final(&self) -> bool;
