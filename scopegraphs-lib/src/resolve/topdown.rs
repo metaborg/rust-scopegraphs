@@ -233,7 +233,7 @@ mod tests {
         let env = resolve(
             &scope_graph,
             &mut Machine::new(),
-            &|_x| true,
+            &|_| true,
             &|_, _| false,
             &|_, _| false,
             s0,
@@ -242,7 +242,7 @@ mod tests {
         let env_vec = env.into_iter().collect::<Vec<_>>();
         assert_eq!(1, env_vec.len());
 
-        let path: &ResolvedPath<'_, Lbl, usize> = &env_vec[0];
+        let path: &ResolvedPath<Lbl, usize> = &env_vec[0];
         assert_eq!(42, *path.data())
     }
 }
