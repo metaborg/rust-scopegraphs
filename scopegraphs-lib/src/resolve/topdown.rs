@@ -4,14 +4,14 @@ use std::iter;
 
 use crate::{
     label::Label,
+    resolve::{
+        containers::{EnvContainer, PathContainer, ScopeContainer},
+        DataOrder, DataWellformedness, EdgeOrData, Env, LabelOrder, Path, ResolvedPath,
+    },
     scopegraph::ScopeGraph,
     scopegraph::{completeness::Completeness, Scope},
 };
 use scopegraphs_regular_expressions::RegexMatcher;
-
-use super::{
-    containers::*, DataOrder, DataWellformedness, EdgeOrData, Env, LabelOrder, Path, ResolvedPath,
-};
 
 pub fn resolve<'sg: 'query, 'query, LABEL, DATA, CMPL, ENVC>(
     sg: &'sg ScopeGraph<LABEL, DATA, CMPL>,
