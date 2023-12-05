@@ -1,5 +1,4 @@
-use crate::resolve::Path;
-use crate::scopegraph::Scope;
+use crate::{resolve::Path, Scope};
 
 pub trait ScopeContainer<LABEL> {
     type PathContainer;

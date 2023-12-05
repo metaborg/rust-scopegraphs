@@ -4,7 +4,7 @@ use std::fmt::{Debug, Formatter};
 use std::hash::Hash;
 use std::sync::Arc;
 
-use crate::scopegraph::Scope;
+use super::Scope;
 
 pub mod containers; // FIXME: proper name (containers)
 pub mod topdown;

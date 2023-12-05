@@ -8,8 +8,8 @@ use crate::{
         containers::{EnvContainer, PathContainer, ScopeContainer},
         DataOrder, DataWellformedness, EdgeOrData, Env, LabelOrder, Path, ResolvedPath,
     },
-    scopegraph::ScopeGraph,
-    scopegraph::{completeness::Completeness, Scope},
+    ScopeGraph,
+    {completeness::Completeness, Scope},
 };
 use scopegraphs_regular_expressions::RegexMatcher;
 
@@ -201,11 +201,9 @@ mod tests {
     use scopegraphs_macros::{compile_regex, Label};
 
     use scopegraphs::{
+        completeness::{Completeness, ExplicitClose, ImplicitClose, UncheckedCompleteness},
         resolve::{topdown::resolve, EdgeOrData, ResolvedPath},
-        scopegraph::{
-            completeness::{Completeness, ExplicitClose, ImplicitClose, UncheckedCompleteness},
-            Scope, ScopeGraph,
-        },
+        Scope, ScopeGraph,
     };
 
     #[derive(Label, Hash, PartialEq, Eq, Debug, Clone, Copy)]
