@@ -10,8 +10,7 @@ use crate::{
 use scopegraphs_regular_expressions::RegexMatcher;
 
 use super::{
-    generic_resolution::*, DataOrder, DataWellformedness, EdgeOrData, Env, LabelOrder, Path,
-    ResolvedPath,
+    containers::*, DataOrder, DataWellformedness, EdgeOrData, Env, LabelOrder, Path, ResolvedPath,
 };
 
 pub fn resolve<'sg: 'query, 'query, LABEL, DATA, CMPL, ENVC>(

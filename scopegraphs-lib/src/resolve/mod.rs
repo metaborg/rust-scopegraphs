@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use crate::scopegraph::Scope;
 
-pub mod generic_resolution; // FIXME: proper name (containers)
+pub mod containers; // FIXME: proper name (containers)
 pub mod topdown;
 
 #[derive(Hash, PartialEq, Eq)]

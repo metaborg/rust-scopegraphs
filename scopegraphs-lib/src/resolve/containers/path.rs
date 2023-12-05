@@ -8,7 +8,7 @@ pub trait PathContainer<LABEL, DATA> {
         LABEL: 'sg;
 
     /// Computes sub-environments for each path in the container,
-    /// and composes them using the [`crate::resolve::generic_resolution::EnvContainer::lift_merge`] method.
+    /// and composes them using the [`crate::resolve::containers::EnvContainer::lift_merge`] method.
     fn map_into_env<'sg, F: FnMut(Path<LABEL>) -> Self::EnvContainer<'sg>>(
         self,
         f: F,
