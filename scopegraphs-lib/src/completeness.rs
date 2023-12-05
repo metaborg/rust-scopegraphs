@@ -1,5 +1,4 @@
-use std::ops::Deref;
-use std::{arch::x86_64::__m128, collections::HashSet, future, hash::Hash};
+use std::{collections::HashSet, hash::Hash};
 
 use crate::label::Label;
 
@@ -50,14 +49,9 @@ pub struct UncheckedCompleteness {}
 impl Sealed for UncheckedCompleteness {}
 
 impl<LABEL: Hash + Eq, DATA> Completeness<LABEL, DATA> for UncheckedCompleteness {
-    fn cmpl_new_scope(&mut self, inner_scope_graph: &InnerScopeGraph<LABEL, DATA>, scope: Scope) {}
+    fn cmpl_new_scope(&mut self, _: &InnerScopeGraph<LABEL, DATA>, _: Scope) {}
 
-    fn cmpl_new_complete_scope(
-        &mut self,
-        inner_scope_graph: &InnerScopeGraph<LABEL, DATA>,
-        scope: Scope,
-    ) {
-    }
+    fn cmpl_new_complete_scope(&mut self, _: &InnerScopeGraph<LABEL, DATA>, _: Scope) {}
 
     type NewEdgeResult = ();
 
@@ -149,7 +143,7 @@ impl<LABEL> Default for ExplicitClose<LABEL> {
 impl<LABEL> Sealed for ExplicitClose<LABEL> {}
 
 impl<LABEL: Hash + Eq + Label, DATA> Completeness<LABEL, DATA> for ExplicitClose<LABEL> {
-    fn cmpl_new_scope(&mut self, inner_scope_graph: &InnerScopeGraph<LABEL, DATA>, scope: Scope) {
+    fn cmpl_new_scope(&mut self, _: &InnerScopeGraph<LABEL, DATA>, _: Scope) {
         <ExplicitClose<LABEL> as CriticalEdgeBasedCompleteness<LABEL, DATA>>::init_scope_with(
             self,
             HashSet::from_iter(LABEL::iter()),
@@ -157,11 +151,7 @@ impl<LABEL: Hash + Eq + Label, DATA> Completeness<LABEL, DATA> for ExplicitClose
         )
     }
 
-    fn cmpl_new_complete_scope(
-        &mut self,
-        inner_scope_graph: &InnerScopeGraph<LABEL, DATA>,
-        scope: Scope,
-    ) {
+    fn cmpl_new_complete_scope(&mut self, _: &InnerScopeGraph<LABEL, DATA>, _: Scope) {
         <ExplicitClose<LABEL> as CriticalEdgeBasedCompleteness<LABEL, DATA>>::init_scope_with(
             self,
             HashSet::new(),
@@ -239,7 +229,7 @@ impl<LABEL> Default for ImplicitClose<LABEL> {
 impl<LABEL> Sealed for ImplicitClose<LABEL> {}
 
 impl<LABEL: Hash + Eq + Label, DATA> Completeness<LABEL, DATA> for ImplicitClose<LABEL> {
-    fn cmpl_new_scope(&mut self, inner_scope_graph: &InnerScopeGraph<LABEL, DATA>, scope: Scope) {
+    fn cmpl_new_scope(&mut self, _: &InnerScopeGraph<LABEL, DATA>, _: Scope) {
         <ImplicitClose<LABEL> as CriticalEdgeBasedCompleteness<LABEL, DATA>>::init_scope_with(
             self,
             HashSet::from_iter(LABEL::iter()),
@@ -247,11 +237,7 @@ impl<LABEL: Hash + Eq + Label, DATA> Completeness<LABEL, DATA> for ImplicitClose
         )
     }
 
-    fn cmpl_new_complete_scope(
-        &mut self,
-        inner_scope_graph: &InnerScopeGraph<LABEL, DATA>,
-        scope: Scope,
-    ) {
+    fn cmpl_new_complete_scope(&mut self, _: &InnerScopeGraph<LABEL, DATA>, _: Scope) {
         <ImplicitClose<LABEL> as CriticalEdgeBasedCompleteness<LABEL, DATA>>::init_scope_with(
             self,
             HashSet::new(),

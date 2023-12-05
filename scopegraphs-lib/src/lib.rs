@@ -1,9 +1,8 @@
+pub mod completeness;
 pub mod label;
 pub mod resolve;
 
-pub mod completeness;
-
-use std::fmt::{Debug, Display, Formatter};
+use std::fmt::{Debug, Formatter};
 use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
@@ -50,7 +49,6 @@ impl Debug for Scope {
 /// - [`DATA`] Type of data associated with nodes.
 #[derive(Default)]
 pub struct InnerScopeGraph<LABEL, DATA /*, META */> {
-    id_counter: u64,
     edges: Vec<HashMap<LABEL, HashSet<Scope>>>, // FIXME: BTreeMap? Vectors? Whatever?
     data: Vec<DATA>,
 }
@@ -58,7 +56,6 @@ pub struct InnerScopeGraph<LABEL, DATA /*, META */> {
 impl<LABEL, DATA> InnerScopeGraph<LABEL, DATA> {
     pub fn new() -> Self {
         Self {
-            id_counter: 0,
             edges: Vec::new(),
             data: Vec::new(),
         }
@@ -83,6 +80,11 @@ impl<LABEL, DATA> InnerScopeGraph<LABEL, DATA> {
         self.data.push(data);
         self.edges.push(HashMap::with_capacity(0));
         Scope(id)
+    }
+
+    /// Returns the data associated with the `scope` argument.
+    fn get_data(&self, scope: Scope) -> &DATA {
+        &self.data[scope.0]
     }
 }
 
@@ -109,11 +111,6 @@ impl<'a, LABEL: Hash + Eq, DATA> InnerScopeGraph<LABEL, DATA> {
     ///
     pub fn add_edge(&mut self, src: Scope, lbl: LABEL, dst: Scope) {
         self.edges[src.0].entry(lbl).or_default().insert(dst);
-    }
-
-    /// Returns the data associated with the `scope` argument.
-    fn get_data(&self, scope: Scope) -> &DATA {
-        &self.data[scope.0]
     }
 
     /// Returns the targets of the outgoing edges of `src` with label `lbl`.
@@ -165,7 +162,7 @@ where
     }
 
     pub fn get_data(&self, scope: Scope) -> &DATA {
-        &self.inner_scope_graph.data[scope.0]
+        self.inner_scope_graph.get_data(scope)
     }
 
     pub fn get_edges(&self, src: Scope, lbl: LABEL) -> CMPL::GetEdgesResult {
@@ -208,7 +205,7 @@ impl<LABEL: Hash + Eq, DATA> ScopeGraph<LABEL, DATA, ExplicitClose<LABEL>> {
 
 #[cfg(test)]
 mod test {
-    use super::{completeness::UncheckedCompleteness, Scope, ScopeGraph};
+    use super::{Scope, ScopeGraph};
 
     #[test]
     fn test_create_scope() {
