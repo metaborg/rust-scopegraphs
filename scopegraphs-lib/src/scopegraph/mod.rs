@@ -13,6 +13,7 @@ use std::{
 
 use bumpalo::Bump;
 
+use crate::scopegraph::completeness::{CriticalEdgeBasedCompleteness, ExplicitClose, Witness};
 use completeness::Completeness;
 
 use self::completeness::UncheckedCompleteness;
@@ -177,8 +178,34 @@ where
     }
 
     pub fn new_decl(&mut self, src: Scope, lbl: LABEL, data: DATA) -> CMPL::NewEdgeResult {
-        let s_data = self.new_scope(data);
+        // Create scope with no open edges.
+        let s_data = self.inner_scope_graph.add_scope(data);
+        self.completeness
+            .borrow_mut()
+            .cmpl_new_complete_scope(&self.inner_scope_graph, s_data);
         self.new_edge(src, lbl, s_data)
+    }
+}
+
+impl<LABEL: Hash + Eq, DATA, CMPL> ScopeGraph<LABEL, DATA, CMPL>
+where
+    CMPL: CriticalEdgeBasedCompleteness<LABEL, DATA>,
+{
+    pub fn new_scope_with<I>(&mut self, data: DATA, open_edges: I) -> Scope
+    where
+        I: IntoIterator<Item = LABEL>,
+    {
+        let scope = self.inner_scope_graph.add_scope(data);
+        self.completeness
+            .borrow_mut()
+            .init_scope_with(HashSet::from_iter(open_edges.into_iter()), Witness(()));
+        scope
+    }
+}
+
+impl<LABEL: Hash + Eq, DATA> ScopeGraph<LABEL, DATA, ExplicitClose<LABEL>> {
+    pub fn close(&self, scope: Scope, label: &LABEL) {
+        self.completeness.borrow_mut().close(scope, label)
     }
 }
 

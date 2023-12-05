@@ -1,3 +1,4 @@
+use std::ops::Deref;
 use std::{arch::x86_64::__m128, collections::HashSet, future, hash::Hash};
 
 use crate::label::Label;
@@ -13,7 +14,13 @@ use private::Sealed;
 /*** Completeness trait ***/
 
 pub trait Completeness<LABEL, DATA>: Sealed {
-    fn cmpl_new_scope(&mut self, inner_scope_graph: &InnerScopeGraph<LABEL, DATA>, scope: Scope); // FIXME `scope` needed?
+    fn cmpl_new_scope(&mut self, inner_scope_graph: &InnerScopeGraph<LABEL, DATA>, scope: Scope);
+
+    fn cmpl_new_complete_scope(
+        &mut self,
+        inner_scope_graph: &InnerScopeGraph<LABEL, DATA>,
+        scope: Scope,
+    );
 
     type NewEdgeResult;
     fn cmpl_new_edge(
@@ -44,6 +51,13 @@ impl Sealed for UncheckedCompleteness {}
 
 impl<LABEL: Hash + Eq, DATA> Completeness<LABEL, DATA> for UncheckedCompleteness {
     fn cmpl_new_scope(&mut self, inner_scope_graph: &InnerScopeGraph<LABEL, DATA>, scope: Scope) {}
+
+    fn cmpl_new_complete_scope(
+        &mut self,
+        inner_scope_graph: &InnerScopeGraph<LABEL, DATA>,
+        scope: Scope,
+    ) {
+    }
 
     type NewEdgeResult = ();
 
@@ -90,7 +104,7 @@ impl<LABEL> CriticalEdgeSet<LABEL> {
 }
 
 impl<LABEL: Hash + Eq> CriticalEdgeSet<LABEL> {
-    fn is_open(&self, scope: Scope, lbl: &LABEL) -> bool {
+    pub fn is_open(&self, scope: Scope, lbl: &LABEL) -> bool {
         self.open_edges[scope.0].contains(lbl)
     }
 
@@ -99,30 +113,60 @@ impl<LABEL: Hash + Eq> CriticalEdgeSet<LABEL> {
     }
 }
 
+pub struct Witness(pub(super) ()); // Prevent abuse of trait function bt requiring argument that can only be constructed locally.
+
+pub trait CriticalEdgeBasedCompleteness<LABEL, DATA>: Completeness<LABEL, DATA> {
+    fn init_scope_with(&mut self, open_edges: HashSet<LABEL>, _witness: Witness);
+}
+
 #[derive(Debug)]
 pub enum EdgeClosedError<LABEL> {
     EdgeClosed { scope: Scope, label: LABEL },
 }
 
 #[derive(Debug)]
-pub enum EdgesOrDelay<EDGES, LABEL> {
-    Edges { edges: EDGES },
-    Delay { scope: Scope, label: LABEL },
+pub struct Delay<LABEL> {
+    pub scope: Scope,
+    pub label: LABEL,
 }
+
+pub(crate) type EdgesOrDelay<EDGES, LABEL> = Result<EDGES, Delay<LABEL>>;
 
 /*** Weakly-Critical-Edge Based Completeness Checking with Explicit Closing ***/
 
-#[derive(Default)]
 pub struct ExplicitClose<LABEL> {
     critical_edges: CriticalEdgeSet<LABEL>,
+}
+
+impl<LABEL> Default for ExplicitClose<LABEL> {
+    fn default() -> Self {
+        ExplicitClose {
+            critical_edges: CriticalEdgeSet::default(),
+        }
+    }
 }
 
 impl<LABEL> Sealed for ExplicitClose<LABEL> {}
 
 impl<LABEL: Hash + Eq + Label, DATA> Completeness<LABEL, DATA> for ExplicitClose<LABEL> {
     fn cmpl_new_scope(&mut self, inner_scope_graph: &InnerScopeGraph<LABEL, DATA>, scope: Scope) {
-        self.critical_edges
-            .init_scope(HashSet::from_iter(LABEL::iter()))
+        <ExplicitClose<LABEL> as CriticalEdgeBasedCompleteness<LABEL, DATA>>::init_scope_with(
+            self,
+            HashSet::from_iter(LABEL::iter()),
+            Witness(()),
+        )
+    }
+
+    fn cmpl_new_complete_scope(
+        &mut self,
+        inner_scope_graph: &InnerScopeGraph<LABEL, DATA>,
+        scope: Scope,
+    ) {
+        <ExplicitClose<LABEL> as CriticalEdgeBasedCompleteness<LABEL, DATA>>::init_scope_with(
+            self,
+            HashSet::new(),
+            Witness(()),
+        )
     }
 
     type NewEdgeResult = Result<(), EdgeClosedError<LABEL>>;
@@ -135,13 +179,13 @@ impl<LABEL: Hash + Eq + Label, DATA> Completeness<LABEL, DATA> for ExplicitClose
         dst: Scope,
     ) -> Self::NewEdgeResult {
         if self.critical_edges.is_open(src, &lbl) {
+            inner_scope_graph.add_edge(src, lbl, dst);
+            Ok(())
+        } else {
             Err(EdgeClosedError::EdgeClosed {
                 scope: src,
                 label: lbl,
             })
-        } else {
-            inner_scope_graph.add_edge(src, lbl, dst);
-            Ok(())
         }
     }
 
@@ -154,15 +198,27 @@ impl<LABEL: Hash + Eq + Label, DATA> Completeness<LABEL, DATA> for ExplicitClose
         lbl: LABEL,
     ) -> Self::GetEdgesResult {
         if self.critical_edges.is_open(src, &lbl) {
-            EdgesOrDelay::Delay {
+            Err(Delay {
                 scope: src,
                 label: lbl,
-            }
+            })
         } else {
-            EdgesOrDelay::Edges {
-                edges: inner_scope_graph.get_edges(src, lbl),
-            }
+            Ok(inner_scope_graph.get_edges(src, lbl))
         }
+    }
+}
+
+impl<LABEL: Hash + Eq + Label, DATA> CriticalEdgeBasedCompleteness<LABEL, DATA>
+    for ExplicitClose<LABEL>
+{
+    fn init_scope_with(&mut self, open_labels: HashSet<LABEL>, _witness: Witness) {
+        self.critical_edges.init_scope(open_labels)
+    }
+}
+
+impl<LABEL: Hash + Eq> ExplicitClose<LABEL> {
+    pub fn close(&mut self, scope: Scope, label: &LABEL) {
+        self.critical_edges.close(scope, label);
     }
 }
 
@@ -184,8 +240,23 @@ impl<LABEL> Sealed for ImplicitClose<LABEL> {}
 
 impl<LABEL: Hash + Eq + Label, DATA> Completeness<LABEL, DATA> for ImplicitClose<LABEL> {
     fn cmpl_new_scope(&mut self, inner_scope_graph: &InnerScopeGraph<LABEL, DATA>, scope: Scope) {
-        self.critical_edges
-            .init_scope(HashSet::from_iter(LABEL::iter()))
+        <ImplicitClose<LABEL> as CriticalEdgeBasedCompleteness<LABEL, DATA>>::init_scope_with(
+            self,
+            HashSet::from_iter(LABEL::iter()),
+            Witness(()),
+        )
+    }
+
+    fn cmpl_new_complete_scope(
+        &mut self,
+        inner_scope_graph: &InnerScopeGraph<LABEL, DATA>,
+        scope: Scope,
+    ) {
+        <ImplicitClose<LABEL> as CriticalEdgeBasedCompleteness<LABEL, DATA>>::init_scope_with(
+            self,
+            HashSet::new(),
+            Witness(()),
+        )
     }
 
     type NewEdgeResult = Result<(), EdgeClosedError<LABEL>>;
@@ -199,14 +270,14 @@ impl<LABEL: Hash + Eq + Label, DATA> Completeness<LABEL, DATA> for ImplicitClose
         dst: Scope,
     ) -> Self::NewEdgeResult {
         if self.critical_edges.is_open(src, &lbl) {
+            inner_scope_graph.add_edge(src, lbl, dst);
+            Ok(())
+        } else {
             // FIXME: provide reason (queries) that made this edge closed?
             Err(EdgeClosedError::EdgeClosed {
                 scope: src,
                 label: lbl,
             })
-        } else {
-            inner_scope_graph.add_edge(src, lbl, dst);
-            Ok(())
         }
     }
 
@@ -220,6 +291,14 @@ impl<LABEL: Hash + Eq + Label, DATA> Completeness<LABEL, DATA> for ImplicitClose
     ) -> Self::GetEdgesResult {
         self.critical_edges.close(src, &lbl);
         inner_scope_graph.get_edges(src, lbl)
+    }
+}
+
+impl<LABEL: Hash + Eq + Label, DATA> CriticalEdgeBasedCompleteness<LABEL, DATA>
+    for ImplicitClose<LABEL>
+{
+    fn init_scope_with(&mut self, open_labels: HashSet<LABEL>, _witness: Witness) {
+        self.critical_edges.init_scope(open_labels)
     }
 }
 

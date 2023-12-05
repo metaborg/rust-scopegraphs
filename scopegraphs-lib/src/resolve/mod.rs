@@ -1,13 +1,46 @@
 use prust_lib::hashmap::HashSet as TrieSet;
 use std::collections::HashSet;
-use std::fmt::Debug;
+use std::fmt::{Debug, Formatter};
 use std::hash::Hash;
 use std::sync::Arc;
 
 use crate::scopegraph::Scope;
 
-pub mod generic_resolution;
+pub mod generic_resolution; // FIXME: proper name (containers)
 pub mod topdown;
+
+#[derive(Hash, PartialEq, Eq)]
+pub enum EdgeOrData<LABEL> {
+    Data,
+    Edge(LABEL),
+}
+
+impl<LABEL: Debug> Debug for EdgeOrData<LABEL> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            EdgeOrData::Data => write!(f, "$"),
+            EdgeOrData::Edge(lbl) => write!(f, "@{:?}", lbl),
+        }
+    }
+}
+
+// custom implementation not to impose LABEL: Copy
+impl<LABEL: Copy> Clone for EdgeOrData<LABEL> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<LABEL: Copy> Copy for EdgeOrData<LABEL> {}
+
+pub trait DataWellformedness<DATA>: for<'sg> Fn(&'sg DATA) -> bool {}
+impl<DATA, T> DataWellformedness<DATA> for T where for<'sg> T: Fn(&'sg DATA) -> bool {}
+
+pub trait LabelOrder<LABEL>: Fn(&EdgeOrData<LABEL>, &EdgeOrData<LABEL>) -> bool {}
+impl<LABEL, T> LabelOrder<LABEL> for T where T: Fn(&EdgeOrData<LABEL>, &EdgeOrData<LABEL>) -> bool {}
+
+pub trait DataOrder<DATA>: for<'sg> Fn(&'sg DATA, &'sg DATA) -> bool {}
+impl<DATA, T> DataOrder<DATA> for T where for<'sg> T: Fn(&'sg DATA, &'sg DATA) -> bool {}
 
 #[derive(Hash, PartialEq, Eq, Debug)]
 enum InnerPath<LABEL> {
@@ -181,5 +214,32 @@ where
 
     pub fn merge(&mut self, other: Self) {
         self.0.extend(other.0)
+    }
+}
+
+impl<'sg, LABEL: 'sg, DATA: Hash> FromIterator<ResolvedPath<'sg, LABEL, DATA>>
+    for Env<'sg, LABEL, DATA>
+where
+    ResolvedPath<'sg, LABEL, DATA>: Eq + Hash,
+{
+    fn from_iter<T: IntoIterator<Item = ResolvedPath<'sg, LABEL, DATA>>>(iter: T) -> Self {
+        let mut env = Env::new();
+        for path in iter.into_iter() {
+            env.insert(path)
+        }
+        env
+    }
+}
+
+impl<'sg, LABEL: 'sg, DATA: Hash> FromIterator<Env<'sg, LABEL, DATA>> for Env<'sg, LABEL, DATA>
+where
+    ResolvedPath<'sg, LABEL, DATA>: Eq + Hash,
+{
+    fn from_iter<T: IntoIterator<Item = Env<'sg, LABEL, DATA>>>(iter: T) -> Self {
+        let mut env = Env::new();
+        for sub_env in iter.into_iter() {
+            env.merge(sub_env)
+        }
+        env
     }
 }
