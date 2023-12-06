@@ -14,6 +14,7 @@ use completeness::{CriticalEdgeBasedCompleteness, ExplicitClose, Witness};
 
 use self::completeness::UncheckedCompleteness;
 
+/// Representation of scopes (nodes in the scope graph).
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Scope(usize);
 
@@ -26,35 +27,14 @@ impl Debug for Scope {
 // Mutability: RefCell in Scope, not Scope in RefCell
 // Concurrency: RW-lock on edges
 
-/// Scope Graph operations.
-///
-/// This trait describes scope graphs, and the primitive operations that can be applied on them.
-/// As a data structure, scope graphs are simple graphs with labeled nodes and labeled, directed edges.
-///
-/// This trait has three associated types:
-/// - [`InnerScopeGraph::Scope`]: the type of the nodes.
-/// - [`InnerScopeGraph::Label`]: the type of the edge labels.
-/// - [`InnerScopeGraph::Data`]: the type of the scope/node labels.
-///
-/// The data structure has been designed for typical scope graph usage scenario's.
-/// For example, there is no support for _removing_ scopes or edges, as this usually does not happen in scope graphs.
-/// In addition, there is no data type for edges, as edges should only be traversed, but never leak outside the scope graph structure.
-/// Finally, although not made explicit, [`InnerScopeGraph::Label`] should be a finite, iterable set.
-///
-/// Typical scope graph implementations will take ownership of the nodes, but only store references to the data that is associated with them.
-///
-/// Type parameters:
-/// - [`SCOPE`] Type of nodes.
-/// - [`LABEL`] Type of edge labels.
-/// - [`DATA`] Type of data associated with nodes.
 #[derive(Default)]
-pub struct InnerScopeGraph<LABEL, DATA /*, META */> {
+pub struct InnerScopeGraph<LABEL, DATA> {
     edges: Vec<HashMap<LABEL, HashSet<Scope>>>, // FIXME: BTreeMap? Vectors? Whatever?
     data: Vec<DATA>,
 }
 
 impl<LABEL, DATA> InnerScopeGraph<LABEL, DATA> {
-    pub fn new() -> Self {
+    fn new() -> Self {
         Self {
             edges: Vec::new(),
             data: Vec::new(),
@@ -63,19 +43,7 @@ impl<LABEL, DATA> InnerScopeGraph<LABEL, DATA> {
 
     /// Adds a new scope to the graph, with `data` as its associated data.
     /// After this operation, all future calls to [`InnerScopeGraph::get_data`] on this scope will return the associated data.
-    ///
-    /// Example:
-    /// ```ignore
-    /// # use InnerScopeGraphs::InnerScopeGraph::InnerScopeGraph;
-    /// let mut sg : InnerScopeGraph<i32, i32, i32> = InnerScopeGraph::new();
-    /// let data = 42;
-    ///
-    /// let scope = sg.add_scope(&data);
-    ///
-    /// let newData = sg.get_data(scope);
-    /// assert_eq!(data, *newData);
-    /// ```
-    pub fn add_scope(&mut self, data: DATA) -> Scope {
+    fn add_scope(&mut self, data: DATA) -> Scope {
         let id = self.data.len();
         self.data.push(data);
         self.edges.push(HashMap::with_capacity(0));
@@ -91,25 +59,7 @@ impl<LABEL, DATA> InnerScopeGraph<LABEL, DATA> {
 impl<'a, LABEL: Hash + Eq, DATA> InnerScopeGraph<LABEL, DATA> {
     /// Adds a new edge from `src`, to `dst`, with label `lbl` to the scope graph.
     /// After this operation, all future calls to [`InnerScopeGraph::get_edges`] on the source will contain the destination.
-    ///
-    /// Example:
-    /// ```ignore
-    /// # use InnerScopeGraphs::{InnerScopeGraph::InnerScopeGraph, Label};
-    ///
-    /// #[derive(Label, Eq, PartialEq, Copy, Clone)]
-    /// enum Label { LEX }
-    /// let mut sg : InnerScopeGraph<i32, Label, i32> = InnerScopeGraph::new();
-    /// let data = 42;
-    ///
-    /// let src = sg.add_scope(&data);
-    /// let dst = sg.add_scope(&data);
-    /// sg.add_edge(src, &Label::LEX, dst);
-    ///
-    /// let mut  dst_iter = sg.get_edges(src, &Label::LEX);
-    /// assert!(dst_iter.any(|d| d == *dst));
-    /// ```
-    ///
-    pub fn add_edge(&mut self, src: Scope, lbl: LABEL, dst: Scope) {
+    fn add_edge(&mut self, src: Scope, lbl: LABEL, dst: Scope) {
         self.edges[src.0].entry(lbl).or_default().insert(dst);
     }
 
@@ -124,6 +74,19 @@ impl<'a, LABEL: Hash + Eq, DATA> InnerScopeGraph<LABEL, DATA> {
     }
 }
 
+/// Scope Graph data structure.
+///
+/// As a data structure, scope graphs are simple graphs with labeled nodes and labeled, directed edges.
+///
+/// This trait has three type parameters:
+/// - [`LABEL`]: the type of the edge labels.
+/// - [`DATA`]: the type of the scope/node labels.
+/// - [`CMPL`]: metadata that guarantees query stability (i.e., query results remain valid in the future).
+///
+/// The data structure has been designed for typical scope graph usage scenario's.
+/// For example, there is no support for _removing_ scopes or edges, as this usually does not happen in scope graphs.
+/// In addition, there is no data type for edges, as edges should only be traversed, but never leak outside the scope graph structure.
+/// Finally, although not made explicit, [`LABEL`] should be a finite, iterable set.
 pub struct ScopeGraph<LABEL, DATA, CMPL> {
     inner_scope_graph: InnerScopeGraph<LABEL, DATA>,
     completeness: RefCell<CMPL>,
@@ -138,8 +101,13 @@ impl<LABEL, DATA, CMPL> ScopeGraph<LABEL, DATA, CMPL> {
     }
 }
 impl<LABEL, DATA> ScopeGraph<LABEL, DATA, UncheckedCompleteness> {
-    pub fn raw() -> Self {
-        Self::new(UncheckedCompleteness::default())
+    /// Creates a new scope graph with [`UncheckedCompleteness`] as its completeness validation.
+    ///
+    /// # Safety
+    ///
+    /// Unsafe, because [`UncheckedCompleteness`] does not actually guarantee query stability.
+    pub unsafe fn raw() -> Self {
+        Self::new(UncheckedCompleteness::new())
     }
 }
 
@@ -147,7 +115,8 @@ impl<LABEL, DATA, CMPL> ScopeGraph<LABEL, DATA, CMPL>
 where
     CMPL: Completeness<LABEL, DATA>,
 {
-    pub fn new_scope(&mut self, data: DATA) -> Scope {
+    /// Add a new scope to the scope graph, with `data` as its label.
+    pub fn add_scope(&mut self, data: DATA) -> Scope {
         let scope = self.inner_scope_graph.add_scope(data);
         self.completeness
             .borrow_mut()
@@ -155,29 +124,57 @@ where
         scope
     }
 
-    pub fn new_edge(&mut self, src: Scope, lbl: LABEL, dst: Scope) -> CMPL::NewEdgeResult {
+    /// Add a new edge in the scope graph.
+    ///
+    /// Permission for this is checked by `CMPL`.
+    pub fn add_edge(&mut self, src: Scope, lbl: LABEL, dst: Scope) -> CMPL::NewEdgeResult {
         self.completeness
             .borrow_mut()
             .cmpl_new_edge(&mut self.inner_scope_graph, src, lbl, dst)
     }
 
+    /// Get the data associated with a scope.
     pub fn get_data(&self, scope: Scope) -> &DATA {
         self.inner_scope_graph.get_data(scope)
     }
 
+    /// Get the targets of the outgoing edges of a scope with some label.
+    ///
+    /// Permission for this operation is checked by `CMPL`.
     pub fn get_edges(&self, src: Scope, lbl: LABEL) -> CMPL::GetEdgesResult {
         self.completeness
             .borrow_mut()
             .cmpl_get_edges(&self.inner_scope_graph, src, lbl)
     }
 
-    pub fn new_decl(&mut self, src: Scope, lbl: LABEL, data: DATA) -> CMPL::NewEdgeResult {
+    /// Utility function to add declarations (i.e., scopes with data, without any outgoing edges).
+    ///
+    /// It performs (roughly) the following operation:
+    ///
+    /// ```ignore
+    /// fn add_decl(&mut self, src: Scope, lbl: LABEL, data: DATA) -> CMPL::NewEdgeResult {
+    ///     let s_data = self.add_scope(data);
+    ///     self.add_edge(src, lbl, s_data);
+    /// }
+    /// ```
+    pub fn add_decl(&mut self, src: Scope, lbl: LABEL, data: DATA) -> CMPL::NewEdgeResult {
         // Create scope with no open edges.
         let s_data = self.inner_scope_graph.add_scope(data);
         self.completeness
             .borrow_mut()
             .cmpl_new_complete_scope(&self.inner_scope_graph, s_data);
-        self.new_edge(src, lbl, s_data)
+        self.add_edge(src, lbl, s_data)
+    }
+}
+
+impl<LABEL, DATA, CMPL> ScopeGraph<LABEL, DATA, CMPL>
+where
+    DATA: Default,
+    CMPL: Completeness<LABEL, DATA>,
+{
+    /// Add a new scope to the scope graph, with default data.
+    pub fn add_scope_default(&mut self) -> Scope {
+        self.add_scope(DATA::default())
     }
 }
 
@@ -185,7 +182,8 @@ impl<LABEL: Hash + Eq, DATA, CMPL> ScopeGraph<LABEL, DATA, CMPL>
 where
     CMPL: CriticalEdgeBasedCompleteness<LABEL, DATA>,
 {
-    pub fn new_scope_with<I>(&mut self, data: DATA, open_edges: I) -> Scope
+    /// Adds a new scope with some open edges.
+    pub fn add_scope_with<I>(&mut self, data: DATA, open_edges: I) -> Scope
     where
         I: IntoIterator<Item = LABEL>,
     {
@@ -195,9 +193,87 @@ where
             .init_scope_with(HashSet::from_iter(open_edges.into_iter()), Witness(()));
         scope
     }
+
+    /// Adds a new scope with no open edges.
+    pub fn add_scope_closed<I>(&mut self, data: DATA) -> Scope
+    where
+        I: IntoIterator<Item = LABEL>,
+    {
+        let scope = self.inner_scope_graph.add_scope(data);
+        self.completeness
+            .borrow_mut()
+            .init_scope_with(HashSet::new(), Witness(()));
+        scope
+    }
+}
+
+impl<LABEL: Hash + Eq, DATA, CMPL> ScopeGraph<LABEL, DATA, CMPL>
+where
+    DATA: Default,
+    CMPL: CriticalEdgeBasedCompleteness<LABEL, DATA>,
+{
+    /// Adds a new scope with some open edges and default data.
+    pub fn add_scope_default_with<I>(&mut self, open_edges: I) -> Scope
+    where
+        I: IntoIterator<Item = LABEL>,
+    {
+        self.add_scope_with(DATA::default(), open_edges)
+    }
+
+    /// Adds a new scope with no open edges and default data.
+    pub fn add_scope_default_closed(&mut self) -> Scope {
+        self.add_scope_with(DATA::default(), HashSet::new())
+    }
 }
 
 impl<LABEL: Hash + Eq, DATA> ScopeGraph<LABEL, DATA, ExplicitClose<LABEL>> {
+    /// Closes an edge, (i.e., prohibit future new
+    ///
+    /// For example, the following program will return an error.
+    /// ```
+    /// # use scopegraphs_lib::completeness::ExplicitClose;
+    /// # use scopegraphs_lib::ScopeGraph;
+    /// # use scopegraphs_macros::Label;
+    /// # #[derive(Eq, Hash, PartialEq, Label)] enum Lbl { Def }
+    /// # use Lbl::*;
+    /// let mut sg = ScopeGraph::<Lbl, usize, _>::new(ExplicitClose::default());
+    ///
+    /// let s1 = sg.add_scope_with(0, [Def]);
+    /// let s2 = sg.add_scope_with::<[Lbl; 0]>(42, []);
+    ///
+    /// sg.close(s1, &Def);
+    /// sg.add_edge(s1, Def, s2).expect_err("cannot add edge after closing edge");
+    /// ```
+    ///
+    /// Closing is required to permit queries to traverse these edges:
+    /// ```
+    ///
+    /// # use scopegraphs_lib::completeness::ExplicitClose;
+    /// # use scopegraphs_lib::ScopeGraph;
+    /// # use scopegraphs_macros::{compile_regex, Label};
+    /// # #[derive(Eq, Hash, PartialEq, Label, Debug, Copy, Clone)] enum Lbl { Def }
+    /// # use Lbl::*;
+    /// # compile_regex!(type Regex<Lbl> = Def);
+    /// # use scopegraphs_lib::resolve::lookup::resolve;
+    /// let mut sg = ScopeGraph::<Lbl, usize, _>::new(ExplicitClose::default());
+    ///
+    /// let s1 = sg.add_scope_with(0, [Def]);
+    /// let s2 = sg.add_scope_with::<[Lbl; 0]>(42, []);
+    ///
+    /// // Note: not calling `sg.close(s1, &Def)`
+    ///
+    /// let query_result = resolve(
+    ///     &sg,
+    ///     /* ... */
+    /// #    &Regex::new(),
+    /// #    &|x| *x == 42,
+    /// #    &|_, _,| false,
+    /// #    &|_, _| true,
+    ///     s1
+    /// );
+    ///
+    /// query_result.expect_err("require s1/Def to be closed");
+    /// ```
     pub fn close(&self, scope: Scope, label: &LABEL) {
         self.completeness.borrow_mut().close(scope, label)
     }
@@ -209,17 +285,17 @@ mod test {
 
     #[test]
     fn test_create_scope() {
-        let mut sg: ScopeGraph<usize, usize, _> = ScopeGraph::raw();
-        let scope = sg.new_scope(42);
+        let mut sg: ScopeGraph<usize, usize, _> = unsafe { ScopeGraph::raw() };
+        let scope = sg.add_scope(42);
         assert_eq!(42, *sg.get_data(scope));
     }
 
     #[test]
     fn test_create_two_scopes() {
-        let mut sg: ScopeGraph<usize, usize, _> = ScopeGraph::raw();
+        let mut sg: ScopeGraph<usize, usize, _> = unsafe { ScopeGraph::raw() };
 
-        let s1 = sg.new_scope(1);
-        let s2 = sg.new_scope(2);
+        let s1 = sg.add_scope(1);
+        let s2 = sg.add_scope(2);
 
         assert_eq!(1, *sg.get_data(s1));
         assert_eq!(2, *sg.get_data(s2));
@@ -227,12 +303,12 @@ mod test {
 
     #[test]
     fn test_create_edge() {
-        let mut sg: ScopeGraph<usize, usize, _> = ScopeGraph::raw();
+        let mut sg: ScopeGraph<usize, usize, _> = unsafe { ScopeGraph::raw() };
 
-        let s1 = sg.new_scope(1);
-        let s2 = sg.new_scope(2);
+        let s1 = sg.add_scope(1);
+        let s2 = sg.add_scope(2);
 
-        sg.new_edge(s1, 1, s2);
+        sg.add_edge(s1, 1, s2);
 
         assert_eq!(vec![s2], sg.get_edges(s1, 1));
         assert_eq!(Vec::<Scope>::new(), sg.get_edges(s1, 2));
@@ -240,14 +316,14 @@ mod test {
 
     #[test]
     fn test_create_edges() {
-        let mut sg: ScopeGraph<usize, usize, _> = ScopeGraph::raw();
+        let mut sg: ScopeGraph<usize, usize, _> = unsafe { ScopeGraph::raw() };
 
-        let s1 = sg.new_scope(1);
-        let s2 = sg.new_scope(2);
-        let s3 = sg.new_scope(3);
+        let s1 = sg.add_scope(1);
+        let s2 = sg.add_scope(2);
+        let s3 = sg.add_scope(3);
 
-        sg.new_edge(s1, 1, s2);
-        sg.new_edge(s1, 1, s3);
+        sg.add_edge(s1, 1, s2);
+        sg.add_edge(s1, 1, s3);
 
         assert!(sg.get_edges(s1, 1).contains(&s2));
         assert!(sg.get_edges(s1, 1).contains(&s3));

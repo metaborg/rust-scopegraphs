@@ -6,9 +6,13 @@ use std::sync::Arc;
 
 use super::Scope;
 
-pub mod containers; // FIXME: proper name (containers)
-pub mod topdown;
+pub mod containers;
+pub mod lookup;
 
+/// Representation of either a labeled edge or the special 'data' label.
+///
+/// Used to implement label orders. The `Data` label is there to support expressing preference
+/// between traversing an edge or resolving to the current node.
 #[derive(Hash, PartialEq, Eq)]
 pub enum EdgeOrData<LABEL> {
     Data,
@@ -33,14 +37,30 @@ impl<LABEL: Copy> Clone for EdgeOrData<LABEL> {
 
 impl<LABEL: Copy> Copy for EdgeOrData<LABEL> {}
 
+/// Unary predicate over `DATA`.
+///
+/// Used to select declarations that a query can resolve to.
 pub trait DataWellformedness<DATA>: for<'sg> Fn(&'sg DATA) -> bool {}
 impl<DATA, T> DataWellformedness<DATA> for T where for<'sg> T: Fn(&'sg DATA) -> bool {}
 
+/// Strict partial order on labels. Used to perform shadowing.
+///
+/// For example, suppose that in some scope `s`, declarations for some query are reachable via an
+/// `Lex` edge and an `Imp` edge (for lexical parent and import, respectively). When the label order
+/// Indicates `Lex < Imp` (i.e., declarations from a lexically enclosing scope have higher priority),
+/// the declaration over the `Imp` edge is shadowed, and will thus not be included in the
+/// environment. If `Imp < Lex`, imports have higher priority, and that one will be included.
+/// Otherwise, paths to both declarations are included in the environment.
 pub trait LabelOrder<LABEL>: Fn(&EdgeOrData<LABEL>, &EdgeOrData<LABEL>) -> bool {}
 impl<LABEL, T> LabelOrder<LABEL> for T where T: Fn(&EdgeOrData<LABEL>, &EdgeOrData<LABEL>) -> bool {}
 
-pub trait DataOrder<DATA>: for<'sg> Fn(&'sg DATA, &'sg DATA) -> bool {}
-impl<DATA, T> DataOrder<DATA> for T where for<'sg> T: Fn(&'sg DATA, &'sg DATA) -> bool {}
+/// Data equivalence relation.
+///
+/// Defines equivalence classes of declarations. Shadowing will only be applied with respect to
+/// declarations in the same equivalence class. That is, the shadowing explained in [`LabelOrder`]
+/// will only be applied if the declarations are equivalent.
+pub trait DataEquiv<DATA>: for<'sg> Fn(&'sg DATA, &'sg DATA) -> bool {}
+impl<DATA, T> DataEquiv<DATA> for T where for<'sg> T: Fn(&'sg DATA, &'sg DATA) -> bool {}
 
 #[derive(Hash, PartialEq, Eq, Debug)]
 enum InnerPath<LABEL> {
@@ -54,6 +74,7 @@ enum InnerPath<LABEL> {
     },
 }
 
+/// Path (alternating sequence of scopes and labels) in a scope graph.
 #[derive(Clone)]
 pub struct Path<LABEL> {
     inner_path: Arc<InnerPath<LABEL>>,
@@ -110,6 +131,7 @@ where
     }
 }
 
+/// A path in the scope graph, including the data of the target of the path.
 #[derive(Hash, PartialEq, Eq, Debug, Clone)]
 pub struct ResolvedPath<'sg, LABEL, DATA> {
     path: Path<LABEL>,
@@ -127,6 +149,7 @@ impl<'sg, LABEL, DATA> ResolvedPath<'sg, LABEL, DATA> {
 }
 
 impl<LABEL> Path<LABEL> {
+    /// Creates a new path that contains of a single scope.
     pub fn new(source: Scope) -> Self {
         Self {
             inner_path: Arc::new(InnerPath::Start { source }),
@@ -134,6 +157,7 @@ impl<LABEL> Path<LABEL> {
         }
     }
 
+    /// Returns the last scope in the path.
     pub fn target(&self) -> Scope {
         match self.inner_path.as_ref() {
             InnerPath::Start { source } => *source,
@@ -141,6 +165,9 @@ impl<LABEL> Path<LABEL> {
         }
     }
 
+    /// Extends the path with a new edge.
+    ///
+    /// Returns `None` if the resulting path would contain a cycle.
     pub fn step(&self, label: LABEL, target: Scope) -> Option<Self> {
         if self.scopes.search(&target) {
             None
@@ -159,11 +186,13 @@ impl<LABEL> Path<LABEL> {
         }
     }
 
+    /// Creates a resolved path from this path.
     pub fn resolve<DATA>(self, data: &DATA) -> ResolvedPath<'_, LABEL, DATA> {
         ResolvedPath { path: self, data }
     }
 }
 
+/// Representation of an environment (i.e., a collection of resolved paths).
 // For now, we stick with hashmaps because they are easy.
 // We might however want to change that in the future, because:
 // - we currently create a lot of new hashmaps, which is not really efficient
@@ -189,10 +218,12 @@ impl<LABEL, DATA> Default for Env<'_, LABEL, DATA> {
 }
 
 impl<'sg, LABEL, DATA> Env<'sg, LABEL, DATA> {
+    /// Creates an empty environemnt.
     pub fn new() -> Self {
         Self(HashSet::new())
     }
 
+    /// Create an iterator over all paths in the environment.
     pub fn iter<'a>(&'a self) -> impl Iterator<Item = &'a ResolvedPath<'sg, LABEL, DATA>> + 'a {
         self.0.iter()
     }
@@ -202,16 +233,19 @@ impl<'sg, LABEL, DATA> Env<'sg, LABEL, DATA>
 where
     ResolvedPath<'sg, LABEL, DATA>: Eq + Hash,
 {
+    /// Create an environment with a single path.
     pub fn single(path: ResolvedPath<'sg, LABEL, DATA>) -> Self {
         let mut env = Env::new();
         env.insert(path);
         env
     }
 
+    /// Insert a path in the environment.
     pub fn insert(&mut self, path: ResolvedPath<'sg, LABEL, DATA>) {
         self.0.insert(path);
     }
 
+    /// Add all paths in `other` to the current environment.
     pub fn merge(&mut self, other: Self) {
         self.0.extend(other.0)
     }
@@ -223,11 +257,7 @@ where
     ResolvedPath<'sg, LABEL, DATA>: Eq + Hash,
 {
     fn from_iter<T: IntoIterator<Item = ResolvedPath<'sg, LABEL, DATA>>>(iter: T) -> Self {
-        let mut env = Env::new();
-        for path in iter.into_iter() {
-            env.insert(path)
-        }
-        env
+        Env(HashSet::from_iter(iter))
     }
 }
 
@@ -236,10 +266,6 @@ where
     ResolvedPath<'sg, LABEL, DATA>: Eq + Hash,
 {
     fn from_iter<T: IntoIterator<Item = Env<'sg, LABEL, DATA>>>(iter: T) -> Self {
-        let mut env = Env::new();
-        for sub_env in iter.into_iter() {
-            env.merge(sub_env)
-        }
-        env
+        iter.into_iter().flatten().collect()
     }
 }

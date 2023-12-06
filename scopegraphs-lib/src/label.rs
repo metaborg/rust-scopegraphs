@@ -1,3 +1,4 @@
+/// Trait that allows iterating over all labels.
 pub trait Label {
     fn iter() -> impl Iterator<Item = Self>
     where

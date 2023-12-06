@@ -1,7 +1,9 @@
 use crate::resolve::{Env, Path, ResolvedPath};
 use std::hash::Hash;
 
+/// Interface for path containers that support the operations required for query resolution.
 pub trait PathContainer<LABEL, DATA> {
+    /// Type returned by resolving a path to its sub-environment.
     type EnvContainer<'sg>
     where
         DATA: 'sg,
@@ -15,30 +17,10 @@ pub trait PathContainer<LABEL, DATA> {
     ) -> Self::EnvContainer<'sg>;
 }
 
-pub fn flat_map_iterator<
-    'sg,
-    LABEL: 'sg,
-    DATA: 'sg,
-    F: FnMut(Path<LABEL>) -> Env<'sg, LABEL, DATA>,
->(
-    iter: impl Iterator<Item = Path<LABEL>>,
-    f: F,
-) -> Env<'sg, LABEL, DATA>
-where
-    LABEL: Clone + Hash + Eq,
-    for<'a> ResolvedPath<'a, LABEL, DATA>: Hash + Eq,
-{
-    let mut env = Env::new();
-    for sub_env in iter.map(f) {
-        env.merge(sub_env)
-    }
-    env
-}
-
 impl<LABEL, DATA> PathContainer<LABEL, DATA> for Vec<Path<LABEL>>
 where
     LABEL: Clone + Hash + Eq,
-    for<'a> ResolvedPath<'a, LABEL, DATA>: Hash + Eq,
+    DATA: Hash + Eq,
 {
     type EnvContainer<'sg> = Env<'sg, LABEL, DATA> where LABEL: 'sg, DATA: 'sg;
 
@@ -46,7 +28,7 @@ where
         self,
         f: F,
     ) -> Self::EnvContainer<'sg> {
-        flat_map_iterator(self.into_iter(), f)
+        self.into_iter().map(f).collect()
     }
 }
 
@@ -64,12 +46,11 @@ where
         self,
         f: F,
     ) -> Self::EnvContainer<'sg> {
-        match self {
-            Ok(paths) => paths
+        self.and_then(|paths| {
+            paths
                 .into_iter()
                 .map(f)
-                .collect::<Result<Env<'sg, LABEL, DATA>, E>>(),
-            Err(err) => Err(err),
-        }
+                .collect::<Result<Env<'sg, LABEL, DATA>, E>>()
+        })
     }
 }
