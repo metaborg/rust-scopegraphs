@@ -316,13 +316,16 @@ impl<'sg, LABEL, DATA, CMPL, PWF, DWF, LO, DEq> Query<'sg, LABEL, DATA, CMPL, PW
 }
 
 impl<LABEL, DATA, CMPL> ScopeGraph<LABEL, DATA, CMPL> {
-    pub fn query(&self) -> Query<LABEL, DATA, CMPL, (), (), (), ()> {
+    pub fn query(
+        &self,
+    ) -> Query<LABEL, DATA, CMPL, (), DefaultDataWellformedness, DefaultLabelOrder, DefaultDataEquiv>
+    {
         Query {
             scope_graph: self,
             path_wellformedness: (),
-            data_wellformedness: (),
-            label_order: (),
-            data_equivalence: (),
+            data_wellformedness: DefaultDataWellformedness::default(),
+            label_order: DefaultLabelOrder::default(),
+            data_equivalence: DefaultDataEquiv::default(),
         }
     }
 }
