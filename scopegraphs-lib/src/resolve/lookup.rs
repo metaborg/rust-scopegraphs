@@ -209,7 +209,7 @@ where
     /// Creates single-path environment if the data `path.target()` is matching, or an empty environment otherwise.
     fn resolve_data(&self, path: &Path<LABEL>) -> ENVC {
         let data = self.sg.get_data(path.target());
-        if (self.data_wellformedness)(data) {
+        if self.data_wellformedness.data_wf(data) {
             log::info!("{:?} matched: return singleton env.", data);
             Env::single(path.clone().resolve(data)).into()
         } else {
@@ -222,7 +222,7 @@ where
     fn max(&self, edges: &[EdgeOrData<LABEL>]) -> Vec<EdgeOrData<LABEL>> {
         let max = edges
             .iter()
-            .filter(|l| !edges.iter().any(|ll| (self.label_order)(l, ll)))
+            .filter(|l| !edges.iter().any(|ll| self.label_order.less_than(l, ll)))
             .copied()
             .collect();
 
@@ -238,7 +238,7 @@ where
     ) -> Vec<EdgeOrData<LABEL>> {
         let smaller = edges
             .iter()
-            .filter(|l| (self.label_order)(l, &edge))
+            .filter(|l| self.label_order.less_than(l, &edge))
             .copied()
             .collect();
 
@@ -254,6 +254,7 @@ mod tests {
     use scopegraphs::{
         completeness::{Completeness, ExplicitClose, ImplicitClose, UncheckedCompleteness},
         resolve::{lookup::resolve, EdgeOrData, ResolvedPath},
+        resolve::{DefaultDataEquiv, DefaultLabelOrder},
         Scope, ScopeGraph,
     };
 
@@ -264,6 +265,7 @@ mod tests {
         Def,
     }
     use Lbl::*;
+    type LblD = EdgeOrData<Lbl>;
 
     #[derive(Hash, PartialEq, Eq, Debug, Default)]
     enum TData<'a, T> {
@@ -274,6 +276,7 @@ mod tests {
             data: T,
         },
     }
+
     use TData::*;
 
     impl<'a, T> TData<'a, T> {
@@ -311,9 +314,9 @@ mod tests {
         let env = resolve(
             &scope_graph,
             &Machine::new(),
-            &|x| x.matches("x"),
-            &|_, _| false,
-            &|_, _| true,
+            &|x: &TData<()>| x.matches("x"),
+            &DefaultLabelOrder::default(),
+            &DefaultDataEquiv::default(),
             s0,
         );
 
@@ -337,9 +340,9 @@ mod tests {
         let env = resolve(
             &scope_graph,
             &Machine::new(),
-            &|x| x.matches("y"),
-            &|_, _| false,
-            &|_, _| true,
+            &|x: &TData<()>| x.matches("y"),
+            &DefaultLabelOrder::default(),
+            &DefaultDataEquiv::default(),
             s0,
         );
 
@@ -363,9 +366,9 @@ mod tests {
         let env = resolve(
             &scope_graph,
             &Machine::new(),
-            &|x| x.matches("x"),
-            &|_, _| false,
-            &|_, _| true,
+            &|x: &TData<usize>| x.matches("x"),
+            &DefaultLabelOrder::default(),
+            &DefaultDataEquiv::default(),
             s0,
         );
 
@@ -390,9 +393,9 @@ mod tests {
         let env = resolve(
             &scope_graph,
             &Machine::new(),
-            &|x| x.matches("x"),
-            &|_, _| false,
-            &|_, _| true,
+            &|x: &TData<usize>| x.matches("x"),
+            &DefaultLabelOrder::default(),
+            &DefaultDataEquiv::default(),
             s0,
         );
 
@@ -418,9 +421,11 @@ mod tests {
         let env = resolve(
             &scope_graph,
             &Machine::new(),
-            &|x| x.matches("x"),
-            &|l1, l2| matches!((l1, l2), (EdgeOrData::Edge(Lex), EdgeOrData::Edge(Imp))),
-            &|_, _| true,
+            &|x: &TData<usize>| x.matches("x"),
+            &|&l1: &LblD, &l2: &LblD| {
+                matches!((l1, l2), (EdgeOrData::Edge(Lex), EdgeOrData::Edge(Imp)))
+            },
+            &DefaultDataEquiv::default(),
             s0,
         );
 
@@ -521,8 +526,8 @@ mod tests {
         let env = resolve(
             &scope_graph,
             &Machine::new(),
-            &|x| x.matches("x"),
-            &|l1, l2| {
+            &|x: &TData<usize>| x.matches("x"),
+            &|&l1: &LblD, &l2: &LblD| {
                 matches!(
                     (l1, l2),
                     (EdgeOrData::Edge(Imp), EdgeOrData::Edge(Lex))
@@ -530,7 +535,7 @@ mod tests {
                         | (EdgeOrData::Edge(Def), EdgeOrData::Edge(Lex))
                 )
             },
-            &|_, _| true,
+            &DefaultDataEquiv::default(),
             s_let,
         )
         .unwrap();
@@ -555,8 +560,8 @@ mod tests {
         let env = resolve(
             scope_graph,
             &Machine::new(),
-            &|x| x.matches("x"),
-            &|l1, l2| {
+            &|x: &TData<usize>| x.matches("x"),
+            &|&l1: &LblD, &l2: &LblD| {
                 matches!(
                     (l1, l2),
                     (EdgeOrData::Edge(Imp), EdgeOrData::Edge(Lex))
@@ -564,7 +569,7 @@ mod tests {
                         | (EdgeOrData::Edge(Def), EdgeOrData::Edge(Lex))
                 )
             },
-            &|_, _| true,
+            &DefaultDataEquiv::default(),
             s_let,
         );
 

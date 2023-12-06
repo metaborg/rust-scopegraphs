@@ -250,9 +250,14 @@ impl<LABEL: Hash + Eq, DATA> ScopeGraph<LABEL, DATA, ExplicitClose<LABEL>> {
     ///
     /// # use scopegraphs_lib::completeness::ExplicitClose;
     /// # use scopegraphs_lib::ScopeGraph;
+    /// # use scopegraphs_lib::resolve::{DefaultDataEquiv, DefaultLabelOrder, EdgeOrData};
     /// # use scopegraphs_macros::{compile_regex, Label};
-    /// # #[derive(Eq, Hash, PartialEq, Label, Debug, Copy, Clone)] enum Lbl { Def }
+    /// #
+    /// # #[derive(Eq, Hash, PartialEq, Label, Debug, Copy, Clone)]
+    /// # enum Lbl { Def }
     /// # use Lbl::*;
+    /// # type LblD = EdgeOrData<Lbl>;
+    /// #
     /// # compile_regex!(type Regex<Lbl> = Def);
     /// # use scopegraphs_lib::resolve::lookup::resolve;
     /// let mut sg = ScopeGraph::<Lbl, usize, _>::new(ExplicitClose::default());
@@ -266,9 +271,9 @@ impl<LABEL: Hash + Eq, DATA> ScopeGraph<LABEL, DATA, ExplicitClose<LABEL>> {
     ///     &sg,
     ///     /* ... */
     /// #    &Regex::new(),
-    /// #    &|x| *x == 42,
-    /// #    &|_, _,| false,
-    /// #    &|_, _| true,
+    /// #    &|x: &usize| *x == 42,
+    /// #    &DefaultLabelOrder::default(),
+    /// #    &DefaultDataEquiv::default(),
     ///     s1
     /// );
     ///

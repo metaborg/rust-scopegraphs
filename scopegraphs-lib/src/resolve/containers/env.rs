@@ -19,7 +19,7 @@ pub trait EnvContainer<'sg, LABEL: 'sg, DATA: 'sg>: From<Env<'sg, LABEL, DATA>> 
     ///
     /// The resulting container should contain all paths in `self` and all paths in `sub_env`
     /// that are not shadowed by some path in `self` according to the data order.
-    fn lift_shadow<DO: DataEquiv<DATA>>(self, sub_env: Self, data_equiv: DO) -> Self;
+    fn lift_shadow<DEq: DataEquiv<DATA>>(self, sub_env: Self, data_equiv: &DEq) -> Self;
 }
 
 impl<'sg, LABEL, DATA: Debug> EnvContainer<'sg, LABEL, DATA> for Env<'sg, LABEL, DATA>
@@ -37,11 +37,14 @@ where
         self
     }
 
-    fn lift_shadow<DO: DataEquiv<DATA>>(mut self, sub_env: Self, data_equiv: DO) -> Self {
+    fn lift_shadow<DEq: DataEquiv<DATA>>(mut self, sub_env: Self, data_equiv: &DEq) -> Self {
         let filtered_env = sub_env
             .into_iter()
             .filter(|p1| {
-                if let Some(p2) = self.iter().find(|p2| data_equiv(p1.data, p2.data)) {
+                if let Some(p2) = self
+                    .iter()
+                    .find(|p2| data_equiv.data_equiv(p1.data, p2.data))
+                {
                     log::info!(
                         "Discarding {:?} in {:?}; shadowed by {:?} in {:?}",
                         p1.data,
@@ -83,7 +86,7 @@ impl<'sg, LABEL: 'sg, DATA: 'sg, EC: EnvContainer<'sg, LABEL, DATA>, E>
         self.and_then(|ec1| other.map(|ec2| ec1.lift_merge(ec2)))
     }
 
-    fn lift_shadow<DO: DataEquiv<DATA>>(self, sub_env: Self, data_equiv: DO) -> Self {
+    fn lift_shadow<DEq: DataEquiv<DATA>>(self, sub_env: Self, data_equiv: &DEq) -> Self {
         // Lift the shadow operations if both results are ok.
         // Otherwise, retain the leftmost error value.
         self.and_then(|ec1| sub_env.map(|ec2| ec1.lift_shadow(ec2, data_equiv)))
