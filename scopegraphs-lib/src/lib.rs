@@ -250,7 +250,7 @@ impl<LABEL: Hash + Eq, DATA> ScopeGraph<LABEL, DATA, ExplicitClose<LABEL>> {
     ///
     /// # use scopegraphs_lib::completeness::ExplicitClose;
     /// # use scopegraphs_lib::ScopeGraph;
-    /// # use scopegraphs_lib::resolve::{DefaultDataEquiv, DefaultLabelOrder, EdgeOrData};
+    /// # use scopegraphs_lib::resolve::{DefaultDataEquiv, DefaultLabelOrder, EdgeOrData, Resolve};
     /// # use scopegraphs_macros::{compile_regex, Label};
     /// #
     /// # #[derive(Eq, Hash, PartialEq, Label, Debug, Copy, Clone)]
@@ -259,7 +259,6 @@ impl<LABEL: Hash + Eq, DATA> ScopeGraph<LABEL, DATA, ExplicitClose<LABEL>> {
     /// # type LblD = EdgeOrData<Lbl>;
     /// #
     /// # compile_regex!(type Regex<Lbl> = Def);
-    /// # use scopegraphs_lib::resolve::lookup::resolve;
     /// let mut sg = ScopeGraph::<Lbl, usize, _>::new(ExplicitClose::default());
     ///
     /// let s1 = sg.add_scope_with(0, [Def]);
@@ -267,15 +266,10 @@ impl<LABEL: Hash + Eq, DATA> ScopeGraph<LABEL, DATA, ExplicitClose<LABEL>> {
     ///
     /// // Note: not calling `sg.close(s1, &Def)`
     ///
-    /// let query_result = resolve(
-    ///     &sg,
-    ///     /* ... */
-    /// #    &Regex::new(),
-    /// #    &|x: &usize| *x == 42,
-    /// #    &DefaultLabelOrder::default(),
-    /// #    &DefaultDataEquiv::default(),
-    ///     s1
-    /// );
+    /// let query_result = sg.query()
+    ///     .with_path_wellformedness(Regex::new()) // regex: `Def`
+    ///     .with_data_wellformedness(|x: &usize| *x == 42) // match `42`
+    ///     .resolve(s1);
     ///
     /// query_result.expect_err("require s1/Def to be closed");
     /// ```

@@ -8,6 +8,7 @@ use std::fmt::Debug;
 use std::hash::Hash;
 use std::iter;
 
+use crate::resolve::{Query, Resolve};
 use crate::{
     label::Label,
     resolve::{
@@ -19,34 +20,8 @@ use crate::{
 };
 use scopegraphs_regular_expressions::RegexMatcher;
 
-/// Entry point of the query resolution. Performs a traversal of the scope graph that results in
-/// an environment containing all declarations matching a reference.
-///
-/// Type parameters:
-/// - `LABEL`: labels in the scope graph.
-/// - `DATA`: Data in the scope graph.
-/// - `CMPL`: the completeness approach (determined by the scope graph). Should be an instance of
-///     [`Completeness`]. This guarantees that the query resolution result will remain valid, even
-///     in the presence of future additions to the scope graph.
-/// - `ENVC`: The [`EnvContainer`] (determined by `CMPL`) used to process environments throughout
-///     the resolution process.
-///
-/// Parameters:
-/// - `sg`: the scope graph in which to perform name resolution.
-/// - `path_wellformedness`: regular expression matcher that indicates which paths are valid.
-///     The labels of all paths in the environment will match the regular expression that this
-///     matcher is derived from.
-/// - `data_wellformedness`: Unary predicate over data that selects valid declarations.
-/// - `label_order`: Label order: the order on labels that indicates which declarations are preferred over others.
-/// - `data_equiv`: Equivalence relation on data that determines which declarations can shadow each other.
-pub fn resolve<'sg: 'query, 'query, LABEL, DATA, CMPL, ENVC>(
-    sg: &'sg ScopeGraph<LABEL, DATA, CMPL>,
-    path_wellformedness: &'query impl for<'a> RegexMatcher<&'a LABEL>,
-    data_wellformedness: &'query impl DataWellformedness<DATA>,
-    label_order: &'query impl LabelOrder<LABEL>,
-    data_equiv: &'query impl DataEquiv<DATA>,
-    source: Scope,
-) -> ENVC
+impl<'sg, LABEL, DATA, CMPL, PWF, DWF, LO, DEq, ENVC> Resolve
+    for Query<'sg, LABEL, DATA, CMPL, PWF, DWF, LO, DEq>
 where
     LABEL: Label + Copy + Debug,
     DATA: Debug,
@@ -55,23 +30,51 @@ where
     <CMPL::GetEdgesResult as ScopeContainer<LABEL>>::PathContainer:
         PathContainer<LABEL, DATA, EnvContainer<'sg> = ENVC>,
     ENVC: EnvContainer<'sg, LABEL, DATA> + Debug,
+    PWF: for<'a> RegexMatcher<&'a LABEL>,
+    DWF: DataWellformedness<DATA>,
+    LO: LabelOrder<LABEL>,
+    DEq: DataEquiv<DATA>,
     ResolvedPath<'sg, LABEL, DATA>: Hash + Eq,
     Path<LABEL>: Clone,
 {
-    let all_edges: Vec<EdgeOrData<LABEL>> = LABEL::iter()
-        .map(EdgeOrData::Edge)
-        .chain(iter::once(EdgeOrData::Data))
-        .collect();
+    type EnvContainer = ENVC;
 
-    let context = ResolutionContext {
-        all_edges,
-        sg,
-        data_wellformedness,
-        label_order,
-        data_equiv,
-    };
+    /// Entry point of lookup-based query resolution. Performs a traversal of the scope graph that
+    /// results in an environment containing all declarations matching a reference.
+    ///
+    /// Type parameters:
+    /// - `LABEL`: labels in the scope graph.
+    /// - `DATA`: Data in the scope graph.
+    /// - `CMPL`: the completeness approach (determined by the scope graph). Should be an instance of
+    ///     [`Completeness`]. This guarantees that the query resolution result will remain valid, even
+    ///     in the presence of future additions to the scope graph.
+    /// - `ENVC`: The [`EnvContainer`] (determined by `CMPL`) used to process environments throughout
+    ///     the resolution process..
+    /// - `PWF`: regular expression matcher that indicates which paths are valid.
+    ///     The labels of all paths in the environment will match the regular expression that this
+    ///     matcher is derived from.
+    /// - `DWF`: Unary predicate over data that selects valid declarations.
+    /// - `LO`: Label order: the order on labels that indicates which declarations are preferred over others.
+    /// - `DEq`: Equivalence relation on data that determines which declarations can shadow each other.
+    ///
+    /// Parameters:
+    /// - `scope`: the scope graph in which to start name resolution
+    fn resolve(&self, scope: Scope) -> Self::EnvContainer {
+        let all_edges: Vec<EdgeOrData<LABEL>> = LABEL::iter()
+            .map(EdgeOrData::Edge)
+            .chain(iter::once(EdgeOrData::Data))
+            .collect();
 
-    context.resolve_all(path_wellformedness, &Path::new(source))
+        let context = ResolutionContext {
+            all_edges,
+            sg: self.scope_graph,
+            data_wellformedness: &self.data_wellformedness,
+            label_order: &self.label_order,
+            data_equiv: &self.data_equivalence,
+        };
+
+        context.resolve_all(&self.path_wellformedness, &Path::new(scope))
+    }
 }
 
 struct ResolutionContext<'sg: 'query, 'query, LABEL, DATA, CMPL, DWF, LO, DEq> {
@@ -253,8 +256,7 @@ mod tests {
 
     use scopegraphs::{
         completeness::{Completeness, ExplicitClose, ImplicitClose, UncheckedCompleteness},
-        resolve::{lookup::resolve, EdgeOrData, ResolvedPath},
-        resolve::{DefaultDataEquiv, DefaultLabelOrder},
+        resolve::{EdgeOrData, Resolve, ResolvedPath},
         Scope, ScopeGraph,
     };
 
@@ -311,14 +313,11 @@ mod tests {
 
         compile_regex!(type Machine<Lbl> = Def);
 
-        let env = resolve(
-            &scope_graph,
-            &Machine::new(),
-            &|x: &TData<()>| x.matches("x"),
-            &DefaultLabelOrder::default(),
-            &DefaultDataEquiv::default(),
-            s0,
-        );
+        let env = scope_graph
+            .query()
+            .with_path_wellformedness(Machine::new())
+            .with_data_wellformedness(|x: &TData<()>| x.matches("x"))
+            .resolve(s0);
 
         let env_vec = env.into_iter().collect::<Vec<_>>();
         assert_eq!(1, env_vec.len());
@@ -337,14 +336,11 @@ mod tests {
 
         compile_regex!(type Machine<Lbl> = Def);
 
-        let env = resolve(
-            &scope_graph,
-            &Machine::new(),
-            &|x: &TData<()>| x.matches("y"),
-            &DefaultLabelOrder::default(),
-            &DefaultDataEquiv::default(),
-            s0,
-        );
+        let env = scope_graph
+            .query()
+            .with_path_wellformedness(Machine::new())
+            .with_data_wellformedness(|x: &TData<()>| x.matches("y"))
+            .resolve(s0);
 
         let env_vec = env.into_iter().collect::<Vec<_>>();
         assert_eq!(0, env_vec.len());
@@ -363,14 +359,11 @@ mod tests {
 
         compile_regex!(type Machine<Lbl> = Lex Def);
 
-        let env = resolve(
-            &scope_graph,
-            &Machine::new(),
-            &|x: &TData<usize>| x.matches("x"),
-            &DefaultLabelOrder::default(),
-            &DefaultDataEquiv::default(),
-            s0,
-        );
+        let env = scope_graph
+            .query()
+            .with_path_wellformedness(Machine::new())
+            .with_data_wellformedness(&|x: &TData<usize>| x.matches("x"))
+            .resolve(s0);
 
         let env_vec = env.into_iter().collect::<Vec<_>>();
         assert_eq!(1, env_vec.len());
@@ -378,6 +371,7 @@ mod tests {
         let path: &ResolvedPath<Lbl, TData<usize>> = &env_vec[0];
         assert!(matches!(path.data(), &Data { name: "x", data: 1 }))
     }
+
     #[test]
     fn test_regex_filter() {
         let mut scope_graph: ScopeGraph<Lbl, TData<usize>, UncheckedCompleteness> =
@@ -390,14 +384,11 @@ mod tests {
 
         compile_regex!(type Machine<Lbl> = Lex Def);
 
-        let env = resolve(
-            &scope_graph,
-            &Machine::new(),
-            &|x: &TData<usize>| x.matches("x"),
-            &DefaultLabelOrder::default(),
-            &DefaultDataEquiv::default(),
-            s0,
-        );
+        let env = scope_graph
+            .query()
+            .with_path_wellformedness(Machine::new())
+            .with_data_wellformedness(|x: &TData<usize>| x.matches("x"))
+            .resolve(s0);
 
         let env_vec = env.into_iter().collect::<Vec<_>>();
         assert_eq!(0, env_vec.len());
@@ -418,16 +409,14 @@ mod tests {
 
         compile_regex!(type Machine<Lbl> = Lex Def);
 
-        let env = resolve(
-            &scope_graph,
-            &Machine::new(),
-            &|x: &TData<usize>| x.matches("x"),
-            &|&l1: &LblD, &l2: &LblD| {
+        let env = scope_graph
+            .query()
+            .with_path_wellformedness(Machine::new())
+            .with_data_wellformedness(|x: &TData<usize>| x.matches("x"))
+            .with_label_order(|&l1: &LblD, &l2: &LblD| {
                 matches!((l1, l2), (EdgeOrData::Edge(Lex), EdgeOrData::Edge(Imp)))
-            },
-            &DefaultDataEquiv::default(),
-            s0,
-        );
+            })
+            .resolve(s0);
 
         let env_vec = env.into_iter().collect::<Vec<_>>();
         assert_eq!(1, env_vec.len());
@@ -523,22 +512,20 @@ mod tests {
 
         compile_regex!(type Machine<Lbl> = Lex* Imp? Def);
 
-        let env = resolve(
-            &scope_graph,
-            &Machine::new(),
-            &|x: &TData<usize>| x.matches("x"),
-            &|&l1: &LblD, &l2: &LblD| {
+        let env = scope_graph
+            .query()
+            .with_path_wellformedness(Machine::new())
+            .with_data_wellformedness(|x: &TData<usize>| x.matches("x"))
+            .with_label_order(|&l1: &LblD, &l2: &LblD| {
                 matches!(
                     (l1, l2),
                     (EdgeOrData::Edge(Imp), EdgeOrData::Edge(Lex))
                         | (EdgeOrData::Edge(Def), EdgeOrData::Edge(Imp))
                         | (EdgeOrData::Edge(Def), EdgeOrData::Edge(Lex))
                 )
-            },
-            &DefaultDataEquiv::default(),
-            s_let,
-        )
-        .unwrap();
+            })
+            .resolve(s_let)
+            .unwrap();
 
         let env_vec = env.into_iter().collect::<Vec<_>>();
         assert_eq!(1, env_vec.len());
@@ -557,21 +544,19 @@ mod tests {
     {
         compile_regex!(type Machine<Lbl> = Lex* Imp? Def);
 
-        let env = resolve(
-            scope_graph,
-            &Machine::new(),
-            &|x: &TData<usize>| x.matches("x"),
-            &|&l1: &LblD, &l2: &LblD| {
+        let env = scope_graph
+            .query()
+            .with_path_wellformedness(Machine::new())
+            .with_data_wellformedness(|x: &TData<usize>| x.matches("x"))
+            .with_label_order(|&l1: &LblD, &l2: &LblD| {
                 matches!(
                     (l1, l2),
                     (EdgeOrData::Edge(Imp), EdgeOrData::Edge(Lex))
                         | (EdgeOrData::Edge(Def), EdgeOrData::Edge(Imp))
                         | (EdgeOrData::Edge(Def), EdgeOrData::Edge(Lex))
                 )
-            },
-            &DefaultDataEquiv::default(),
-            s_let,
-        );
+            })
+            .resolve(s_let);
 
         let env_vec = env.into_iter().collect::<Vec<_>>();
         assert_eq!(1, env_vec.len());
