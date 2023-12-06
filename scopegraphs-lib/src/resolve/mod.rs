@@ -4,7 +4,7 @@ use std::fmt::{Debug, Formatter};
 use std::hash::Hash;
 use std::sync::Arc;
 
-use super::Scope;
+use super::{Scope, ScopeGraph};
 
 pub mod containers;
 pub mod lookup;
@@ -267,5 +267,85 @@ where
 {
     fn from_iter<T: IntoIterator<Item = Env<'sg, LABEL, DATA>>>(iter: T) -> Self {
         iter.into_iter().flatten().collect()
+    }
+}
+
+pub trait Resolve {
+    type EnvContainer;
+
+    fn resolve(&self, scope: Scope) -> Self::EnvContainer;
+}
+
+pub struct Query<'sg, LABEL, DATA, CMPL, PWF, DWF, LO, DEq> {
+    scope_graph: &'sg ScopeGraph<LABEL, DATA, CMPL>,
+    path_wellformedness: PWF,
+    data_wellformedness: DWF,
+    label_order: LO,
+    data_equivalence: DEq,
+}
+
+impl<'sg, LABEL, DATA, CMPL, PWF, DWF, LO, DEq> Query<'sg, LABEL, DATA, CMPL, PWF, DWF, LO, DEq> {
+    pub fn with_path_wellformedness<NPWF>(
+        self,
+        new_path_wellformedness: NPWF,
+    ) -> Query<'sg, LABEL, DATA, CMPL, NPWF, DWF, LO, DEq> {
+        Query {
+            scope_graph: self.scope_graph,
+            path_wellformedness: new_path_wellformedness,
+            data_wellformedness: self.data_wellformedness,
+            label_order: self.label_order,
+            data_equivalence: self.data_equivalence,
+        }
+    }
+
+    pub fn with_data_wellformedness<NDWF>(
+        self,
+        new_data_wellformedness: NDWF,
+    ) -> Query<'sg, LABEL, DATA, CMPL, PWF, NDWF, LO, DEq> {
+        Query {
+            scope_graph: self.scope_graph,
+            path_wellformedness: self.path_wellformedness,
+            data_wellformedness: new_data_wellformedness,
+            label_order: self.label_order,
+            data_equivalence: self.data_equivalence,
+        }
+    }
+
+    pub fn with_label_order<NLO>(
+        self,
+        new_label_order: NLO,
+    ) -> Query<'sg, LABEL, DATA, CMPL, PWF, DWF, NLO, DEq> {
+        Query {
+            scope_graph: self.scope_graph,
+            path_wellformedness: self.path_wellformedness,
+            data_wellformedness: self.data_wellformedness,
+            label_order: new_label_order,
+            data_equivalence: self.data_equivalence,
+        }
+    }
+
+    pub fn with_data_equivalence<NDEq>(
+        self,
+        new_data_equivalence: NDEq,
+    ) -> Query<'sg, LABEL, DATA, CMPL, PWF, DWF, LO, NDEq> {
+        Query {
+            scope_graph: self.scope_graph,
+            path_wellformedness: self.path_wellformedness,
+            data_wellformedness: self.data_wellformedness,
+            label_order: self.label_order,
+            data_equivalence: new_data_equivalence,
+        }
+    }
+}
+
+impl<LABEL, DATA, CMPL> ScopeGraph<LABEL, DATA, CMPL> {
+    pub fn query(&self) -> Query<LABEL, DATA, CMPL, (), (), (), ()> {
+        Query {
+            scope_graph: self,
+            path_wellformedness: (),
+            data_wellformedness: (),
+            label_order: (),
+            data_equivalence: (),
+        }
     }
 }
