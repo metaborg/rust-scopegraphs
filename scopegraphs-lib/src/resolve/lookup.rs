@@ -252,10 +252,11 @@ where
 
 #[cfg(test)]
 mod tests {
-    use scopegraphs_macros::{compile_regex, Label};
+    use scopegraphs_macros::Label;
 
     use scopegraphs::{
         completeness::{Completeness, ExplicitClose, ImplicitClose, UncheckedCompleteness},
+        label::query_regex,
         resolve::{EdgeOrData, Resolve, ResolvedPath},
         Scope, ScopeGraph,
     };
@@ -311,11 +312,9 @@ mod tests {
         let s0 = scope_graph.add_scope_default();
         scope_graph.add_decl(s0, Def, TData::from_default("x"));
 
-        compile_regex!(type Machine<Lbl> = Def);
-
         let env = scope_graph
             .query()
-            .with_path_wellformedness(Machine::new())
+            .with_path_wellformedness(query_regex!(Lbl[Def]))
             .with_data_wellformedness(|x: &TData<()>| x.matches("x"))
             .resolve(s0);
 
@@ -334,11 +333,9 @@ mod tests {
         let s0 = scope_graph.add_scope_default();
         scope_graph.add_decl(s0, Def, TData::from_default("x"));
 
-        compile_regex!(type Machine<Lbl> = Def);
-
         let env = scope_graph
             .query()
-            .with_path_wellformedness(Machine::new())
+            .with_path_wellformedness(query_regex!(Lbl[Def]))
             .with_data_wellformedness(|x: &TData<()>| x.matches("y"))
             .resolve(s0);
 
@@ -357,11 +354,9 @@ mod tests {
         scope_graph.add_decl(s0, Def, Data { name: "x", data: 0 });
         scope_graph.add_decl(s1, Def, Data { name: "x", data: 1 });
 
-        compile_regex!(type Machine<Lbl> = Lex Def);
-
         let env = scope_graph
             .query()
-            .with_path_wellformedness(Machine::new())
+            .with_path_wellformedness(query_regex!(Lbl[Lex Def]))
             .with_data_wellformedness(&|x: &TData<usize>| x.matches("x"))
             .resolve(s0);
 
@@ -382,11 +377,9 @@ mod tests {
         scope_graph.add_edge(s0, Lex, s1);
         scope_graph.add_decl(s0, Def, Data { name: "x", data: 0 });
 
-        compile_regex!(type Machine<Lbl> = Lex Def);
-
         let env = scope_graph
             .query()
-            .with_path_wellformedness(Machine::new())
+            .with_path_wellformedness(query_regex!(Lbl[Lex Def]))
             .with_data_wellformedness(|x: &TData<usize>| x.matches("x"))
             .resolve(s0);
 
@@ -407,11 +400,9 @@ mod tests {
         scope_graph.add_decl(s1, Def, Data { name: "x", data: 0 });
         scope_graph.add_decl(s2, Def, Data { name: "x", data: 1 });
 
-        compile_regex!(type Machine<Lbl> = Lex Def);
-
         let env = scope_graph
             .query()
-            .with_path_wellformedness(Machine::new())
+            .with_path_wellformedness(query_regex!(Lbl[Lex Def]))
             .with_data_wellformedness(|x: &TData<usize>| x.matches("x"))
             .with_label_order(|&l1: &LblD, &l2: &LblD| {
                 matches!((l1, l2), (EdgeOrData::Edge(Lex), EdgeOrData::Edge(Imp)))
@@ -510,11 +501,9 @@ mod tests {
         scope_graph.close(s_let, &Lex);
         scope_graph.close(s_let, &Def);
 
-        compile_regex!(type Machine<Lbl> = Lex* Imp? Def);
-
         let env = scope_graph
             .query()
-            .with_path_wellformedness(Machine::new())
+            .with_path_wellformedness(query_regex!(Lbl[Lex* Imp? Def]))
             .with_data_wellformedness(|x: &TData<usize>| x.matches("x"))
             .with_label_order(|&l1: &LblD, &l2: &LblD| {
                 matches!(
@@ -542,11 +531,9 @@ mod tests {
     ) where
         CMPL: for<'a> Completeness<Lbl, TData<'a, usize>, GetEdgesResult = Vec<Scope>>,
     {
-        compile_regex!(type Machine<Lbl> = Lex* Imp? Def);
-
         let env = scope_graph
             .query()
-            .with_path_wellformedness(Machine::new())
+            .with_path_wellformedness(query_regex!(Lbl[Lex* Imp? Def]))
             .with_data_wellformedness(|x: &TData<usize>| x.matches("x"))
             .with_label_order(|&l1: &LblD, &l2: &LblD| {
                 matches!(

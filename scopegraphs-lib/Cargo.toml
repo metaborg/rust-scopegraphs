@@ -10,9 +10,9 @@ bumpalo = "3.14.0"
 log = "0.4.20"
 prust-lib = {git="https://github.com/jdonszelmann/prust", branch = "main"}
 scopegraphs-regular-expressions = {path = "../scopegraphs-regular-expressions"}
+scopegraphs-macros = {path = "../scopegraphs-macros"}
 
 [dev-dependencies]
 scopegraphs = {path = "../scopegraphs"}
-scopegraphs-macros = {path = "../scopegraphs-macros"}
 env_logger = "0.10.1"
 ctor = "0.2.5"
