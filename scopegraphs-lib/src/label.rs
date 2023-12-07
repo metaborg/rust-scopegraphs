@@ -13,8 +13,8 @@ pub trait Label {
 macro_rules! query_regex {
     ($label_type:path: $($regex:tt)*) => {
         {
-            scopegraphs_macros::compile_regex!(type ___QueryRegex___<$label_type> = $($regex)*);
-            ___QueryRegex___::new()
+            scopegraphs_macros::compile_regex!(type QueryRegex<$label_type> = $($regex)*);
+            QueryRegex::new()
         }
     };
 }
