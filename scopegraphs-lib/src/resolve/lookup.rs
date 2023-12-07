@@ -257,7 +257,7 @@ mod tests {
     use scopegraphs::{
         completeness::{Completeness, ExplicitClose, ImplicitClose, UncheckedCompleteness},
         label::query_regex,
-        resolve::{EdgeOrData, Resolve, ResolvedPath},
+        resolve::{Resolve, ResolvedPath},
         Scope, ScopeGraph,
     };
 
@@ -268,7 +268,6 @@ mod tests {
         Def,
     }
     use Lbl::*;
-    type LblD = EdgeOrData<Lbl>;
 
     #[derive(Hash, PartialEq, Eq, Debug, Default)]
     enum TData<'a, T> {
@@ -404,7 +403,7 @@ mod tests {
             .query()
             .with_path_wellformedness(query_regex!(Lbl: Lex Def))
             .with_data_wellformedness(|x: &TData<usize>| x.matches("x"))
-            .with_label_order(label_order!(Lbl: {$, Lex} < Imp))
+            .with_label_order(label_order!(Lbl: Lex < Imp))
             .resolve(s0);
 
         let env_vec = env.into_iter().collect::<Vec<_>>();
@@ -503,14 +502,7 @@ mod tests {
             .query()
             .with_path_wellformedness(query_regex!(Lbl: Lex* Imp? Def))
             .with_data_wellformedness(|x: &TData<usize>| x.matches("x"))
-            .with_label_order(|&l1: &LblD, &l2: &LblD| {
-                matches!(
-                    (l1, l2),
-                    (EdgeOrData::Edge(Imp), EdgeOrData::Edge(Lex))
-                        | (EdgeOrData::Edge(Def), EdgeOrData::Edge(Imp))
-                        | (EdgeOrData::Edge(Def), EdgeOrData::Edge(Lex))
-                )
-            })
+            .with_label_order(label_order!(Lbl: Def < Imp < Lex))
             .resolve(s_let)
             .unwrap();
 
@@ -533,14 +525,7 @@ mod tests {
             .query()
             .with_path_wellformedness(query_regex!(Lbl: Lex* Imp? Def))
             .with_data_wellformedness(|x: &TData<usize>| x.matches("x"))
-            .with_label_order(|&l1: &LblD, &l2: &LblD| {
-                matches!(
-                    (l1, l2),
-                    (EdgeOrData::Edge(Imp), EdgeOrData::Edge(Lex))
-                        | (EdgeOrData::Edge(Def), EdgeOrData::Edge(Imp))
-                        | (EdgeOrData::Edge(Def), EdgeOrData::Edge(Lex))
-                )
-            })
+            .with_label_order(label_order!(Lbl: Def < Imp < Lex))
             .resolve(s_let);
 
         let env_vec = env.into_iter().collect::<Vec<_>>();

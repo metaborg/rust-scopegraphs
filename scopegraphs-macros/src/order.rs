@@ -165,14 +165,18 @@ impl OrderInput {
                             // insert forward entry and queue transitive elements for transitive closure computation
                             if forward.entry(lower).or_default().insert(upper) {
                                 for trans_upper in forward.entry(upper).or_default().iter() {
-                                    queue.push_back((lower, trans_upper));
+                                    if *trans_upper != upper {
+                                        queue.push_back((lower, trans_upper));
+                                    }
                                 }
                             }
 
                             // insert backward entry and queue transitive elements for transitive closure computation
                             if backward.entry(upper).or_default().insert(lower) {
-                                for trans_lower in backward.entry(upper).or_default().iter() {
-                                    queue.push_back((trans_lower, upper));
+                                for trans_lower in backward.entry(lower).or_default().iter() {
+                                    if *trans_lower != lower {
+                                        queue.push_back((trans_lower, upper));
+                                    }
                                 }
                             }
                         }
