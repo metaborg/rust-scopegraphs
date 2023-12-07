@@ -11,7 +11,7 @@ pub trait Label {
 
 #[macro_export]
 macro_rules! query_regex {
-    ($label_type:path[$($regex:tt)*]) => {
+    ($label_type:path: $($regex:tt)*) => {
         {
             scopegraphs_macros::compile_regex!(type ___QueryRegex___<$label_type> = $($regex)*);
             ___QueryRegex___::new()

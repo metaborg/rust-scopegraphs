@@ -1,10 +1,12 @@
 use crate::label::impl_label;
+use crate::order::OrderInput;
 use crate::regex::RegexInput;
 
 use proc_macro::TokenStream;
 use syn::{parse_macro_input, DeriveInput};
 
 mod label;
+mod order;
 mod regex;
 
 /// Derive [`Label`] implementation.
@@ -54,4 +56,10 @@ pub fn label_derive(input: TokenStream) -> TokenStream {
 pub fn compile_regex(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as RegexInput);
     input.compile()
+}
+
+#[proc_macro]
+pub fn label_order(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as OrderInput);
+    input.compile().into()
 }

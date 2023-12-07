@@ -252,7 +252,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use scopegraphs_macros::Label;
+    use scopegraphs_macros::{label_order, Label};
 
     use scopegraphs::{
         completeness::{Completeness, ExplicitClose, ImplicitClose, UncheckedCompleteness},
@@ -314,7 +314,7 @@ mod tests {
 
         let env = scope_graph
             .query()
-            .with_path_wellformedness(query_regex!(Lbl[Def]))
+            .with_path_wellformedness(query_regex!(Lbl: Def))
             .with_data_wellformedness(|x: &TData<()>| x.matches("x"))
             .resolve(s0);
 
@@ -335,7 +335,7 @@ mod tests {
 
         let env = scope_graph
             .query()
-            .with_path_wellformedness(query_regex!(Lbl[Def]))
+            .with_path_wellformedness(query_regex!(Lbl: Def))
             .with_data_wellformedness(|x: &TData<()>| x.matches("y"))
             .resolve(s0);
 
@@ -356,7 +356,7 @@ mod tests {
 
         let env = scope_graph
             .query()
-            .with_path_wellformedness(query_regex!(Lbl[Lex Def]))
+            .with_path_wellformedness(query_regex!(Lbl: Lex Def))
             .with_data_wellformedness(&|x: &TData<usize>| x.matches("x"))
             .resolve(s0);
 
@@ -379,7 +379,7 @@ mod tests {
 
         let env = scope_graph
             .query()
-            .with_path_wellformedness(query_regex!(Lbl[Lex Def]))
+            .with_path_wellformedness(query_regex!(Lbl: Lex Def))
             .with_data_wellformedness(|x: &TData<usize>| x.matches("x"))
             .resolve(s0);
 
@@ -402,11 +402,9 @@ mod tests {
 
         let env = scope_graph
             .query()
-            .with_path_wellformedness(query_regex!(Lbl[Lex Def]))
+            .with_path_wellformedness(query_regex!(Lbl: Lex Def))
             .with_data_wellformedness(|x: &TData<usize>| x.matches("x"))
-            .with_label_order(|&l1: &LblD, &l2: &LblD| {
-                matches!((l1, l2), (EdgeOrData::Edge(Lex), EdgeOrData::Edge(Imp)))
-            })
+            .with_label_order(label_order!(Lbl: {$, Lex} < Imp))
             .resolve(s0);
 
         let env_vec = env.into_iter().collect::<Vec<_>>();
@@ -503,7 +501,7 @@ mod tests {
 
         let env = scope_graph
             .query()
-            .with_path_wellformedness(query_regex!(Lbl[Lex* Imp? Def]))
+            .with_path_wellformedness(query_regex!(Lbl: Lex* Imp? Def))
             .with_data_wellformedness(|x: &TData<usize>| x.matches("x"))
             .with_label_order(|&l1: &LblD, &l2: &LblD| {
                 matches!(
@@ -533,7 +531,7 @@ mod tests {
     {
         let env = scope_graph
             .query()
-            .with_path_wellformedness(query_regex!(Lbl[Lex* Imp? Def]))
+            .with_path_wellformedness(query_regex!(Lbl: Lex* Imp? Def))
             .with_data_wellformedness(|x: &TData<usize>| x.matches("x"))
             .with_label_order(|&l1: &LblD, &l2: &LblD| {
                 matches!(

@@ -12,6 +12,7 @@ proc-macro = true
 syn = { version = "2.0.29", features = ["full"] }
 quote = "1.0.33"
 scopegraphs-regular-expressions = {path = "../scopegraphs-regular-expressions", features = ["rust-code-emitting", "dot"]}
+proc-macro2 = "1.0.69"
 
 [dev-dependencies]
 scopegraphs = {path="../scopegraphs"}
