@@ -10,7 +10,7 @@ use std::{
 };
 
 use completeness::Completeness;
-use completeness::{CriticalEdgeBasedCompleteness, ExplicitClose, Witness};
+use completeness::{CriticalEdgeBasedCompleteness, ExplicitClose};
 
 use self::completeness::UncheckedCompleteness;
 
@@ -190,7 +190,7 @@ where
         let scope = self.inner_scope_graph.add_scope(data);
         self.completeness
             .borrow_mut()
-            .init_scope_with(HashSet::from_iter(open_edges.into_iter()), Witness(()));
+            .init_scope_with(HashSet::from_iter(open_edges.into_iter()));
         scope
     }
 
@@ -202,7 +202,7 @@ where
         let scope = self.inner_scope_graph.add_scope(data);
         self.completeness
             .borrow_mut()
-            .init_scope_with(HashSet::new(), Witness(()));
+            .init_scope_with(HashSet::new());
         scope
     }
 }

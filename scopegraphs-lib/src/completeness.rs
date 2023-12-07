@@ -156,15 +156,13 @@ impl<LABEL: Hash + Eq> CriticalEdgeSet<LABEL> {
     }
 }
 
-pub struct Witness(pub(super) ()); // Prevent abuse of trait function bt requiring argument that can only be constructed locally.
-
 /// Sub-trait of [`Completeness`] that uses _critical edges_ (scope-label pairs) to manage completeness.
 ///
 /// Provides utility function to create scopes with particular open edges.
 ///
 /// Should not be called externally, but only from utility function on [`super::ScopeGraph`].
 pub trait CriticalEdgeBasedCompleteness<LABEL, DATA>: Completeness<LABEL, DATA> {
-    fn init_scope_with(&mut self, open_edges: HashSet<LABEL>, _witness: Witness);
+    fn init_scope_with(&mut self, open_edges: HashSet<LABEL>);
 }
 
 /// Error returned when attempting to add an edge with a label that is already closed in that scope.
@@ -215,7 +213,6 @@ impl<LABEL: Hash + Eq + Label, DATA> Completeness<LABEL, DATA> for ExplicitClose
         <ExplicitClose<LABEL> as CriticalEdgeBasedCompleteness<LABEL, DATA>>::init_scope_with(
             self,
             HashSet::from_iter(LABEL::iter()),
-            Witness(()),
         )
     }
 
@@ -223,7 +220,6 @@ impl<LABEL: Hash + Eq + Label, DATA> Completeness<LABEL, DATA> for ExplicitClose
         <ExplicitClose<LABEL> as CriticalEdgeBasedCompleteness<LABEL, DATA>>::init_scope_with(
             self,
             HashSet::new(),
-            Witness(()),
         )
     }
 
@@ -269,7 +265,7 @@ impl<LABEL: Hash + Eq + Label, DATA> Completeness<LABEL, DATA> for ExplicitClose
 impl<LABEL: Hash + Eq + Label, DATA> CriticalEdgeBasedCompleteness<LABEL, DATA>
     for ExplicitClose<LABEL>
 {
-    fn init_scope_with(&mut self, open_labels: HashSet<LABEL>, _witness: Witness) {
+    fn init_scope_with(&mut self, open_labels: HashSet<LABEL>) {
         self.critical_edges.init_scope(open_labels)
     }
 }
@@ -310,7 +306,6 @@ impl<LABEL: Hash + Eq + Label, DATA> Completeness<LABEL, DATA> for ImplicitClose
         <ImplicitClose<LABEL> as CriticalEdgeBasedCompleteness<LABEL, DATA>>::init_scope_with(
             self,
             HashSet::from_iter(LABEL::iter()),
-            Witness(()),
         )
     }
 
@@ -318,7 +313,6 @@ impl<LABEL: Hash + Eq + Label, DATA> Completeness<LABEL, DATA> for ImplicitClose
         <ImplicitClose<LABEL> as CriticalEdgeBasedCompleteness<LABEL, DATA>>::init_scope_with(
             self,
             HashSet::new(),
-            Witness(()),
         )
     }
 
@@ -360,7 +354,7 @@ impl<LABEL: Hash + Eq + Label, DATA> Completeness<LABEL, DATA> for ImplicitClose
 impl<LABEL: Hash + Eq + Label, DATA> CriticalEdgeBasedCompleteness<LABEL, DATA>
     for ImplicitClose<LABEL>
 {
-    fn init_scope_with(&mut self, open_labels: HashSet<LABEL>, _witness: Witness) {
+    fn init_scope_with(&mut self, open_labels: HashSet<LABEL>) {
         self.critical_edges.init_scope(open_labels)
     }
 }
