@@ -137,6 +137,7 @@
 use crate::regex::Symbol;
 use crate::Regex;
 use std::fmt::Debug;
+use std::mem;
 use std::ops::Deref;
 use std::rc::Rc;
 use syn::parse::{Parse, ParseStream};
@@ -252,9 +253,7 @@ impl<'a> Lexer<'a> {
 
     /// Advances lexer to the next token.
     fn next(&mut self) -> syn::Result<Token> {
-        let token = self.top.clone();
-        self.top = Self::scan(self.input)?;
-        Ok(token)
+        Ok(mem::replace(&mut self.top, Self::scan(self.input)?))
     }
 
     /// Returns the current position in the stream (mainly for emitting errors).
