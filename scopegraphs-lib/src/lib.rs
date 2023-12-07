@@ -27,7 +27,6 @@ impl Debug for Scope {
 // Mutability: RefCell in Scope, not Scope in RefCell
 // Concurrency: RW-lock on edges
 
-#[derive(Default)]
 pub struct InnerScopeGraph<LABEL, DATA> {
     edges: Vec<HashMap<LABEL, HashSet<Scope>>>, // FIXME: BTreeMap? Vectors? Whatever?
     data: Vec<DATA>,
