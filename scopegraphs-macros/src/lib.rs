@@ -58,6 +58,36 @@ pub fn compile_regex(input: TokenStream) -> TokenStream {
     input.compile()
 }
 
+/// Syntax: `$type: $( $label_order ),*`
+/// with
+/// `$label_order`: `$( $label_group )<.`
+/// `$label_group`: `{ $($variant),* } | $variant`
+/// `$variant`: `$ident | '$'`
+///
+/// For example
+/// ```rust
+/// # use scopegraphs_macros::label_order;
+/// enum Lbl {
+///     Def,
+///     Mod,
+///     Lex,
+///     Imp,
+/// }
+///
+/// label_order!(Lbl: $ < { Def, Mod } < Lex, Imp < Lex);
+/// ```
+///
+/// Here, `$` means the end-of-path label: i.e., the current scope.
+///
+/// Using `{ ... }`, labels with equal priority can be grouped.
+///
+/// Multiple partial orders can be combined using `,`-separators: `X < Y, Z < Y`.
+///
+/// Sequences of multiple `<` can be chained (`X < Y < Z`).
+/// This is equivalent to the 2-windowed decomposition: `X < Y, Y < Z` (which, by transitivity, also includes `X < Z`).
+///
+/// The macro will at compile time validate whether the order is a strict partial order, and report
+/// any symmetric or reflexive entries.
 #[proc_macro]
 pub fn label_order(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as OrderInput);
