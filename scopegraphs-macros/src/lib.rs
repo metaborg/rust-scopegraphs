@@ -67,6 +67,8 @@ pub fn compile_regex(input: TokenStream) -> TokenStream {
 /// For example
 /// ```rust
 /// # use scopegraphs_macros::label_order;
+///
+/// #[derive(Copy, Clone)]
 /// enum Lbl {
 ///     Def,
 ///     Mod,

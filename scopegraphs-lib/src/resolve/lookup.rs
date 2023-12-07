@@ -257,7 +257,7 @@ mod tests {
     use scopegraphs::{
         completeness::{Completeness, ExplicitClose, ImplicitClose, UncheckedCompleteness},
         label::query_regex,
-        resolve::{Resolve, ResolvedPath},
+        resolve::{DataWellformedness, Resolve, ResolvedPath},
         Scope, ScopeGraph,
     };
 
@@ -270,31 +270,31 @@ mod tests {
     use Lbl::*;
 
     #[derive(Hash, PartialEq, Eq, Debug, Default)]
-    enum TData<'a, T> {
+    enum TData<'a> {
         #[default]
         NoData,
         Data {
             name: &'a str,
-            data: T,
+            data: usize,
         },
     }
 
     use TData::*;
 
-    impl<'a, T> TData<'a, T> {
+    impl<'a> TData<'a> {
         fn matches(&self, n: &str) -> bool {
             match self {
                 NoData => false,
                 Data { name, .. } => *name == n,
             }
         }
-    }
-    impl<'a, T: Default> TData<'a, T> {
+
+        fn matcher(n: &'a str) -> impl DataWellformedness<Self> {
+            |data: &Self| data.matches(n)
+        }
+
         fn from_default(name: &'a str) -> Self {
-            Data {
-                name,
-                data: T::default(),
-            }
+            Data { name, data: 0 }
         }
     }
 
@@ -305,7 +305,7 @@ mod tests {
 
     #[test]
     fn test_match_data() {
-        let mut scope_graph: ScopeGraph<Lbl, TData<()>, UncheckedCompleteness> =
+        let mut scope_graph: ScopeGraph<Lbl, TData, UncheckedCompleteness> =
             unsafe { ScopeGraph::raw() };
 
         let s0 = scope_graph.add_scope_default();
@@ -314,19 +314,19 @@ mod tests {
         let env = scope_graph
             .query()
             .with_path_wellformedness(query_regex!(Lbl: Def))
-            .with_data_wellformedness(|x: &TData<()>| x.matches("x"))
+            .with_data_wellformedness(TData::matcher("x"))
             .resolve(s0);
 
         let env_vec = env.into_iter().collect::<Vec<_>>();
         assert_eq!(1, env_vec.len());
 
-        let path: &ResolvedPath<Lbl, TData<()>> = &env_vec[0];
+        let path: &ResolvedPath<Lbl, TData> = &env_vec[0];
         assert!(path.data().matches("x"))
     }
 
     #[test]
     fn test_no_match_other_data() {
-        let mut scope_graph: ScopeGraph<Lbl, TData<()>, UncheckedCompleteness> =
+        let mut scope_graph: ScopeGraph<Lbl, TData, UncheckedCompleteness> =
             unsafe { ScopeGraph::raw() };
 
         let s0 = scope_graph.add_scope_default();
@@ -335,7 +335,7 @@ mod tests {
         let env = scope_graph
             .query()
             .with_path_wellformedness(query_regex!(Lbl: Def))
-            .with_data_wellformedness(|x: &TData<()>| x.matches("y"))
+            .with_data_wellformedness(TData::matcher("y"))
             .resolve(s0);
 
         let env_vec = env.into_iter().collect::<Vec<_>>();
@@ -344,7 +344,7 @@ mod tests {
 
     #[test]
     fn test_regex_enforces_step() {
-        let mut scope_graph: ScopeGraph<Lbl, TData<usize>, UncheckedCompleteness> =
+        let mut scope_graph: ScopeGraph<Lbl, TData, UncheckedCompleteness> =
             unsafe { ScopeGraph::raw() };
 
         let s0 = scope_graph.add_scope_default();
@@ -356,19 +356,19 @@ mod tests {
         let env = scope_graph
             .query()
             .with_path_wellformedness(query_regex!(Lbl: Lex Def))
-            .with_data_wellformedness(&|x: &TData<usize>| x.matches("x"))
+            .with_data_wellformedness(TData::matcher("x"))
             .resolve(s0);
 
         let env_vec = env.into_iter().collect::<Vec<_>>();
         assert_eq!(1, env_vec.len());
 
-        let path: &ResolvedPath<Lbl, TData<usize>> = &env_vec[0];
+        let path: &ResolvedPath<Lbl, TData> = &env_vec[0];
         assert!(matches!(path.data(), &Data { name: "x", data: 1 }))
     }
 
     #[test]
     fn test_regex_filter() {
-        let mut scope_graph: ScopeGraph<Lbl, TData<usize>, UncheckedCompleteness> =
+        let mut scope_graph: ScopeGraph<Lbl, TData, UncheckedCompleteness> =
             unsafe { ScopeGraph::raw() };
 
         let s0 = scope_graph.add_scope_default();
@@ -379,7 +379,7 @@ mod tests {
         let env = scope_graph
             .query()
             .with_path_wellformedness(query_regex!(Lbl: Lex Def))
-            .with_data_wellformedness(|x: &TData<usize>| x.matches("x"))
+            .with_data_wellformedness(TData::matcher("x"))
             .resolve(s0);
 
         let env_vec = env.into_iter().collect::<Vec<_>>();
@@ -388,7 +388,7 @@ mod tests {
 
     #[test]
     fn test_shadow_applied() {
-        let mut scope_graph: ScopeGraph<Lbl, TData<usize>, UncheckedCompleteness> =
+        let mut scope_graph: ScopeGraph<Lbl, TData, UncheckedCompleteness> =
             unsafe { ScopeGraph::raw() };
 
         let s0 = scope_graph.add_scope_default();
@@ -402,20 +402,20 @@ mod tests {
         let env = scope_graph
             .query()
             .with_path_wellformedness(query_regex!(Lbl: Lex Def))
-            .with_data_wellformedness(|x: &TData<usize>| x.matches("x"))
+            .with_data_wellformedness(TData::matcher("x"))
             .with_label_order(label_order!(Lbl: Lex < Imp))
             .resolve(s0);
 
         let env_vec = env.into_iter().collect::<Vec<_>>();
         assert_eq!(1, env_vec.len());
 
-        let path: &ResolvedPath<Lbl, TData<usize>> = &env_vec[0];
+        let path: &ResolvedPath<Lbl, TData> = &env_vec[0];
         assert!(matches!(path.data(), &Data { name: "x", data: 1 }))
     }
 
     #[test]
     fn test_label_order_complex_raw() {
-        let mut scope_graph: ScopeGraph<Lbl, TData<usize>, UncheckedCompleteness> =
+        let mut scope_graph: ScopeGraph<Lbl, TData, UncheckedCompleteness> =
             unsafe { ScopeGraph::raw() };
 
         let s0 = scope_graph.add_scope_default();
@@ -435,7 +435,7 @@ mod tests {
 
     #[test]
     fn test_label_order_complex_implicit_close() {
-        let mut scope_graph: ScopeGraph<Lbl, TData<usize>, ImplicitClose<Lbl>> =
+        let mut scope_graph: ScopeGraph<Lbl, TData, ImplicitClose<Lbl>> =
             ScopeGraph::new(ImplicitClose::default());
 
         let s0 = scope_graph.add_scope_default();
@@ -467,7 +467,7 @@ mod tests {
 
     #[test]
     fn test_label_order_complex_explicit_close() {
-        let mut scope_graph: ScopeGraph<Lbl, TData<usize>, ExplicitClose<Lbl>> =
+        let mut scope_graph: ScopeGraph<Lbl, TData, ExplicitClose<Lbl>> =
             ScopeGraph::new(ExplicitClose::default());
 
         let s0 = scope_graph.add_scope_default_closed();
@@ -501,7 +501,7 @@ mod tests {
         let env = scope_graph
             .query()
             .with_path_wellformedness(query_regex!(Lbl: Lex* Imp? Def))
-            .with_data_wellformedness(|x: &TData<usize>| x.matches("x"))
+            .with_data_wellformedness(TData::matcher("x"))
             .with_label_order(label_order!(Lbl: Def < Imp < Lex))
             .resolve(s_let)
             .unwrap();
@@ -509,29 +509,27 @@ mod tests {
         let env_vec = env.into_iter().collect::<Vec<_>>();
         assert_eq!(1, env_vec.len());
 
-        let path: &ResolvedPath<Lbl, TData<usize>> = &env_vec[0];
+        let path: &ResolvedPath<Lbl, TData> = &env_vec[0];
         assert!(matches!(path.data(), &Data { name: "x", data: 2 }));
 
         // todo!("assert the correct edges are closed!")
     }
 
-    fn resolve_complex_unchecked<CMPL>(
-        scope_graph: &mut ScopeGraph<Lbl, TData<usize>, CMPL>,
-        s_let: Scope,
-    ) where
-        CMPL: for<'a> Completeness<Lbl, TData<'a, usize>, GetEdgesResult = Vec<Scope>>,
+    fn resolve_complex_unchecked<CMPL>(scope_graph: &mut ScopeGraph<Lbl, TData, CMPL>, s_let: Scope)
+    where
+        CMPL: for<'a> Completeness<Lbl, TData<'a>, GetEdgesResult = Vec<Scope>>,
     {
         let env = scope_graph
             .query()
             .with_path_wellformedness(query_regex!(Lbl: Lex* Imp? Def))
-            .with_data_wellformedness(|x: &TData<usize>| x.matches("x"))
+            .with_data_wellformedness(TData::matcher("x"))
             .with_label_order(label_order!(Lbl: Def < Imp < Lex))
             .resolve(s_let);
 
         let env_vec = env.into_iter().collect::<Vec<_>>();
         assert_eq!(1, env_vec.len());
 
-        let path: &ResolvedPath<Lbl, TData<usize>> = &env_vec[0];
+        let path: &ResolvedPath<Lbl, TData> = &env_vec[0];
         assert!(matches!(path.data(), &Data { name: "x", data: 2 }));
     }
 }
