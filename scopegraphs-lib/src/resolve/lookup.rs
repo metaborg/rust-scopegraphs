@@ -146,10 +146,8 @@ where
         log::info!("Resolving max-edges {:?} in {:?}", max, tgt);
 
         max.into_iter()
-            .map::<Rc<ENVC>, _>(move |edge| {
+            .map::<Rc<ENVC>, _>(|edge| {
                 if let Some(env) = cache.borrow().get(&edge) {
-                    // Here we create an Rc<ENVC> clone that is not owned byt the cache
-                    // However, it is dropped in the reduce below
                     return env.clone();
                 }
                 // sub-environment that has higher priority that the `max`-environment
