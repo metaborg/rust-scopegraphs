@@ -33,30 +33,28 @@ pub trait RegexMatcher<A>: Clone {
         }
     }
 
+    /// Steps once for each element in the iterator
+    fn step_unless_empty(&mut self, inp: impl IntoIterator<Item = A>) {
+        for i in inp {
+            self.step(i);
+            if self.is_empty() {
+                return;
+            }
+        }
+    }
+
     /// Returns true if the regular expression accepts the input iterator
     fn accepts(&self, iter: impl IntoIterator<Item = A>) -> bool {
         let mut this = self.clone();
-        for i in iter {
-            this.step(i);
-            if this.is_empty() {
-                return false;
-            }
-        }
-
+        this.step_unless_empty(iter);
         this.is_accepting()
     }
 
     /// Returns true if the regular expression accepts a word of which the input iterator is a prefix
     fn accepts_prefix(&self, iter: impl IntoIterator<Item = A>) -> bool {
         let mut this = self.clone();
-        for i in iter {
-            this.step(i);
-            if this.is_empty() {
-                return false;
-            }
-        }
-
-        true
+        this.step_unless_empty(iter);
+        !this.is_empty()
     }
 
     fn is_final(&self) -> bool;
