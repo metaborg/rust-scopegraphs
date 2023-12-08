@@ -173,7 +173,7 @@ pub struct EdgeClosedError<LABEL> {
 }
 
 /// Value returned when a query cannot yet be computed because some edge it depends on is still closed.
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub struct Delay<LABEL> {
     pub scope: Scope,
     pub label: LABEL,

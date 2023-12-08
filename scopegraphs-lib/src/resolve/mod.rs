@@ -109,10 +109,19 @@ where
 }
 
 /// A path in the scope graph, including the data of the target of the path.
-#[derive(Hash, PartialEq, Eq, Debug, Clone)]
+#[derive(Hash, PartialEq, Eq, Debug)]
 pub struct ResolvedPath<'sg, LABEL, DATA> {
     path: Path<LABEL>,
     data: &'sg DATA,
+}
+
+impl<'sg, LABEL: Clone, DATA> Clone for ResolvedPath<'sg, LABEL, DATA> {
+    fn clone(&self) -> Self {
+        Self {
+            path: self.path.clone(),
+            data: self.data,
+        }
+    }
 }
 
 impl<'sg, LABEL, DATA> ResolvedPath<'sg, LABEL, DATA> {
@@ -174,6 +183,7 @@ impl<LABEL> Path<LABEL> {
 // We might however want to change that in the future, because:
 // - we currently create a lot of new hashmaps, which is not really efficient
 // - efficiency might be dependent on the name resolution (shadowing) strategy
+// - we (not always necessarily) clone hashmaps often
 // Perhaps we will resort to fibbonacy heaps/pairing heaps, and/or make resolution parametric in the environment type.
 #[derive(Debug)]
 pub struct Env<'sg, LABEL: 'sg, DATA>(HashSet<ResolvedPath<'sg, LABEL, DATA>>);
@@ -249,6 +259,12 @@ where
 {
     fn from_iter<T: IntoIterator<Item = Env<'sg, LABEL, DATA>>>(iter: T) -> Self {
         iter.into_iter().flatten().collect()
+    }
+}
+
+impl<'sg, LABEL: 'sg + Clone, DATA> Clone for Env<'sg, LABEL, DATA> {
+    fn clone(&self) -> Self {
+        Env(self.0.clone())
     }
 }
 

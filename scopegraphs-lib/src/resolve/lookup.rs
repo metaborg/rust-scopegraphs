@@ -156,18 +156,16 @@ where
                 self.resolve_shadow(path_wellformedness, edge, &smaller, path)
             })
             .reduce(|env1, env2| {
-                env1.flat_map(|mut agg_env| {
+                env1.flat_map(|agg_env| {
                     env2.flat_map(|new_env| {
-                        agg_env.merge(new_env);
-                        ENVC::from(agg_env)
+                        let mut merged_env = Env::new();
+                        merged_env.merge(agg_env.clone());
+                        merged_env.merge(new_env.clone());
+                        ENVC::from(merged_env)
                     })
                 })
             })
             .expect("max-set can never be empty, so reduction will return some result")
-            .flat_map(|env| {
-                log::info!("{:?}-result: {:?}", edges, env);
-                ENVC::from(env)
-            })
     }
 
     /// Computes shadowed environment with following steps:
@@ -185,14 +183,14 @@ where
         // base environment
         let base_env: ENVC = self.resolve_edges(path_wellformedness, edges, path);
         // environment of current (max) label, which might be shadowed by the base environment
-        base_env.flat_map(|mut base_env| {
+        base_env.flat_map(|base_env| {
             if !base_env.is_empty() && self.data_equiv.always_true() {
-                ENVC::from(base_env)
+                ENVC::from(base_env.clone())
             } else {
                 let sub_env = self.resolve_edge(path_wellformedness, edge, path);
                 sub_env.flat_map(|sub_env| {
                     let filtered_env = sub_env
-                        .into_iter()
+                        .iter()
                         .filter(|p1| {
                             if let Some(p2) = base_env
                                 .iter()
@@ -211,10 +209,11 @@ where
                             }
                         })
                         .collect::<Vec<_>>();
+                    let mut new_env = base_env.clone();
                     for path in filtered_env {
-                        base_env.insert(path)
+                        new_env.insert(path.clone())
                     }
-                    ENVC::from(base_env)
+                    ENVC::from(new_env)
                 })
             }
         })
