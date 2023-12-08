@@ -148,6 +148,7 @@ where
         max.into_iter()
             .map::<Rc<ENVC>, _>(|edge| {
                 if let Some(env) = cache.borrow().get(&edge) {
+                    log::info!("Reuse {:?}-environment from cache", edge);
                     return env.clone();
                 }
                 // sub-environment that has higher priority that the `max`-environment
@@ -564,6 +565,46 @@ mod tests {
         assert!(matches!(path.data(), &Data { name: "x", data: 2 }));
 
         // todo!("assert the correct edges are closed!")
+    }
+
+    #[test]
+    fn test_caching() {
+        let mut scope_graph: ScopeGraph<Lbl, TData, ImplicitClose<Lbl>> =
+            ScopeGraph::new(ImplicitClose::default());
+
+        let s0 = scope_graph.add_scope_default_with([Def]);
+        scope_graph
+            .add_decl(
+                s0,
+                Def,
+                Data {
+                    name: "x",
+                    data: 42,
+                },
+            )
+            .expect("edge unexpectedly closed");
+
+        let env = scope_graph
+            .query()
+            .with_path_wellformedness(query_regex!(Lbl: Lex* Imp? Def))
+            .with_data_wellformedness(TData::matcher("x"))
+            // Because of the label order, `Def` will be in the smaller set of both Lex and Imp
+            // Due to the caching, it will be reused rather than recomputed.
+            // This can be seen when running this test with RUST_LOG=info.
+            .with_label_order(label_order!(Lbl: Def < { Lex, Imp }))
+            .resolve(s0);
+
+        let env_vec = env.into_iter().collect::<Vec<_>>();
+        assert_eq!(1, env_vec.len());
+
+        let path: &ResolvedPath<Lbl, TData> = &env_vec[0];
+        assert!(matches!(
+            path.data(),
+            &Data {
+                name: "x",
+                data: 42
+            }
+        ));
     }
 
     fn resolve_complex_unchecked<CMPL>(scope_graph: &mut ScopeGraph<Lbl, TData, CMPL>, s_let: Scope)
