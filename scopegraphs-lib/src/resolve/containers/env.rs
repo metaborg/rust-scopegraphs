@@ -1,5 +1,6 @@
 use crate::resolve::{Env, ResolvedPath};
 use std::hash::Hash;
+use std::rc::Rc;
 
 /// Interface for environment containers that support the operations required for query resolution.
 pub trait EnvContainer<'sg, LABEL: 'sg, DATA: 'sg>: From<Env<'sg, LABEL, DATA>> {
@@ -16,6 +17,19 @@ where
 {
     fn empty() -> Self {
         Self::new()
+    }
+
+    fn flat_map(&self, map: impl FnOnce(&Env<'sg, LABEL, DATA>) -> Self) -> Self {
+        map(self)
+    }
+}
+
+impl<'sg, LABEL, DATA> EnvContainer<'sg, LABEL, DATA> for Rc<Env<'sg, LABEL, DATA>>
+where
+    ResolvedPath<'sg, LABEL, DATA>: Hash + Eq,
+{
+    fn empty() -> Self {
+        Self::new(Env::empty())
     }
 
     fn flat_map(&self, map: impl FnOnce(&Env<'sg, LABEL, DATA>) -> Self) -> Self {

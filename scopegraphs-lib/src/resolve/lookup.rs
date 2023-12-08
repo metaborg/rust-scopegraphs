@@ -4,9 +4,12 @@
 //! The versatile set of parameters guides the search to ensure the resulting environment matches
 //! the intended semantics of the reference.
 
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::fmt::Debug;
 use std::hash::Hash;
 use std::iter;
+use std::rc::Rc;
 
 use crate::resolve::{Query, Resolve};
 use crate::{
@@ -23,7 +26,7 @@ use scopegraphs_regular_expressions::RegexMatcher;
 impl<'sg, LABEL, DATA, CMPL, PWF, DWF, LO, DEq, ENVC> Resolve
     for Query<'sg, LABEL, DATA, CMPL, PWF, DWF, LO, DEq>
 where
-    LABEL: Label + Copy + Debug,
+    LABEL: Label + Copy + Debug + Hash + Eq,
     DATA: Debug,
     CMPL: Completeness<LABEL, DATA>,
     CMPL::GetEdgesResult: ScopeContainer<LABEL>,
@@ -85,10 +88,12 @@ struct ResolutionContext<'sg: 'query, 'query, LABEL, DATA, CMPL, DWF, LO, DEq> {
     data_equiv: &'query DEq,
 }
 
+type EnvCache<LABEL, ENVC> = RefCell<HashMap<EdgeOrData<LABEL>, Rc<ENVC>>>;
+
 impl<'sg, 'query, LABEL, DATA, CMPL, DWF, LO, DEq, ENVC>
     ResolutionContext<'sg, 'query, LABEL, DATA, CMPL, DWF, LO, DEq>
 where
-    LABEL: Copy + Debug,
+    LABEL: Copy + Debug + Hash + Eq,
     DATA: Debug,
     ResolvedPath<'sg, LABEL, DATA>: Hash + Eq,
     CMPL: Completeness<LABEL, DATA>,
@@ -123,7 +128,11 @@ where
             .collect();
 
         log::info!("Resolving edges {:?} in {:?}", edges, path.target());
-        self.resolve_edges(path_wellformedness, &edges, path)
+        let result = {
+            let cache = HashMap::new();
+            self.resolve_edges(path_wellformedness, &edges, path, &RefCell::new(cache))
+        };
+        Rc::try_unwrap(result).expect("rc'ed copies are only in cache, should be dropped by now")
     }
 
     /// Computes a sub environment for `edges`, for which shadowing is internally applied.
@@ -132,19 +141,18 @@ where
         path_wellformedness: &impl for<'a> RegexMatcher<&'a LABEL>,
         edges: &[EdgeOrData<LABEL>],
         path: &Path<LABEL>,
-    ) -> ENVC {
-        let tgt = path.target();
+        cache: &EnvCache<LABEL, ENVC>,
+    ) -> Rc<ENVC> {
         // set of labels that are to be resolved last
         let max = self.max(edges);
-
-        if max.is_empty() {
-            return ENVC::empty();
-        }
-
+        let tgt = path.target();
         log::info!("Resolving max-edges {:?} in {:?}", max, tgt);
 
         max.into_iter()
-            .map(|edge| {
+            .map::<Rc<ENVC>, _>(move |edge| {
+                if let Some(env) = cache.borrow().get(&edge) {
+                    return env.clone();
+                }
                 // sub-environment that has higher priority that the `max`-environment
                 let smaller = self.smaller(edge, edges);
                 log::info!(
@@ -153,19 +161,21 @@ where
                     edge,
                     tgt
                 );
-                self.resolve_shadow(path_wellformedness, edge, &smaller, path)
+                let new_env = self.resolve_shadow(path_wellformedness, edge, &smaller, path, cache);
+                cache.borrow_mut().insert(edge, new_env.clone());
+                new_env
             })
             .reduce(|env1, env2| {
-                env1.flat_map(|agg_env| {
+                Rc::new(env1.flat_map(|agg_env| {
                     env2.flat_map(|new_env| {
                         let mut merged_env = Env::new();
                         merged_env.merge(agg_env.clone());
                         merged_env.merge(new_env.clone());
                         ENVC::from(merged_env)
                     })
-                })
+                }))
             })
-            .expect("max-set can never be empty, so reduction will return some result")
+            .unwrap_or(Rc::new(ENVC::empty()))
     }
 
     /// Computes shadowed environment with following steps:
@@ -179,11 +189,12 @@ where
         edge: EdgeOrData<LABEL>,
         edges: &[EdgeOrData<LABEL>],
         path: &Path<LABEL>,
-    ) -> ENVC {
+        cache: &EnvCache<LABEL, ENVC>,
+    ) -> Rc<ENVC> {
         // base environment
-        let base_env: ENVC = self.resolve_edges(path_wellformedness, edges, path);
+        let base_env: Rc<ENVC> = self.resolve_edges(path_wellformedness, edges, path, cache);
         // environment of current (max) label, which might be shadowed by the base environment
-        base_env.flat_map(|base_env| {
+        Rc::new(base_env.flat_map(|base_env| {
             if !base_env.is_empty() && self.data_equiv.always_true() {
                 ENVC::from(base_env.clone())
             } else {
@@ -216,7 +227,7 @@ where
                     ENVC::from(new_env)
                 })
             }
-        })
+        }))
     }
 
     /// Compute environment for single edge
