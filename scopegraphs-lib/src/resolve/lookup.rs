@@ -166,8 +166,7 @@ where
                 // env1 and env2 are Rc<ENVC> clones not owned by a cache
                 env1.flat_map(|agg_env| {
                     env2.flat_map(|new_env| {
-                        let mut merged_env = Env::new();
-                        merged_env.merge(agg_env.clone());
+                        let mut merged_env = agg_env.clone();
                         merged_env.merge(new_env.clone());
                         ENVC::from(merged_env)
                     })
