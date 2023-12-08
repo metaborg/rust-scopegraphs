@@ -1,5 +1,4 @@
-use crate::resolve::{DataEquiv, Env, ResolvedPath};
-use std::fmt::Debug;
+use crate::resolve::{Env, ResolvedPath};
 use std::hash::Hash;
 
 /// Interface for environment containers that support the operations required for query resolution.
@@ -7,20 +6,48 @@ pub trait EnvContainer<'sg, LABEL: 'sg, DATA: 'sg>: From<Env<'sg, LABEL, DATA>> 
     /// Creates a new, container with an empty environment.
     fn empty() -> Self;
 
-    /// Lifts a merge operation into this container.
-    ///
-    /// The resulting container should contain all paths in `self` and all paths in `other`.
-    // has functional interface (-> Self) to accommodate Result/Option implementations.
-    // e.g., `&mut self` cannot be changed from `Ok(_)` to `Err(_)`
-    // implementations that use the interior mutability should return `self`
-    fn lift_merge(self, other: Self) -> Self;
-
-    /// Lifts a shadowing operation into this container.
-    ///
-    /// The resulting container should contain all paths in `self` and all paths in `sub_env`
-    /// that are not shadowed by some path in `self` according to the data order.
-    fn lift_shadow<DEq: DataEquiv<DATA>>(self, sub_env: Self, data_equiv: &DEq) -> Self;
+    /// Maps the current container to a new one, based a provided mapping of the underlying environment.
+    fn flat_map(self, map: impl FnOnce(Env<'sg, LABEL, DATA>) -> Self) -> Self;
 }
+
+impl<'sg, LABEL, DATA> EnvContainer<'sg, LABEL, DATA> for Env<'sg, LABEL, DATA>
+where
+    ResolvedPath<'sg, LABEL, DATA>: Hash + Eq,
+{
+    fn empty() -> Self {
+        Self::new()
+    }
+
+    fn flat_map(self, map: impl FnOnce(Env<'sg, LABEL, DATA>) -> Self) -> Self {
+        map(self)
+    }
+}
+
+// Implementations for Results
+impl<'sg, LABEL: 'sg, DATA: 'sg, E> From<Env<'sg, LABEL, DATA>>
+    for Result<Env<'sg, LABEL, DATA>, E>
+{
+    fn from(value: Env<'sg, LABEL, DATA>) -> Self {
+        Ok(value)
+    }
+}
+
+impl<'sg, LABEL: 'sg, DATA: 'sg, E> EnvContainer<'sg, LABEL, DATA>
+    for Result<Env<'sg, LABEL, DATA>, E>
+where
+    ResolvedPath<'sg, LABEL, DATA>: Hash + Eq,
+{
+    fn empty() -> Self {
+        Ok(Env::empty())
+    }
+
+    fn flat_map(self, map: impl FnOnce(Env<'sg, LABEL, DATA>) -> Self) -> Self {
+        self.and_then(map)
+    }
+}
+
+/*
+
 
 impl<'sg, LABEL, DATA: Debug> EnvContainer<'sg, LABEL, DATA> for Env<'sg, LABEL, DATA>
 where
@@ -37,7 +64,7 @@ where
         self
     }
 
-    fn lift_shadow<DEq: DataEquiv<DATA>>(mut self, sub_env: Self, data_equiv: &DEq) -> Self {
+    fn lift_shadow<DEq: DataEquiv<DATA>>(mut self, sub_env: ThunkOf<Self>, data_equiv: &DEq) -> Self {
         let filtered_env = sub_env
             .into_iter()
             .filter(|p1| {
@@ -65,13 +92,6 @@ where
     }
 }
 
-impl<'sg, LABEL: 'sg, DATA: 'sg, EC: EnvContainer<'sg, LABEL, DATA>, E> From<Env<'sg, LABEL, DATA>>
-    for Result<EC, E>
-{
-    fn from(value: Env<'sg, LABEL, DATA>) -> Self {
-        Ok(EC::from(value))
-    }
-}
 
 impl<'sg, LABEL: 'sg, DATA: 'sg, EC: EnvContainer<'sg, LABEL, DATA>, E>
     EnvContainer<'sg, LABEL, DATA> for Result<EC, E>
@@ -86,9 +106,11 @@ impl<'sg, LABEL: 'sg, DATA: 'sg, EC: EnvContainer<'sg, LABEL, DATA>, E>
         self.and_then(|ec1| other.map(|ec2| ec1.lift_merge(ec2)))
     }
 
-    fn lift_shadow<DEq: DataEquiv<DATA>>(self, sub_env: Self, data_equiv: &DEq) -> Self {
+    fn lift_shadow<DEq: DataEquiv<DATA>>(self, sub_env: ThunkOf<Self>, data_equiv: &DEq) -> Self {
         // Lift the shadow operations if both results are ok.
         // Otherwise, retain the leftmost error value.
         self.and_then(|ec1| sub_env.map(|ec2| ec1.lift_shadow(ec2, data_equiv)))
     }
 }
+
+ */

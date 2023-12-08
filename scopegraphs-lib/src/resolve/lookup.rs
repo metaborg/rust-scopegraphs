@@ -136,24 +136,38 @@ where
         let tgt = path.target();
         // set of labels that are to be resolved last
         let max = self.max(edges);
-        let mut env = ENVC::empty();
 
-        log::info!("Resolving max-edges {:?} in {:?}", max, tgt);
-        for edge in max {
-            // sub-environment that has higher priority that the `max`-environment
-            let smaller = self.smaller(edge, edges);
-            log::info!(
-                "Resolving(shadowed) {:?} < {:?} in {:?}",
-                smaller,
-                edge,
-                tgt
-            );
-            //
-            env = env.lift_merge(self.resolve_shadow(path_wellformedness, edge, &smaller, path))
+        if max.is_empty() {
+            return ENVC::empty();
         }
 
-        log::info!("{:?}-result: {:?}", edges, env);
-        env
+        log::info!("Resolving max-edges {:?} in {:?}", max, tgt);
+
+        max.into_iter()
+            .map(|edge| {
+                // sub-environment that has higher priority that the `max`-environment
+                let smaller = self.smaller(edge, edges);
+                log::info!(
+                    "Resolving(shadowed) {:?} < {:?} in {:?}",
+                    smaller,
+                    edge,
+                    tgt
+                );
+                self.resolve_shadow(path_wellformedness, edge, &smaller, path)
+            })
+            .reduce(|env1, env2| {
+                env1.flat_map(|mut agg_env| {
+                    env2.flat_map(|new_env| {
+                        agg_env.merge(new_env);
+                        ENVC::from(agg_env)
+                    })
+                })
+            })
+            .expect("max-set can never be empty, so reduction will return some result")
+            .flat_map(|env| {
+                log::info!("{:?}-result: {:?}", edges, env);
+                ENVC::from(env)
+            })
     }
 
     /// Computes shadowed environment with following steps:
@@ -171,8 +185,39 @@ where
         // base environment
         let base_env: ENVC = self.resolve_edges(path_wellformedness, edges, path);
         // environment of current (max) label, which might be shadowed by the base environment
-        let sub_env = self.resolve_edge(path_wellformedness, edge, path);
-        base_env.lift_shadow(sub_env, self.data_equiv)
+        base_env.flat_map(|mut base_env| {
+            if !base_env.is_empty() && self.data_equiv.always_true() {
+                ENVC::from(base_env)
+            } else {
+                let sub_env = self.resolve_edge(path_wellformedness, edge, path);
+                sub_env.flat_map(|sub_env| {
+                    let filtered_env = sub_env
+                        .into_iter()
+                        .filter(|p1| {
+                            if let Some(p2) = base_env
+                                .iter()
+                                .find(|p2| self.data_equiv.data_equiv(p1.data, p2.data))
+                            {
+                                log::info!(
+                                    "Discarding {:?} in {:?}; shadowed by {:?} in {:?}",
+                                    p1.data,
+                                    p1.path.target(),
+                                    p2.data,
+                                    p2.path.target()
+                                );
+                                false
+                            } else {
+                                true
+                            }
+                        })
+                        .collect::<Vec<_>>();
+                    for path in filtered_env {
+                        base_env.insert(path)
+                    }
+                    ENVC::from(base_env)
+                })
+            }
+        })
     }
 
     /// Compute environment for single edge

@@ -204,6 +204,11 @@ impl<'sg, LABEL, DATA> Env<'sg, LABEL, DATA> {
     pub fn iter<'a>(&'a self) -> impl Iterator<Item = &'a ResolvedPath<'sg, LABEL, DATA>> + 'a {
         self.0.iter()
     }
+
+    /// Returns `true` is the environment is empty, `false` otherwise.
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
 }
 
 impl<'sg, LABEL, DATA> Env<'sg, LABEL, DATA>

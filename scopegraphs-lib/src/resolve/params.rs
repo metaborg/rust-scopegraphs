@@ -61,6 +61,10 @@ impl<LABEL> LabelOrder<LABEL> for DefaultLabelOrder {
 /// will only be applied if the declarations are equivalent.
 pub trait DataEquiv<DATA> {
     fn data_equiv(&self, d1: &DATA, d2: &DATA) -> bool;
+
+    fn always_true(&self) -> bool {
+        false
+    }
 }
 
 impl<DATA, T> DataEquiv<DATA> for T
@@ -78,5 +82,9 @@ pub struct DefaultDataEquiv {}
 impl<DATA> DataEquiv<DATA> for DefaultDataEquiv {
     fn data_equiv(&self, _d1: &DATA, _d2: &DATA) -> bool {
         true // all data in same equivalence class by default
+    }
+
+    fn always_true(&self) -> bool {
+        true
     }
 }
