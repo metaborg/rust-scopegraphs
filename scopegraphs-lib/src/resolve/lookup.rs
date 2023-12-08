@@ -128,11 +128,8 @@ where
             .collect();
 
         log::info!("Resolving edges {:?} in {:?}", edges, path.target());
-        let result = {
-            let cache = HashMap::new();
-            self.resolve_edges(path_wellformedness, &edges, path, &RefCell::new(cache))
-        };
-        Rc::try_unwrap(result).expect("rc'ed copies are only in cache, should be dropped by now")
+        let cache = HashMap::new();
+        self.resolve_edges(path_wellformedness, &edges, path, &RefCell::new(cache))
     }
 
     /// Computes a sub environment for `edges`, for which shadowing is internally applied.
@@ -142,7 +139,7 @@ where
         edges: &[EdgeOrData<LABEL>],
         path: &Path<LABEL>,
         cache: &EnvCache<LABEL, ENVC>,
-    ) -> Rc<ENVC> {
+    ) -> ENVC {
         // set of labels that are to be resolved last
         let max = self.max(edges);
         let tgt = path.target();
@@ -151,6 +148,8 @@ where
         max.into_iter()
             .map::<Rc<ENVC>, _>(move |edge| {
                 if let Some(env) = cache.borrow().get(&edge) {
+                    // Here we create an Rc<ENVC> clone that is not owned byt the cache
+                    // However, it is dropped in the reduce below
                     return env.clone();
                 }
                 // sub-environment that has higher priority that the `max`-environment
@@ -165,17 +164,17 @@ where
                 cache.borrow_mut().insert(edge, new_env.clone());
                 new_env
             })
-            .reduce(|env1, env2| {
-                Rc::new(env1.flat_map(|agg_env| {
+            .fold(ENVC::empty(), |env1, env2| {
+                // env1 and env2 are Rc<ENVC> clones not owned by a cache
+                env1.flat_map(|agg_env| {
                     env2.flat_map(|new_env| {
                         let mut merged_env = Env::new();
                         merged_env.merge(agg_env.clone());
                         merged_env.merge(new_env.clone());
                         ENVC::from(merged_env)
                     })
-                }))
+                })
             })
-            .unwrap_or(Rc::new(ENVC::empty()))
     }
 
     /// Computes shadowed environment with following steps:
@@ -192,7 +191,7 @@ where
         cache: &EnvCache<LABEL, ENVC>,
     ) -> Rc<ENVC> {
         // base environment
-        let base_env: Rc<ENVC> = self.resolve_edges(path_wellformedness, edges, path, cache);
+        let base_env: ENVC = self.resolve_edges(path_wellformedness, edges, path, cache);
         // environment of current (max) label, which might be shadowed by the base environment
         Rc::new(base_env.flat_map(|base_env| {
             if !base_env.is_empty() && self.data_equiv.always_true() {
