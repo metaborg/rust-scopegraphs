@@ -5,9 +5,7 @@ use std::{
     hash::Hash,
 };
 
-use crate::completeness::{
-    Completeness, CriticalEdgeBasedCompleteness, ExplicitClose, UncheckedCompleteness,
-};
+use crate::completeness::{Completeness, UncheckedCompleteness};
 
 /// Representation of scopes (nodes in the scope graph).
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -37,7 +35,7 @@ impl<LABEL, DATA> InnerScopeGraph<LABEL, DATA> {
 
     /// Adds a new scope to the graph, with `data` as its associated data.
     /// After this operation, all future calls to [`InnerScopeGraph::get_data`] on this scope will return the associated data.
-    fn add_scope(&mut self, data: DATA) -> Scope {
+    pub(super) fn add_scope(&mut self, data: DATA) -> Scope {
         let id = self.data.len();
         self.data.push(data);
         self.edges.push(HashMap::with_capacity(0));
@@ -91,8 +89,8 @@ impl<'a, LABEL: Hash + Eq, DATA> InnerScopeGraph<LABEL, DATA> {
 /// In addition, there is no data type for edges, as edges should only be traversed, but never leak outside the scope graph structure.
 /// Finally, although not made explicit, [`LABEL`] should be a finite, iterable set.
 pub struct ScopeGraph<LABEL, DATA, CMPL> {
-    inner_scope_graph: InnerScopeGraph<LABEL, DATA>,
-    completeness: RefCell<CMPL>,
+    pub(super) inner_scope_graph: InnerScopeGraph<LABEL, DATA>,
+    pub(super) completeness: RefCell<CMPL>,
 }
 
 impl<LABEL, DATA, CMPL> ScopeGraph<LABEL, DATA, CMPL> {
@@ -179,132 +177,5 @@ where
     /// Add a new scope to the scope graph, with default data.
     pub fn add_scope_default(&mut self) -> Scope {
         self.add_scope(DATA::default())
-    }
-}
-
-impl<LABEL: Hash + Eq, DATA, CMPL> ScopeGraph<LABEL, DATA, CMPL>
-where
-    CMPL: CriticalEdgeBasedCompleteness<LABEL, DATA>,
-{
-    /// Adds a new scope with some open edges.
-    pub fn add_scope_with<I>(&mut self, data: DATA, open_edges: I) -> Scope
-    where
-        I: IntoIterator<Item = LABEL>,
-    {
-        let scope = self.inner_scope_graph.add_scope(data);
-        self.completeness
-            .borrow_mut()
-            .init_scope_with(HashSet::from_iter(open_edges.into_iter()));
-        scope
-    }
-
-    /// Adds a new scope with no open edges.
-    pub fn add_scope_closed(&mut self, data: DATA) -> Scope {
-        let scope = self.inner_scope_graph.add_scope(data);
-        self.completeness
-            .borrow_mut()
-            .init_scope_with(HashSet::new());
-        scope
-    }
-}
-
-impl<LABEL: Hash + Eq, DATA, CMPL> ScopeGraph<LABEL, DATA, CMPL>
-where
-    DATA: Default,
-    CMPL: CriticalEdgeBasedCompleteness<LABEL, DATA>,
-{
-    /// Adds a new scope with some open edges and default data.
-    pub fn add_scope_default_with<I>(&mut self, open_edges: I) -> Scope
-    where
-        I: IntoIterator<Item = LABEL>,
-    {
-        self.add_scope_with(DATA::default(), open_edges)
-    }
-
-    /// Adds a new scope with no open edges and default data.
-    pub fn add_scope_default_closed(&mut self) -> Scope {
-        self.add_scope_with(DATA::default(), HashSet::new())
-    }
-}
-
-impl<LABEL: Hash + Eq, DATA> ScopeGraph<LABEL, DATA, ExplicitClose<LABEL>> {
-    /// Closes an edge, (i.e., prohibit future new
-    ///
-    /// For example, the following program will return an error.
-    /// ```
-    /// # use scopegraphs_lib::completeness::ExplicitClose;
-    /// # use scopegraphs_lib::ScopeGraph;
-    /// # use scopegraphs_macros::Label;
-    /// # #[derive(Eq, Hash, PartialEq, Label)] enum Lbl { Def }
-    /// # use Lbl::*;
-    /// let mut sg = ScopeGraph::<Lbl, usize, _>::new(ExplicitClose::default());
-    ///
-    /// let s1 = sg.add_scope_with(0, [Def]);
-    /// let s2 = sg.add_scope_closed(42);
-    ///
-    /// sg.close(s1, &Def);
-    /// sg.add_edge(s1, Def, s2).expect_err("cannot add edge after closing edge");
-    /// ```
-    ///
-    /// Closing is required to permit queries to traverse these edges:
-    /// ```
-    ///
-    /// # use scopegraphs_lib::completeness::ExplicitClose;
-    /// # use scopegraphs_lib::ScopeGraph;
-    /// # use scopegraphs_lib::resolve::{DefaultDataEquiv, DefaultLabelOrder, EdgeOrData, Resolve};
-    /// # use scopegraphs_macros::{compile_regex, Label};
-    /// #
-    /// # #[derive(Eq, Hash, PartialEq, Label, Debug, Copy, Clone)]
-    /// # enum Lbl { Def }
-    /// # use Lbl::*;
-    /// # type LblD = EdgeOrData<Lbl>;
-    /// #
-    /// # compile_regex!(type Regex<Lbl> = Def);
-    /// let mut sg = ScopeGraph::<Lbl, usize, _>::new(ExplicitClose::default());
-    ///
-    /// let s1 = sg.add_scope_with(0, [Def]);
-    /// let s2 = sg.add_scope_closed(42);
-    ///
-    /// // Note: not calling `sg.close(s1, &Def)`
-    ///
-    /// let query_result = sg.query()
-    ///     .with_path_wellformedness(Regex::new()) // regex: `Def`
-    ///     .with_data_wellformedness(|x: &usize| *x == 42) // match `42`
-    ///     .resolve(s1);
-    ///
-    /// query_result.expect_err("require s1/Def to be closed");
-    /// ```
-    ///
-    /// Closing allows queries to resolve:
-    /// ```
-    ///
-    /// # use scopegraphs_lib::completeness::ExplicitClose;
-    /// # use scopegraphs_lib::ScopeGraph;
-    /// # use scopegraphs_lib::resolve::{DefaultDataEquiv, DefaultLabelOrder, EdgeOrData, Resolve};
-    /// # use scopegraphs_macros::{compile_regex, Label};
-    /// #
-    /// # #[derive(Eq, Hash, PartialEq, Label, Debug, Copy, Clone)]
-    /// # enum Lbl { Def }
-    /// # use Lbl::*;
-    /// # type LblD = EdgeOrData<Lbl>;
-    /// #
-    /// # compile_regex!(type Regex<Lbl> = Def);
-    /// let mut sg = ScopeGraph::<Lbl, usize, _>::new(ExplicitClose::default());
-    ///
-    /// let s1 = sg.add_scope_with(0, [Def]);
-    /// let s2 = sg.add_scope_closed(42);
-    ///
-    /// // Note: closing the edge *after* creating all edges, *before* doing the query
-    /// sg.close(s1, &Def);
-    ///
-    /// let query_result = sg.query()
-    ///     .with_path_wellformedness(Regex::new()) // regex: `Def`
-    ///     .with_data_wellformedness(|x: &usize| *x == 42) // match `42`
-    ///     .resolve(s1);
-    ///
-    /// query_result.expect("query should return result");
-    /// ```
-    pub fn close(&self, scope: Scope, label: &LABEL) {
-        self.completeness.borrow_mut().close(scope, label)
     }
 }

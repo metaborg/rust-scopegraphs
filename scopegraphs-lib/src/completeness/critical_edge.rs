@@ -1,4 +1,4 @@
-use crate::{completeness::Completeness, Scope};
+use crate::{completeness::Completeness, Scope, ScopeGraph};
 use std::{collections::HashSet, hash::Hash};
 
 pub(super) struct CriticalEdgeSet<LABEL> {
@@ -53,3 +53,48 @@ pub struct Delay<LABEL> {
 }
 
 pub(crate) type EdgesOrDelay<EDGES, LABEL> = Result<EDGES, Delay<LABEL>>;
+
+impl<LABEL: Hash + Eq, DATA, CMPL> ScopeGraph<LABEL, DATA, CMPL>
+where
+    CMPL: CriticalEdgeBasedCompleteness<LABEL, DATA>,
+{
+    /// Adds a new scope with some open edges.
+    pub fn add_scope_with<I>(&mut self, data: DATA, open_edges: I) -> Scope
+    where
+        I: IntoIterator<Item = LABEL>,
+    {
+        let scope = self.inner_scope_graph.add_scope(data);
+        self.completeness
+            .borrow_mut()
+            .init_scope_with(HashSet::from_iter(open_edges.into_iter()));
+        scope
+    }
+
+    /// Adds a new scope with no open edges.
+    pub fn add_scope_closed(&mut self, data: DATA) -> Scope {
+        let scope = self.inner_scope_graph.add_scope(data);
+        self.completeness
+            .borrow_mut()
+            .init_scope_with(HashSet::new());
+        scope
+    }
+}
+
+impl<LABEL: Hash + Eq, DATA, CMPL> ScopeGraph<LABEL, DATA, CMPL>
+where
+    DATA: Default,
+    CMPL: CriticalEdgeBasedCompleteness<LABEL, DATA>,
+{
+    /// Adds a new scope with some open edges and default data.
+    pub fn add_scope_default_with<I>(&mut self, open_edges: I) -> Scope
+    where
+        I: IntoIterator<Item = LABEL>,
+    {
+        self.add_scope_with(DATA::default(), open_edges)
+    }
+
+    /// Adds a new scope with no open edges and default data.
+    pub fn add_scope_default_closed(&mut self) -> Scope {
+        self.add_scope_with(DATA::default(), HashSet::new())
+    }
+}
