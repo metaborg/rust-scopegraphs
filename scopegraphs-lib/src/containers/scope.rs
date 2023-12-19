@@ -8,7 +8,7 @@ pub trait ScopeContainer<LABEL> {
     /// Lift the [`Path::step`] operation into this container.
     ///
     /// Should retain the contract that for all scopes `s` in `self`, `prefix.step(lbl, s)` is
-    /// included in the resulting path container (excpet cyclic paths).
+    /// included in the resulting path container (except cyclic paths).
     fn lift_step(self, lbl: LABEL, prefix: &Path<LABEL>) -> Self::PathContainer;
 }
 
