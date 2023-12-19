@@ -6,7 +6,6 @@ use std::sync::Arc;
 
 use super::{Scope, ScopeGraph};
 
-pub mod containers;
 mod params;
 pub use params::*;
 pub mod lookup;

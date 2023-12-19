@@ -11,13 +11,11 @@ use std::hash::Hash;
 use std::iter;
 use std::rc::Rc;
 
+use crate::containers::{EnvContainer, PathContainer, ScopeContainer};
 use crate::resolve::{Query, Resolve};
 use crate::{
     label::Label,
-    resolve::{
-        containers::{EnvContainer, PathContainer, ScopeContainer},
-        DataEquiv, DataWellformedness, EdgeOrData, Env, LabelOrder, Path, ResolvedPath,
-    },
+    resolve::{DataEquiv, DataWellformedness, EdgeOrData, Env, LabelOrder, Path, ResolvedPath},
     ScopeGraph,
     {completeness::Completeness, Scope},
 };
