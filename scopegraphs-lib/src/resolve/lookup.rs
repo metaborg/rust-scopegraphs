@@ -27,9 +27,10 @@ where
     LABEL: Label + Copy + Debug + Hash + Eq,
     DATA: Debug,
     CMPL: Completeness<LABEL, DATA>,
-    CMPL::GetEdgesResult<'sg>: ScopeContainer<LABEL>,
-    <CMPL::GetEdgesResult<'sg> as ScopeContainer<LABEL>>::PathContainer: PathContainer<LABEL, DATA>,
-    <<CMPL::GetEdgesResult<'sg> as ScopeContainer<LABEL>>::PathContainer as PathContainer<
+    CMPL::GetEdgesResult<'sg>: ScopeContainer<'sg, LABEL>,
+    <CMPL::GetEdgesResult<'sg> as ScopeContainer<'sg, LABEL>>::PathContainer:
+        PathContainer<LABEL, DATA>,
+    <<CMPL::GetEdgesResult<'sg> as ScopeContainer<'sg, LABEL>>::PathContainer as PathContainer<
         LABEL,
         DATA,
     >>::EnvContainer<'sg>: EnvContainer<'sg, LABEL, DATA> + Debug,
@@ -90,7 +91,7 @@ struct ResolutionContext<'sg: 'query, 'query, LABEL, DATA, CMPL, DWF, LO, DEq> {
 
 type EnvC<'sg, CMPL, LABEL, DATA> = <<<CMPL as Completeness<LABEL, DATA>>::GetEdgesResult<
     'sg,
-> as ScopeContainer<LABEL>>::PathContainer as PathContainer<LABEL, DATA>>::EnvContainer<'sg>;
+> as ScopeContainer<'sg, LABEL>>::PathContainer as PathContainer<LABEL, DATA>>::EnvContainer<'sg>;
 
 type EnvCache<LABEL, ENVC> = RefCell<HashMap<EdgeOrData<LABEL>, Rc<ENVC>>>;
 
@@ -101,9 +102,10 @@ where
     DATA: Debug,
     ResolvedPath<'sg, LABEL, DATA>: Hash + Eq,
     CMPL: Completeness<LABEL, DATA>,
-    CMPL::GetEdgesResult<'sg>: ScopeContainer<LABEL>,
-    <CMPL::GetEdgesResult<'sg> as ScopeContainer<LABEL>>::PathContainer: PathContainer<LABEL, DATA>,
-    <<CMPL::GetEdgesResult<'sg> as ScopeContainer<LABEL>>::PathContainer as PathContainer<
+    CMPL::GetEdgesResult<'sg>: ScopeContainer<'sg, LABEL>,
+    <CMPL::GetEdgesResult<'sg> as ScopeContainer<'sg, LABEL>>::PathContainer:
+        PathContainer<LABEL, DATA>,
+    <<CMPL::GetEdgesResult<'sg> as ScopeContainer<'sg, LABEL>>::PathContainer as PathContainer<
         LABEL,
         DATA,
     >>::EnvContainer<'sg>: EnvContainer<'sg, LABEL, DATA> + Debug,
@@ -269,7 +271,7 @@ where
         path: &Path<LABEL>,
     ) -> EnvC<'sg, CMPL, LABEL, DATA> {
         let source = path.target();
-        let targets = self.sg.get_edges(source, label);
+        let mut targets = self.sg.get_edges(source, label);
         let path_set = targets.lift_step(label, path);
         let env: EnvC<'sg, CMPL, LABEL, DATA> =
             path_set.map_into_env::<_>(|p| self.resolve_all(path_wellformedness, &p));
