@@ -31,14 +31,14 @@ impl<LABEL> Default for ImplicitClose<LABEL> {
 impl<LABEL> Sealed for ImplicitClose<LABEL> {}
 
 impl<LABEL: Hash + Eq + Label, DATA> Completeness<LABEL, DATA> for ImplicitClose<LABEL> {
-    fn cmpl_new_scope(&mut self, _: &InnerScopeGraph<LABEL, DATA>, _: Scope) {
+    fn cmpl_new_scope(&self, _: &mut InnerScopeGraph<LABEL, DATA>, _: Scope) {
         <ImplicitClose<LABEL> as CriticalEdgeBasedCompleteness<LABEL, DATA>>::init_scope_with(
             self,
             HashSet::from_iter(LABEL::iter()),
         )
     }
 
-    fn cmpl_new_complete_scope(&mut self, _: &InnerScopeGraph<LABEL, DATA>, _: Scope) {
+    fn cmpl_new_complete_scope(&self, _: &mut InnerScopeGraph<LABEL, DATA>, _: Scope) {
         <ImplicitClose<LABEL> as CriticalEdgeBasedCompleteness<LABEL, DATA>>::init_scope_with(
             self,
             HashSet::new(),
@@ -49,7 +49,7 @@ impl<LABEL: Hash + Eq + Label, DATA> Completeness<LABEL, DATA> for ImplicitClose
 
     // FIXME: identical to `ExplicitClose` impl.
     fn cmpl_new_edge(
-        &mut self,
+        &self,
         inner_scope_graph: &mut InnerScopeGraph<LABEL, DATA>,
         src: Scope,
         lbl: LABEL,
@@ -67,14 +67,17 @@ impl<LABEL: Hash + Eq + Label, DATA> Completeness<LABEL, DATA> for ImplicitClose
         }
     }
 
-    type GetEdgesResult = Vec<Scope>;
+    type GetEdgesResult<'a> = Vec<Scope>
+        where
+            DATA: 'a,
+            LABEL: 'a;
 
-    fn cmpl_get_edges(
-        &mut self,
-        inner_scope_graph: &InnerScopeGraph<LABEL, DATA>,
+    fn cmpl_get_edges<'a>(
+        &'a self,
+        inner_scope_graph: &'a InnerScopeGraph<LABEL, DATA>,
         src: Scope,
         lbl: LABEL,
-    ) -> Self::GetEdgesResult {
+    ) -> Self::GetEdgesResult<'a> {
         self.critical_edges.close(src, &lbl);
         inner_scope_graph.get_edges(src, lbl)
     }
@@ -83,7 +86,7 @@ impl<LABEL: Hash + Eq + Label, DATA> Completeness<LABEL, DATA> for ImplicitClose
 impl<LABEL: Hash + Eq + Label, DATA> CriticalEdgeBasedCompleteness<LABEL, DATA>
     for ImplicitClose<LABEL>
 {
-    fn init_scope_with(&mut self, open_labels: HashSet<LABEL>) {
+    fn init_scope_with(&self, open_labels: HashSet<LABEL>) {
         self.critical_edges.init_scope(open_labels)
     }
 }

@@ -14,6 +14,8 @@
 
 use crate::{InnerScopeGraph, Scope};
 
+mod future;
+
 mod critical_edge;
 pub use critical_edge::*;
 mod explicit;
@@ -52,12 +54,12 @@ use private::Sealed;
 ///
 /// This trait is sealed to ensure only verified implementations are available.
 pub trait Completeness<LABEL, DATA>: Sealed {
-    fn cmpl_new_scope(&mut self, inner_scope_graph: &InnerScopeGraph<LABEL, DATA>, scope: Scope);
+    fn cmpl_new_scope(&self, inner_scope_graph: &mut InnerScopeGraph<LABEL, DATA>, scope: Scope);
 
     /// Should initialize a scope without possibility to extend it with edges
     fn cmpl_new_complete_scope(
-        &mut self,
-        inner_scope_graph: &InnerScopeGraph<LABEL, DATA>,
+        &self,
+        inner_scope_graph: &mut InnerScopeGraph<LABEL, DATA>,
         scope: Scope,
     ) {
         self.cmpl_new_scope(inner_scope_graph, scope)
@@ -65,7 +67,7 @@ pub trait Completeness<LABEL, DATA>: Sealed {
 
     type NewEdgeResult;
     fn cmpl_new_edge(
-        &mut self,
+        &self,
         inner_scope_graph: &mut InnerScopeGraph<LABEL, DATA>,
         src: Scope,
         lbl: LABEL,
@@ -75,13 +77,17 @@ pub trait Completeness<LABEL, DATA>: Sealed {
     // type GetDataResult;
     // fn get_data(&mut self, inner_scope_graph: &InnerScopeGraph<LABEL, DATA>, scope: Scope) -> Self::GetDataResult;
 
-    type GetEdgesResult;
-    fn cmpl_get_edges(
-        &mut self,
-        inner_scope_graph: &InnerScopeGraph<LABEL, DATA>,
+    type GetEdgesResult<'a>
+    where
+        DATA: 'a,
+        LABEL: 'a,
+        Self: 'a;
+    fn cmpl_get_edges<'a>(
+        &'a self,
+        inner_scope_graph: &'a InnerScopeGraph<LABEL, DATA>,
         src: Scope,
         lbl: LABEL,
-    ) -> Self::GetEdgesResult;
+    ) -> Self::GetEdgesResult<'a>;
 }
 
 // TODO: Asynchronous Completeness can be a wrapper around the ExplicitClose impl

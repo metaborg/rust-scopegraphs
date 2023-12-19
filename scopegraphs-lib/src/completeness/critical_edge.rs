@@ -1,8 +1,9 @@
 use crate::{completeness::Completeness, Scope, ScopeGraph};
+use std::cell::RefCell;
 use std::{collections::HashSet, hash::Hash};
 
 pub(super) struct CriticalEdgeSet<LABEL> {
-    open_edges: Vec<HashSet<LABEL>>,
+    open_edges: RefCell<Vec<HashSet<LABEL>>>,
 }
 
 impl<LABEL> Default for CriticalEdgeSet<LABEL> {
@@ -14,18 +15,18 @@ impl<LABEL> Default for CriticalEdgeSet<LABEL> {
 }
 
 impl<LABEL> CriticalEdgeSet<LABEL> {
-    pub(super) fn init_scope(&mut self, edges: HashSet<LABEL>) {
-        self.open_edges.push(edges)
+    pub(super) fn init_scope(&self, edges: HashSet<LABEL>) {
+        self.open_edges.borrow_mut().push(edges)
     }
 }
 
 impl<LABEL: Hash + Eq> CriticalEdgeSet<LABEL> {
     pub fn is_open(&self, scope: Scope, lbl: &LABEL) -> bool {
-        self.open_edges[scope.0].contains(lbl)
+        self.open_edges.borrow()[scope.0].contains(lbl)
     }
 
-    pub(super) fn close(&mut self, scope: Scope, lbl: &LABEL) -> bool {
-        self.open_edges[scope.0].remove(lbl)
+    pub(super) fn close(&self, scope: Scope, lbl: &LABEL) -> bool {
+        self.open_edges.borrow_mut()[scope.0].remove(lbl)
     }
 }
 
@@ -35,7 +36,7 @@ impl<LABEL: Hash + Eq> CriticalEdgeSet<LABEL> {
 ///
 /// Should not be called externally, but only from utility function on [`super::ScopeGraph`].
 pub trait CriticalEdgeBasedCompleteness<LABEL, DATA>: Completeness<LABEL, DATA> {
-    fn init_scope_with(&mut self, open_edges: HashSet<LABEL>);
+    fn init_scope_with(&self, open_edges: HashSet<LABEL>);
 }
 
 /// Error returned when attempting to add an edge with a label that is already closed in that scope.
@@ -46,7 +47,7 @@ pub struct EdgeClosedError<LABEL> {
 }
 
 /// Value returned when a query cannot yet be computed because some edge it depends on is still closed.
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct Delay<LABEL> {
     pub scope: Scope,
     pub label: LABEL,
@@ -65,17 +66,14 @@ where
     {
         let scope = self.inner_scope_graph.add_scope(data);
         self.completeness
-            .borrow_mut()
-            .init_scope_with(HashSet::from_iter(open_edges.into_iter()));
+            .init_scope_with(open_edges.into_iter().collect());
         scope
     }
 
     /// Adds a new scope with no open edges.
     pub fn add_scope_closed(&mut self, data: DATA) -> Scope {
         let scope = self.inner_scope_graph.add_scope(data);
-        self.completeness
-            .borrow_mut()
-            .init_scope_with(HashSet::new());
+        self.completeness.init_scope_with(HashSet::new());
         scope
     }
 }

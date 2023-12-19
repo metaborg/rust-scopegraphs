@@ -21,16 +21,17 @@ use crate::{
 };
 use scopegraphs_regular_expressions::RegexMatcher;
 
-impl<'sg, LABEL, DATA, CMPL, PWF, DWF, LO, DEq, ENVC> Resolve
-    for Query<'sg, LABEL, DATA, CMPL, PWF, DWF, LO, DEq>
+impl<'sg, LABEL, DATA, CMPL, PWF, DWF, LO, DEq> Query<'sg, LABEL, DATA, CMPL, PWF, DWF, LO, DEq>
 where
     LABEL: Label + Copy + Debug + Hash + Eq,
     DATA: Debug,
     CMPL: Completeness<LABEL, DATA>,
-    CMPL::GetEdgesResult: ScopeContainer<LABEL>,
-    <CMPL::GetEdgesResult as ScopeContainer<LABEL>>::PathContainer:
-        PathContainer<LABEL, DATA, EnvContainer<'sg> = ENVC>,
-    ENVC: EnvContainer<'sg, LABEL, DATA> + Debug,
+    CMPL::GetEdgesResult<'sg>: ScopeContainer<LABEL>,
+    <CMPL::GetEdgesResult<'sg> as ScopeContainer<LABEL>>::PathContainer: PathContainer<LABEL, DATA>,
+    <<CMPL::GetEdgesResult<'sg> as ScopeContainer<LABEL>>::PathContainer as PathContainer<
+        LABEL,
+        DATA,
+    >>::EnvContainer<'sg>: EnvContainer<'sg, LABEL, DATA> + Debug,
     PWF: for<'a> RegexMatcher<&'a LABEL>,
     DWF: DataWellformedness<DATA>,
     LO: LabelOrder<LABEL>,
@@ -38,7 +39,31 @@ where
     ResolvedPath<'sg, LABEL, DATA>: Hash + Eq,
     Path<LABEL>: Clone,
 {
-    type EnvContainer = ENVC;
+    pub fn lookup_compat(self) -> Self {
+        self
+    }
+}
+
+impl<'sg, LABEL, DATA, CMPL, PWF, DWF, LO, DEq> Resolve
+    for Query<'sg, LABEL, DATA, CMPL, PWF, DWF, LO, DEq>
+where
+    LABEL: Label + Copy + Debug + Hash + Eq,
+    DATA: Debug,
+    CMPL: Completeness<LABEL, DATA>,
+    CMPL::GetEdgesResult<'sg>: ScopeContainer<LABEL>,
+    <CMPL::GetEdgesResult<'sg> as ScopeContainer<LABEL>>::PathContainer: PathContainer<LABEL, DATA>,
+    <<CMPL::GetEdgesResult<'sg> as ScopeContainer<LABEL>>::PathContainer as PathContainer<
+        LABEL,
+        DATA,
+    >>::EnvContainer<'sg>: EnvContainer<'sg, LABEL, DATA> + Debug,
+    PWF: for<'a> RegexMatcher<&'a LABEL>,
+    DWF: DataWellformedness<DATA>,
+    LO: LabelOrder<LABEL>,
+    DEq: DataEquiv<DATA>,
+    ResolvedPath<'sg, LABEL, DATA>: Hash + Eq,
+    Path<LABEL>: Clone,
+{
+    type EnvContainer<'cont> = EnvC<'sg, CMPL, LABEL, DATA> where Self: 'cont;
 
     /// Entry point of lookup-based query resolution. Performs a traversal of the scope graph that
     /// results in an environment containing all declarations matching a reference.
@@ -60,7 +85,7 @@ where
     ///
     /// Parameters:
     /// - `scope`: the scope graph in which to start name resolution
-    fn resolve(&self, scope: Scope) -> Self::EnvContainer {
+    fn resolve(&self, scope: Scope) -> Self::EnvContainer<'_> {
         let all_edges: Vec<EdgeOrData<LABEL>> = LABEL::iter()
             .map(EdgeOrData::Edge)
             .chain(iter::once(EdgeOrData::Data))
@@ -86,19 +111,25 @@ struct ResolutionContext<'sg: 'query, 'query, LABEL, DATA, CMPL, DWF, LO, DEq> {
     data_equiv: &'query DEq,
 }
 
+type EnvC<'sg, CMPL, LABEL, DATA> = <<<CMPL as Completeness<LABEL, DATA>>::GetEdgesResult<
+    'sg,
+> as ScopeContainer<LABEL>>::PathContainer as PathContainer<LABEL, DATA>>::EnvContainer<'sg>;
+
 type EnvCache<LABEL, ENVC> = RefCell<HashMap<EdgeOrData<LABEL>, Rc<ENVC>>>;
 
-impl<'sg, 'query, LABEL, DATA, CMPL, DWF, LO, DEq, ENVC>
+impl<'sg, 'query, LABEL, DATA, CMPL, DWF, LO, DEq>
     ResolutionContext<'sg, 'query, LABEL, DATA, CMPL, DWF, LO, DEq>
 where
     LABEL: Copy + Debug + Hash + Eq,
     DATA: Debug,
     ResolvedPath<'sg, LABEL, DATA>: Hash + Eq,
     CMPL: Completeness<LABEL, DATA>,
-    CMPL::GetEdgesResult: ScopeContainer<LABEL>,
-    <CMPL::GetEdgesResult as ScopeContainer<LABEL>>::PathContainer:
-        PathContainer<LABEL, DATA, EnvContainer<'sg> = ENVC>,
-    ENVC: EnvContainer<'sg, LABEL, DATA> + Debug,
+    CMPL::GetEdgesResult<'sg>: ScopeContainer<LABEL>,
+    <CMPL::GetEdgesResult<'sg> as ScopeContainer<LABEL>>::PathContainer: PathContainer<LABEL, DATA>,
+    <<CMPL::GetEdgesResult<'sg> as ScopeContainer<LABEL>>::PathContainer as PathContainer<
+        LABEL,
+        DATA,
+    >>::EnvContainer<'sg>: EnvContainer<'sg, LABEL, DATA> + Debug,
     DEq: DataEquiv<DATA>,
     DWF: DataWellformedness<DATA>,
     LO: LabelOrder<LABEL>,
@@ -112,7 +143,7 @@ where
         &self,
         path_wellformedness: &impl for<'a> RegexMatcher<&'a LABEL>,
         path: &Path<LABEL>,
-    ) -> ENVC {
+    ) -> EnvC<'sg, CMPL, LABEL, DATA> {
         let edges: Vec<_> = self
             .all_edges
             .iter()
@@ -136,15 +167,15 @@ where
         path_wellformedness: &impl for<'a> RegexMatcher<&'a LABEL>,
         edges: &[EdgeOrData<LABEL>],
         path: &Path<LABEL>,
-        cache: &EnvCache<LABEL, ENVC>,
-    ) -> ENVC {
+        cache: &EnvCache<LABEL, EnvC<'sg, CMPL, LABEL, DATA>>,
+    ) -> EnvC<'sg, CMPL, LABEL, DATA> {
         // set of labels that are to be resolved last
         let max = self.max(edges);
         let tgt = path.target();
         log::info!("Resolving max-edges {:?} in {:?}", max, tgt);
 
         max.into_iter()
-            .map::<Rc<ENVC>, _>(|edge| {
+            .map::<Rc<EnvC<'sg, CMPL, LABEL, DATA>>, _>(|edge| {
                 if let Some(env) = cache.borrow().get(&edge) {
                     log::info!("Reuse {:?}-environment from cache", edge);
                     return env.clone();
@@ -161,16 +192,21 @@ where
                 cache.borrow_mut().insert(edge, new_env.clone());
                 new_env
             })
-            .fold(ENVC::empty(), |env1, env2| {
-                // env1 and env2 are Rc<ENVC> clones not owned by a cache
-                env1.flat_map(|agg_env| {
-                    env2.flat_map(|new_env| {
-                        let mut merged_env = agg_env.clone();
-                        merged_env.merge(new_env.clone());
-                        ENVC::from(merged_env)
+            .fold(
+                <EnvC<'sg, CMPL, LABEL, DATA> as EnvContainer<'sg, LABEL, DATA>>::empty(),
+                |env1, env2| {
+                    // env1 and env2 are Rc<ENVC> clones not owned by a cache
+                    env1.flat_map(|agg_env| {
+                        env2.flat_map(|new_env| {
+                            let mut merged_env = agg_env.clone();
+                            merged_env.merge(new_env.clone());
+                            <EnvC<'sg, CMPL, LABEL, DATA> as From<Env<'sg, LABEL, DATA>>>::from(
+                                merged_env,
+                            )
+                        })
                     })
-                })
-            })
+                },
+            )
     }
 
     /// Computes shadowed environment with following steps:
@@ -184,14 +220,17 @@ where
         edge: EdgeOrData<LABEL>,     // current max label
         edges: &[EdgeOrData<LABEL>], // smaller set of `edge`
         path: &Path<LABEL>,
-        cache: &EnvCache<LABEL, ENVC>,
-    ) -> Rc<ENVC> {
+        cache: &EnvCache<LABEL, EnvC<'sg, CMPL, LABEL, DATA>>,
+    ) -> Rc<EnvC<'sg, CMPL, LABEL, DATA>> {
         // base environment
-        let base_env: ENVC = self.resolve_edges(path_wellformedness, edges, path, cache);
+        let base_env: EnvC<'sg, CMPL, LABEL, DATA> =
+            self.resolve_edges(path_wellformedness, edges, path, cache);
         // environment of current (max) label, which might be shadowed by the base environment
         Rc::new(base_env.flat_map(|base_env| {
             if !base_env.is_empty() && self.data_equiv.always_true() {
-                ENVC::from(base_env.clone())
+                <EnvC<'sg, CMPL, LABEL, DATA> as From<Env<'sg, LABEL, DATA>>>::from(
+                    base_env.clone(),
+                )
             } else {
                 let sub_env = self.resolve_edge(path_wellformedness, edge, path);
                 sub_env.flat_map(|sub_env| {
@@ -219,7 +258,7 @@ where
                     for path in filtered_env {
                         new_env.insert(path.clone())
                     }
-                    ENVC::from(new_env)
+                    <EnvC<'sg, CMPL, LABEL, DATA> as From<Env<'sg, LABEL, DATA>>>::from(new_env)
                 })
             }
         }))
@@ -231,7 +270,7 @@ where
         path_wellformedness: &impl for<'a> RegexMatcher<&'a LABEL>,
         edge: EdgeOrData<LABEL>,
         path: &Path<LABEL>,
-    ) -> ENVC {
+    ) -> EnvC<'sg, CMPL, LABEL, DATA> {
         match edge {
             EdgeOrData::Edge(label) => {
                 let mut new_path_wellformedness = path_wellformedness.clone();
@@ -251,23 +290,24 @@ where
         path_wellformedness: &impl for<'a> RegexMatcher<&'a LABEL>,
         label: LABEL,
         path: &Path<LABEL>,
-    ) -> ENVC {
+    ) -> EnvC<'sg, CMPL, LABEL, DATA> {
         let source = path.target();
         let targets = self.sg.get_edges(source, label);
         let path_set = targets.lift_step(label, path);
-        let env: ENVC = path_set.map_into_env::<_>(|p| self.resolve_all(path_wellformedness, &p));
+        let env: EnvC<'sg, CMPL, LABEL, DATA> =
+            path_set.map_into_env::<_>(|p| self.resolve_all(path_wellformedness, &p));
         env
     }
 
     /// Creates single-path environment if the data `path.target()` is matching, or an empty environment otherwise.
-    fn resolve_data(&self, path: &Path<LABEL>) -> ENVC {
+    fn resolve_data(&self, path: &Path<LABEL>) -> EnvC<'sg, CMPL, LABEL, DATA> {
         let data = self.sg.get_data(path.target());
         if self.data_wellformedness.data_wf(data) {
             log::info!("{:?} matched: return singleton env.", data);
             Env::single(path.clone().resolve(data)).into()
         } else {
             log::info!("{:?} not matched: return empty env.", data);
-            ENVC::empty()
+            <EnvC<'sg, CMPL, LABEL, DATA> as EnvContainer<'sg, LABEL, DATA>>::empty()
         }
     }
 
@@ -607,13 +647,14 @@ mod tests {
 
     fn resolve_complex_unchecked<CMPL>(scope_graph: &mut ScopeGraph<Lbl, TData, CMPL>, s_let: Scope)
     where
-        CMPL: for<'a> Completeness<Lbl, TData<'a>, GetEdgesResult = Vec<Scope>>,
+        CMPL: for<'a> Completeness<Lbl, TData<'a>, GetEdgesResult<'a> = Vec<Scope>>,
     {
         let env = scope_graph
             .query()
             .with_path_wellformedness(query_regex!(Lbl: Lex* Imp? Def))
             .with_data_wellformedness(TData::matcher("x"))
             .with_label_order(label_order!(Lbl: Def < Imp < Lex))
+            //  .lookup_compat();
             .resolve(s_let);
 
         let env_vec = env.into_iter().collect::<Vec<_>>();

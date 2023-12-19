@@ -268,9 +268,11 @@ impl<'sg, LABEL: 'sg + Clone, DATA> Clone for Env<'sg, LABEL, DATA> {
 }
 
 pub trait Resolve {
-    type EnvContainer;
+    type EnvContainer<'cont>
+    where
+        Self: 'cont;
 
-    fn resolve(&self, scope: Scope) -> Self::EnvContainer;
+    fn resolve(&self, scope: Scope) -> Self::EnvContainer<'_>;
 }
 
 pub struct Query<'sg, LABEL, DATA, CMPL, PWF, DWF, LO, DEq> {

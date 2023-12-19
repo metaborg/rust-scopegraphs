@@ -22,12 +22,12 @@ impl UncheckedCompleteness {
 }
 
 impl<LABEL: Hash + Eq, DATA> Completeness<LABEL, DATA> for UncheckedCompleteness {
-    fn cmpl_new_scope(&mut self, _: &InnerScopeGraph<LABEL, DATA>, _: Scope) {}
+    fn cmpl_new_scope(&self, _: &mut InnerScopeGraph<LABEL, DATA>, _: Scope) {}
 
     type NewEdgeResult = ();
 
-    fn cmpl_new_edge<'a>(
-        &mut self,
+    fn cmpl_new_edge(
+        &self,
         inner_scope_graph: &mut InnerScopeGraph<LABEL, DATA>,
         src: Scope,
         lbl: LABEL,
@@ -36,14 +36,17 @@ impl<LABEL: Hash + Eq, DATA> Completeness<LABEL, DATA> for UncheckedCompleteness
         inner_scope_graph.add_edge(src, lbl, dst)
     }
 
-    type GetEdgesResult = Vec<Scope>;
+    type GetEdgesResult<'a> = Vec<Scope>
+        where
+            DATA: 'a,
+            LABEL: 'a;
 
-    fn cmpl_get_edges(
-        &mut self,
-        inner_scope_graph: &InnerScopeGraph<LABEL, DATA>,
+    fn cmpl_get_edges<'a>(
+        &'a self,
+        inner_scope_graph: &'a InnerScopeGraph<LABEL, DATA>,
         src: Scope,
         lbl: LABEL,
-    ) -> Self::GetEdgesResult {
+    ) -> Self::GetEdgesResult<'a> {
         inner_scope_graph.get_edges(src, lbl)
     }
 }

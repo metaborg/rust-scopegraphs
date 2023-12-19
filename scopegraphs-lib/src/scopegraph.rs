@@ -1,5 +1,4 @@
 use std::{
-    cell::RefCell,
     collections::{HashMap, HashSet},
     fmt::{Debug, Formatter},
     hash::Hash,
@@ -90,14 +89,14 @@ impl<'a, LABEL: Hash + Eq, DATA> InnerScopeGraph<LABEL, DATA> {
 /// Finally, although not made explicit, [`LABEL`] should be a finite, iterable set.
 pub struct ScopeGraph<LABEL, DATA, CMPL> {
     pub(super) inner_scope_graph: InnerScopeGraph<LABEL, DATA>,
-    pub(super) completeness: RefCell<CMPL>,
+    pub(super) completeness: CMPL,
 }
 
 impl<LABEL, DATA, CMPL> ScopeGraph<LABEL, DATA, CMPL> {
     pub fn new(completeness: CMPL) -> Self {
         ScopeGraph {
             inner_scope_graph: InnerScopeGraph::new(),
-            completeness: RefCell::new(completeness),
+            completeness,
         }
     }
 }
@@ -121,8 +120,7 @@ where
     pub fn add_scope(&mut self, data: DATA) -> Scope {
         let scope = self.inner_scope_graph.add_scope(data);
         self.completeness
-            .borrow_mut()
-            .cmpl_new_scope(&self.inner_scope_graph, scope);
+            .cmpl_new_scope(&mut self.inner_scope_graph, scope);
         scope
     }
 
@@ -131,7 +129,6 @@ where
     /// Permission for this is checked by `CMPL`.
     pub fn add_edge(&mut self, src: Scope, lbl: LABEL, dst: Scope) -> CMPL::NewEdgeResult {
         self.completeness
-            .borrow_mut()
             .cmpl_new_edge(&mut self.inner_scope_graph, src, lbl, dst)
     }
 
@@ -143,9 +140,8 @@ where
     /// Get the targets of the outgoing edges of a scope with some label.
     ///
     /// Permission for this operation is checked by `CMPL`.
-    pub fn get_edges(&self, src: Scope, lbl: LABEL) -> CMPL::GetEdgesResult {
+    pub fn get_edges(&self, src: Scope, lbl: LABEL) -> CMPL::GetEdgesResult<'_> {
         self.completeness
-            .borrow_mut()
             .cmpl_get_edges(&self.inner_scope_graph, src, lbl)
     }
 
@@ -163,8 +159,7 @@ where
         // Create scope with no open edges.
         let s_data = self.inner_scope_graph.add_scope(data);
         self.completeness
-            .borrow_mut()
-            .cmpl_new_complete_scope(&self.inner_scope_graph, s_data);
+            .cmpl_new_complete_scope(&mut self.inner_scope_graph, s_data);
         self.add_edge(src, lbl, s_data)
     }
 }

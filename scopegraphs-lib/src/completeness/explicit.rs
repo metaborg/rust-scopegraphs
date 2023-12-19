@@ -35,14 +35,14 @@ impl<LABEL> Default for ExplicitClose<LABEL> {
 impl<LABEL> Sealed for ExplicitClose<LABEL> {}
 
 impl<LABEL: Hash + Eq + Label, DATA> Completeness<LABEL, DATA> for ExplicitClose<LABEL> {
-    fn cmpl_new_scope(&mut self, _: &InnerScopeGraph<LABEL, DATA>, _: Scope) {
+    fn cmpl_new_scope(&self, _: &mut InnerScopeGraph<LABEL, DATA>, _: Scope) {
         <ExplicitClose<LABEL> as CriticalEdgeBasedCompleteness<LABEL, DATA>>::init_scope_with(
             self,
             LABEL::iter().collect(), // init with all labels: programmer is responsible for closing edges
         )
     }
 
-    fn cmpl_new_complete_scope(&mut self, _: &InnerScopeGraph<LABEL, DATA>, _: Scope) {
+    fn cmpl_new_complete_scope(&self, _: &mut InnerScopeGraph<LABEL, DATA>, _: Scope) {
         <ExplicitClose<LABEL> as CriticalEdgeBasedCompleteness<LABEL, DATA>>::init_scope_with(
             self,
             HashSet::new(), // init with empty label set to prevent extension
@@ -52,7 +52,7 @@ impl<LABEL: Hash + Eq + Label, DATA> Completeness<LABEL, DATA> for ExplicitClose
     type NewEdgeResult = Result<(), EdgeClosedError<LABEL>>;
 
     fn cmpl_new_edge(
-        &mut self,
+        &self,
         inner_scope_graph: &mut InnerScopeGraph<LABEL, DATA>,
         src: Scope,
         lbl: LABEL,
@@ -69,14 +69,18 @@ impl<LABEL: Hash + Eq + Label, DATA> Completeness<LABEL, DATA> for ExplicitClose
         }
     }
 
-    type GetEdgesResult = EdgesOrDelay<Vec<Scope>, LABEL>;
+    type GetEdgesResult<'a> = EdgesOrDelay<Vec<Scope>, LABEL>
+        where
+            DATA: 'a,
+            LABEL: 'a,
+            Self: 'a;
 
-    fn cmpl_get_edges(
-        &mut self,
-        inner_scope_graph: &InnerScopeGraph<LABEL, DATA>,
+    fn cmpl_get_edges<'a>(
+        &'a self,
+        inner_scope_graph: &'a InnerScopeGraph<LABEL, DATA>,
         src: Scope,
         lbl: LABEL,
-    ) -> Self::GetEdgesResult {
+    ) -> Self::GetEdgesResult<'a> {
         if self.critical_edges.is_open(src, &lbl) {
             Err(Delay {
                 scope: src,
@@ -91,13 +95,13 @@ impl<LABEL: Hash + Eq + Label, DATA> Completeness<LABEL, DATA> for ExplicitClose
 impl<LABEL: Hash + Eq + Label, DATA> CriticalEdgeBasedCompleteness<LABEL, DATA>
     for ExplicitClose<LABEL>
 {
-    fn init_scope_with(&mut self, open_labels: HashSet<LABEL>) {
+    fn init_scope_with(&self, open_labels: HashSet<LABEL>) {
         self.critical_edges.init_scope(open_labels)
     }
 }
 
 impl<LABEL: Hash + Eq> ExplicitClose<LABEL> {
-    fn close(&mut self, scope: Scope, label: &LABEL) {
+    pub(super) fn close(&self, scope: Scope, label: &LABEL) {
         self.critical_edges.close(scope, label);
     }
 }
@@ -180,6 +184,6 @@ impl<LABEL: Hash + Eq, DATA> ScopeGraph<LABEL, DATA, ExplicitClose<LABEL>> {
     /// query_result.expect("query should return result");
     /// ```
     pub fn close(&self, scope: Scope, label: &LABEL) {
-        self.completeness.borrow_mut().close(scope, label)
+        self.completeness.close(scope, label)
     }
 }
