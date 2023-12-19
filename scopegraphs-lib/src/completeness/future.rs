@@ -10,13 +10,11 @@ use std::pin::Pin;
 use std::task::{Context, Poll, Waker};
 
 pub enum ResolutionFuture<'fut, T> {
-    Ready {
-        value: T,
-    },
-    PollFn {
-        poll: Box<dyn FnMut(&Context) -> Poll<T> + 'fut>,
-    },
+    Ready { value: T },
+    PollFn { poll: PollMut<'fut, T> },
 }
+
+type PollMut<'fut, T> = Box<dyn FnMut(&Context) -> Poll<T> + 'fut>;
 
 impl<'fut, T> Future for ResolutionFuture<'fut, T>
 where
@@ -34,7 +32,7 @@ where
 
 impl<'fut, T> From<T> for ResolutionFuture<'fut, T> {
     fn from(value: T) -> Self {
-        ResolutionFuture::Ready { value: value }
+        ResolutionFuture::Ready { value }
     }
 }
 
@@ -141,7 +139,7 @@ impl<LABEL: Hash + Eq + Copy> FutureCompleteness<LABEL> {
             .into_iter()
             .flatten()
         {
-            waker.clone().wake()
+            waker.wake_by_ref()
         }
     }
 }
