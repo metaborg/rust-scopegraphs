@@ -203,10 +203,7 @@ where
     }
 
     /// Adds a new scope with no open edges.
-    pub fn add_scope_closed<I>(&mut self, data: DATA) -> Scope
-    where
-        I: IntoIterator<Item = LABEL>,
-    {
+    pub fn add_scope_closed(&mut self, data: DATA) -> Scope {
         let scope = self.inner_scope_graph.add_scope(data);
         self.completeness
             .borrow_mut()
