@@ -183,8 +183,8 @@ where
     fn resolve_shadow(
         &self,
         path_wellformedness: &impl for<'a> RegexMatcher<&'a LABEL>,
-        edge: EdgeOrData<LABEL>,
-        edges: &[EdgeOrData<LABEL>],
+        edge: EdgeOrData<LABEL>,     // current max label
+        edges: &[EdgeOrData<LABEL>], // smaller set of `edge`
         path: &Path<LABEL>,
         cache: &EnvCache<LABEL, ENVC>,
     ) -> Rc<ENVC> {
@@ -269,7 +269,7 @@ where
             Env::single(path.clone().resolve(data)).into()
         } else {
             log::info!("{:?} not matched: return empty env.", data);
-            Env::new().into()
+            ENVC::empty()
         }
     }
 

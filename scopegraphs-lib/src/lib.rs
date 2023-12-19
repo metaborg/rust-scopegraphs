@@ -51,6 +51,9 @@ impl<LABEL, DATA> InnerScopeGraph<LABEL, DATA> {
 
     /// Returns the data associated with the `scope` argument.
     fn get_data(&self, scope: Scope) -> &DATA {
+        // panics if src.0 is out of bounds
+        // the methods that update `ScopeGraphs` retain the invariant that each scope has an appropriate entry in this vector
+        // however, panics can still happen when a scope from a different scope graph is used
         &self.data[scope.0]
     }
 }
@@ -59,11 +62,17 @@ impl<'a, LABEL: Hash + Eq, DATA> InnerScopeGraph<LABEL, DATA> {
     /// Adds a new edge from `src`, to `dst`, with label `lbl` to the scope graph.
     /// After this operation, all future calls to [`InnerScopeGraph::get_edges`] on the source will contain the destination.
     fn add_edge(&mut self, src: Scope, lbl: LABEL, dst: Scope) {
+        // panics if src.0 is out of bounds
+        // the methods that update `ScopeGraphs` retain the invariant that each scope has an appropriate entry in this vector
+        // however, panics can still happen when a scope from a different scope graph is used
         self.edges[src.0].entry(lbl).or_default().insert(dst);
     }
 
     /// Returns the targets of the outgoing edges of `src` with label `lbl`.
     fn get_edges(&'a self, scope: Scope, lbl: LABEL) -> Vec<Scope> {
+        // panics if scope.0 is out of bounds
+        // the methods that update `ScopeGraphs` retain the invariant that each scope has an appropriate entry in this vector
+        // however, panics can still happen when a scope from a different scope graph is used
         self.edges[scope.0]
             .get(&lbl)
             .into_iter()
@@ -238,7 +247,7 @@ impl<LABEL: Hash + Eq, DATA> ScopeGraph<LABEL, DATA, ExplicitClose<LABEL>> {
     /// let mut sg = ScopeGraph::<Lbl, usize, _>::new(ExplicitClose::default());
     ///
     /// let s1 = sg.add_scope_with(0, [Def]);
-    /// let s2 = sg.add_scope_with::<[Lbl; 0]>(42, []);
+    /// let s2 = sg.add_scope_closed(42);
     ///
     /// sg.close(s1, &Def);
     /// sg.add_edge(s1, Def, s2).expect_err("cannot add edge after closing edge");
@@ -261,7 +270,7 @@ impl<LABEL: Hash + Eq, DATA> ScopeGraph<LABEL, DATA, ExplicitClose<LABEL>> {
     /// let mut sg = ScopeGraph::<Lbl, usize, _>::new(ExplicitClose::default());
     ///
     /// let s1 = sg.add_scope_with(0, [Def]);
-    /// let s2 = sg.add_scope_with::<[Lbl; 0]>(42, []);
+    /// let s2 = sg.add_scope_closed(42);
     ///
     /// // Note: not calling `sg.close(s1, &Def)`
     ///
@@ -271,6 +280,36 @@ impl<LABEL: Hash + Eq, DATA> ScopeGraph<LABEL, DATA, ExplicitClose<LABEL>> {
     ///     .resolve(s1);
     ///
     /// query_result.expect_err("require s1/Def to be closed");
+    /// ```
+    ///
+    /// Closing allows queries to resolve:
+    /// ```
+    ///
+    /// # use scopegraphs_lib::completeness::ExplicitClose;
+    /// # use scopegraphs_lib::ScopeGraph;
+    /// # use scopegraphs_lib::resolve::{DefaultDataEquiv, DefaultLabelOrder, EdgeOrData, Resolve};
+    /// # use scopegraphs_macros::{compile_regex, Label};
+    /// #
+    /// # #[derive(Eq, Hash, PartialEq, Label, Debug, Copy, Clone)]
+    /// # enum Lbl { Def }
+    /// # use Lbl::*;
+    /// # type LblD = EdgeOrData<Lbl>;
+    /// #
+    /// # compile_regex!(type Regex<Lbl> = Def);
+    /// let mut sg = ScopeGraph::<Lbl, usize, _>::new(ExplicitClose::default());
+    ///
+    /// let s1 = sg.add_scope_with(0, [Def]);
+    /// let s2 = sg.add_scope_closed(42);
+    ///
+    /// // Note: closing the edge *after* creating all edges, *before* doing the query
+    /// sg.close(s1, &Def);
+    ///
+    /// let query_result = sg.query()
+    ///     .with_path_wellformedness(Regex::new()) // regex: `Def`
+    ///     .with_data_wellformedness(|x: &usize| *x == 42) // match `42`
+    ///     .resolve(s1);
+    ///
+    /// query_result.expect("query should return result");
     /// ```
     pub fn close(&self, scope: Scope, label: &LABEL) {
         self.completeness.borrow_mut().close(scope, label)

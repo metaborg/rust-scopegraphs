@@ -49,11 +49,14 @@ use private::Sealed;
 pub trait Completeness<LABEL, DATA>: Sealed {
     fn cmpl_new_scope(&mut self, inner_scope_graph: &InnerScopeGraph<LABEL, DATA>, scope: Scope);
 
+    /// Should initialize a scope without possibility to extend it with edges
     fn cmpl_new_complete_scope(
         &mut self,
         inner_scope_graph: &InnerScopeGraph<LABEL, DATA>,
         scope: Scope,
-    );
+    ) {
+        self.cmpl_new_scope(inner_scope_graph, scope)
+    }
 
     type NewEdgeResult;
     fn cmpl_new_edge(
@@ -99,8 +102,6 @@ impl UncheckedCompleteness {
 
 impl<LABEL: Hash + Eq, DATA> Completeness<LABEL, DATA> for UncheckedCompleteness {
     fn cmpl_new_scope(&mut self, _: &InnerScopeGraph<LABEL, DATA>, _: Scope) {}
-
-    fn cmpl_new_complete_scope(&mut self, _: &InnerScopeGraph<LABEL, DATA>, _: Scope) {}
 
     type NewEdgeResult = ();
 
@@ -212,14 +213,14 @@ impl<LABEL: Hash + Eq + Label, DATA> Completeness<LABEL, DATA> for ExplicitClose
     fn cmpl_new_scope(&mut self, _: &InnerScopeGraph<LABEL, DATA>, _: Scope) {
         <ExplicitClose<LABEL> as CriticalEdgeBasedCompleteness<LABEL, DATA>>::init_scope_with(
             self,
-            HashSet::from_iter(LABEL::iter()),
+            LABEL::iter().collect(), // init with all labels: programmer is responsible for closing edges
         )
     }
 
     fn cmpl_new_complete_scope(&mut self, _: &InnerScopeGraph<LABEL, DATA>, _: Scope) {
         <ExplicitClose<LABEL> as CriticalEdgeBasedCompleteness<LABEL, DATA>>::init_scope_with(
             self,
-            HashSet::new(),
+            HashSet::new(), // init with empty label set to prevent extension
         )
     }
 
