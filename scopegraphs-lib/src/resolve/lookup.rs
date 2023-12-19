@@ -21,29 +21,6 @@ use crate::{
 };
 use scopegraphs_regular_expressions::RegexMatcher;
 
-impl<'sg, LABEL, DATA, CMPL, PWF, DWF, LO, DEq> Query<'sg, LABEL, DATA, CMPL, PWF, DWF, LO, DEq>
-where
-    LABEL: Label + Copy + Debug + Hash + Eq,
-    DATA: Debug,
-    CMPL: Completeness<LABEL, DATA>,
-    CMPL::GetEdgesResult<'sg>: ScopeContainer<LABEL>,
-    <CMPL::GetEdgesResult<'sg> as ScopeContainer<LABEL>>::PathContainer: PathContainer<LABEL, DATA>,
-    <<CMPL::GetEdgesResult<'sg> as ScopeContainer<LABEL>>::PathContainer as PathContainer<
-        LABEL,
-        DATA,
-    >>::EnvContainer<'sg>: EnvContainer<'sg, LABEL, DATA> + Debug,
-    PWF: for<'a> RegexMatcher<&'a LABEL>,
-    DWF: DataWellformedness<DATA>,
-    LO: LabelOrder<LABEL>,
-    DEq: DataEquiv<DATA>,
-    ResolvedPath<'sg, LABEL, DATA>: Hash + Eq,
-    Path<LABEL>: Clone,
-{
-    pub fn lookup_compat(self) -> Self {
-        self
-    }
-}
-
 impl<'sg, LABEL, DATA, CMPL, PWF, DWF, LO, DEq> Resolve
     for Query<'sg, LABEL, DATA, CMPL, PWF, DWF, LO, DEq>
 where
@@ -345,10 +322,10 @@ mod tests {
     use scopegraphs_macros::{label_order, Label};
 
     use scopegraphs::{
-        completeness::{Completeness, ExplicitClose, ImplicitClose, UncheckedCompleteness},
+        completeness::{ExplicitClose, ImplicitClose, UncheckedCompleteness},
         label::query_regex,
         resolve::{DataWellformedness, Resolve, ResolvedPath},
-        Scope, ScopeGraph,
+        ScopeGraph,
     };
 
     #[derive(Label, Hash, PartialEq, Eq, Debug, Clone, Copy)]
@@ -520,7 +497,18 @@ mod tests {
         scope_graph.add_decl(s_rec, Def, Data { name: "x", data: 1 });
         scope_graph.add_decl(s_let, Def, Data { name: "x", data: 2 });
 
-        resolve_complex_unchecked(&mut scope_graph, s_let)
+        let env = scope_graph
+            .query()
+            .with_path_wellformedness(query_regex!(Lbl: Lex* Imp? Def))
+            .with_data_wellformedness(TData::matcher("x"))
+            .with_label_order(label_order!(Lbl: Def < Imp < Lex))
+            .resolve(s_let);
+
+        let env_vec = env.into_iter().collect::<Vec<_>>();
+        assert_eq!(1, env_vec.len());
+
+        let path: &ResolvedPath<Lbl, TData> = &env_vec[0];
+        assert!(matches!(path.data(), &Data { name: "x", data: 2 }));
     }
 
     #[test]
@@ -550,7 +538,18 @@ mod tests {
             .add_decl(s_let, Def, Data { name: "x", data: 2 })
             .expect("edge closed unexpectedly");
 
-        resolve_complex_unchecked(&mut scope_graph, s_let);
+        let env = scope_graph
+            .query()
+            .with_path_wellformedness(query_regex!(Lbl: Lex* Imp? Def))
+            .with_data_wellformedness(TData::matcher("x"))
+            .with_label_order(label_order!(Lbl: Def < Imp < Lex))
+            .resolve(s_let);
+
+        let env_vec = env.into_iter().collect::<Vec<_>>();
+        assert_eq!(1, env_vec.len());
+
+        let path: &ResolvedPath<Lbl, TData> = &env_vec[0];
+        assert!(matches!(path.data(), &Data { name: "x", data: 2 }));
 
         // todo!("assert the correct edges are closed!")
     }
@@ -643,24 +642,5 @@ mod tests {
                 data: 42
             }
         ));
-    }
-
-    fn resolve_complex_unchecked<CMPL>(scope_graph: &mut ScopeGraph<Lbl, TData, CMPL>, s_let: Scope)
-    where
-        CMPL: for<'a> Completeness<Lbl, TData<'a>, GetEdgesResult<'a> = Vec<Scope>>,
-    {
-        let env = scope_graph
-            .query()
-            .with_path_wellformedness(query_regex!(Lbl: Lex* Imp? Def))
-            .with_data_wellformedness(TData::matcher("x"))
-            .with_label_order(label_order!(Lbl: Def < Imp < Lex))
-            //  .lookup_compat();
-            .resolve(s_let);
-
-        let env_vec = env.into_iter().collect::<Vec<_>>();
-        assert_eq!(1, env_vec.len());
-
-        let path: &ResolvedPath<Lbl, TData> = &env_vec[0];
-        assert!(matches!(path.data(), &Data { name: "x", data: 2 }));
     }
 }
