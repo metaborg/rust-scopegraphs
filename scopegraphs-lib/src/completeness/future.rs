@@ -1,10 +1,11 @@
 use crate::completeness::private::Sealed;
 use crate::completeness::{Completeness, CriticalEdgeBasedCompleteness, Delay, ExplicitClose};
+use crate::future_wrapper::FutureWrapper;
 use crate::label::Label;
-use crate::resolution_future::ResolutionFuture;
 use crate::{InnerScopeGraph, Scope};
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
+use std::future::poll_fn;
 use std::hash::Hash;
 use std::task::{Poll, Waker};
 
@@ -35,7 +36,7 @@ impl<LABEL: Hash + Eq + Label + Copy, DATA> Completeness<LABEL, DATA>
             .cmpl_new_edge(inner_scope_graph, src, lbl, dst)
     }
 
-    type GetEdgesResult<'fut> = ResolutionFuture<'fut, Vec<Scope>> where DATA: 'fut, LABEL: 'fut, Self: 'fut;
+    type GetEdgesResult<'fut> = FutureWrapper<'fut, Vec<Scope>> where DATA: 'fut, LABEL: 'fut, Self: 'fut;
 
     fn cmpl_get_edges<'fut>(
         &'fut self,
@@ -43,30 +44,22 @@ impl<LABEL: Hash + Eq + Label + Copy, DATA> Completeness<LABEL, DATA>
         src: Scope,
         lbl: LABEL,
     ) -> Self::GetEdgesResult<'fut> {
-        match self
-            .explicit_close
-            .cmpl_get_edges(inner_scope_graph, src, lbl)
-        {
-            Ok(scopes) => ResolutionFuture::Ready { value: scopes },
-            Err(_) => ResolutionFuture::PollFn {
-                poll: Box::new(move |cx| {
-                    match self
-                        .explicit_close
-                        .cmpl_get_edges(inner_scope_graph, src, lbl)
-                    {
-                        Ok(scopes) => Poll::Ready(scopes),
-                        Err(delay) => {
-                            self.wakers
-                                .borrow_mut()
-                                .entry(delay)
-                                .or_default()
-                                .push(cx.waker().clone());
-                            Poll::Pending
-                        }
-                    }
-                }),
-            },
-        }
+        FutureWrapper(Box::new(poll_fn(move |cx| {
+            match self
+                .explicit_close
+                .cmpl_get_edges(inner_scope_graph, src, lbl)
+            {
+                Ok(scopes) => Poll::Ready(scopes),
+                Err(delay) => {
+                    self.wakers
+                        .borrow_mut()
+                        .entry(delay)
+                        .or_default()
+                        .push(cx.waker().clone());
+                    Poll::Pending
+                }
+            }
+        })))
     }
 }
 

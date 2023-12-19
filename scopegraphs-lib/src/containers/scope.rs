@@ -1,3 +1,4 @@
+// use crate::resolution_future::ResolutionFuture;
 use crate::{resolve::Path, Scope};
 
 /// Interface for scope containers that support the operations required for query resolution.
@@ -29,3 +30,22 @@ impl<LABEL, SC: ScopeContainer<LABEL>, E> ScopeContainer<LABEL> for Result<SC, E
         self.map(|sc| sc.lift_step(lbl, prefix))
     }
 }
+
+/*
+impl<'fut, LABEL, SC: ScopeContainer<LABEL> + Clone> ScopeContainer<LABEL>
+    for ResolutionFuture<'fut, SC>
+where
+    LABEL: Copy,
+    SC: Unpin,
+    SC::PathContainer: Clone + Unpin,
+    Self: 'fut,
+{
+    type PathContainer = ResolutionFuture<'fut, SC::PathContainer>;
+
+    fn lift_step(mut self, lbl: LABEL, prefix: &Path<LABEL>) -> Self::PathContainer {
+        self.flat_map(&mut |inner_sc| ResolutionFuture::Ready {
+            value: inner_sc.lift_step(lbl, prefix),
+        })
+    }
+}
+*/
