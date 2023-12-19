@@ -31,8 +31,11 @@ impl<'fut, T> From<T> for ResolutionFuture<'fut, T> {
     }
 }
 
-impl<'fut, T: Clone> ResolutionFuture<'fut, T> {
-    pub(crate) fn flat_map(&'fut mut self, map: &'fut mut (impl FnMut(&T) -> Self + 'fut)) -> Self {
+impl<'fut, T> ResolutionFuture<'fut, T> {
+    pub(crate) fn flat_map<U: Clone>(
+        &'fut mut self,
+        map: &'fut mut (impl FnMut(&T) -> ResolutionFuture<'fut, U>),
+    ) -> ResolutionFuture<'fut, U> {
         match self {
             // outer value is ready, return mapping of that value
             ResolutionFuture::Ready { value } => map(value),
