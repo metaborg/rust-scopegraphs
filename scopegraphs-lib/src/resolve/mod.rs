@@ -63,7 +63,8 @@ pub struct Path<LABEL> {
     /// This is cheaper than traversing the [`Path::inner_path`], at the cost of some more memory usage.
     ///
     /// In order to make paths cheap to extend multiple times, we use a persistent data structure.
-    scopes: TrieSet<Scope>,
+    scopes: Arc<TrieSet<Scope>>,
+    // FIXME: put fields in same Arc
 }
 
 impl<LABEL> PartialEq for Path<LABEL>
@@ -138,7 +139,7 @@ impl<LABEL> Path<LABEL> {
     pub fn new(source: Scope) -> Self {
         Self {
             inner_path: Arc::new(InnerPath::Start { source }),
-            scopes: TrieSet::new().insert(source),
+            scopes: Arc::new(TrieSet::new().insert(source)),
         }
     }
 
@@ -166,7 +167,7 @@ impl<LABEL> Path<LABEL> {
                     label,
                     target,
                 }),
-                scopes: self.scopes.insert(target),
+                scopes: Arc::new(self.scopes.insert(target)),
             })
         }
     }

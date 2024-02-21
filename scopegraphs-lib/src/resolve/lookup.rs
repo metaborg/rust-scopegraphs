@@ -271,8 +271,8 @@ where
         path: &Path<LABEL>,
     ) -> EnvC<'sg, CMPL, LABEL, DATA> {
         let source = path.target();
-        let mut targets = self.sg.get_edges(source, label);
-        let path_set = targets.lift_step(label, path);
+        let targets = self.sg.get_edges(source, label);
+        let path_set = targets.lift_step(label, path.clone());
         let env: EnvC<'sg, CMPL, LABEL, DATA> =
             path_set.map_into_env::<_>(|p| self.resolve_all(path_wellformedness, &p));
         env
