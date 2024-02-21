@@ -12,6 +12,7 @@ syn = { version = "2.0.29", features = ["full", "extra-traits"] }
 quote = { version = "1.0.33" , optional = true}
 scopegraphs-regular-expressions = {path = "../scopegraphs-regular-expressions"}
 scopegraphs-macros = {path = "../scopegraphs-macros"}
+futures = "0.3.30"
 
 [dev-dependencies]
 scopegraphs = {path = "../scopegraphs"}
