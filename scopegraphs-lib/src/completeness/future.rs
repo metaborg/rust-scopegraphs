@@ -16,7 +16,7 @@ pub struct FutureCompleteness<LABEL> {
 
 impl<LABEL> Sealed for FutureCompleteness<LABEL> {}
 
-impl<LABEL: Hash + Eq + Label + Copy, DATA> Completeness<LABEL, DATA>
+impl<'sg, LABEL: Hash + Eq + Label + Copy, DATA> Completeness<LABEL, DATA>
     for FutureCompleteness<LABEL>
 {
     fn cmpl_new_scope(&self, inner_scope_graph: &mut InnerScopeGraph<LABEL, DATA>, scope: Scope) {
@@ -36,14 +36,18 @@ impl<LABEL: Hash + Eq + Label + Copy, DATA> Completeness<LABEL, DATA>
             .cmpl_new_edge(inner_scope_graph, src, lbl, dst)
     }
 
-    type GetEdgesResult<'fut> = FutureWrapper<'fut, Vec<Scope>> where DATA: 'fut, LABEL: 'fut, Self: 'fut;
+    type GetEdgesResult<'rslv> = FutureWrapper<'rslv, Vec<Scope>> where Self: 'rslv, LABEL: 'rslv, DATA: 'rslv;
 
-    fn cmpl_get_edges<'fut>(
-        &'fut self,
-        inner_scope_graph: &'fut InnerScopeGraph<LABEL, DATA>,
+    fn cmpl_get_edges<'rslv>(
+        &'rslv self,
+        inner_scope_graph: &'rslv InnerScopeGraph<LABEL, DATA>,
         src: Scope,
         lbl: LABEL,
-    ) -> Self::GetEdgesResult<'fut> {
+    ) -> Self::GetEdgesResult<'rslv>
+    where
+        LABEL: 'rslv,
+        DATA: 'rslv,
+    {
         FutureWrapper(Box::new(poll_fn(move |cx| {
             match self
                 .explicit_close

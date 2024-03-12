@@ -140,7 +140,7 @@ where
     /// Get the targets of the outgoing edges of a scope with some label.
     ///
     /// Permission for this operation is checked by `CMPL`.
-    pub fn get_edges(&self, src: Scope, lbl: LABEL) -> CMPL::GetEdgesResult<'_> {
+    pub fn get_edges<'sg>(&'sg self, src: Scope, lbl: LABEL) -> CMPL::GetEdgesResult<'sg> {
         self.completeness
             .cmpl_get_edges(&self.inner_scope_graph, src, lbl)
     }

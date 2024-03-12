@@ -67,17 +67,20 @@ impl<LABEL: Hash + Eq + Label, DATA> Completeness<LABEL, DATA> for ImplicitClose
         }
     }
 
-    type GetEdgesResult<'a> = Vec<Scope>
+    type GetEdgesResult<'rslv> = Vec<Scope>
         where
-            DATA: 'a,
-            LABEL: 'a;
+            Self: 'rslv, LABEL: 'rslv, DATA: 'rslv;
 
-    fn cmpl_get_edges<'a>(
-        &'a self,
-        inner_scope_graph: &'a InnerScopeGraph<LABEL, DATA>,
+    fn cmpl_get_edges<'rslv>(
+        &self,
+        inner_scope_graph: &InnerScopeGraph<LABEL, DATA>,
         src: Scope,
         lbl: LABEL,
-    ) -> Self::GetEdgesResult<'a> {
+    ) -> Self::GetEdgesResult<'rslv>
+    where
+        LABEL: 'rslv,
+        DATA: 'rslv,
+    {
         self.critical_edges.close(src, &lbl);
         inner_scope_graph.get_edges(src, lbl)
     }

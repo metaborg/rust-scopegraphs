@@ -1,11 +1,10 @@
-use std::future::{poll_fn, Future};
-use std::task::Poll;
 use crate::future_wrapper::FutureWrapper;
 use crate::{resolve::Path, Scope};
-
+use std::future::{poll_fn, Future};
+use std::task::Poll;
 
 /// Interface for scope containers that support the operations required for query resolution.
-pub trait ScopeContainer<'a, LABEL> {
+pub trait ScopeContainer<LABEL> {
     /// The type containing paths obtained after stepping to this scope.
     type PathContainer;
 
@@ -16,8 +15,7 @@ pub trait ScopeContainer<'a, LABEL> {
     fn lift_step(self, lbl: LABEL, prefix: Path<LABEL>) -> Self::PathContainer;
 }
 
-impl<'a, LABEL: Copy> ScopeContainer<'a, LABEL> for Vec<Scope>
-{
+impl<'a, LABEL: Copy> ScopeContainer<LABEL> for Vec<Scope> {
     type PathContainer = Vec<Path<LABEL>>;
 
     fn lift_step(self, lbl: LABEL, prefix: Path<LABEL>) -> Self::PathContainer {
@@ -27,8 +25,7 @@ impl<'a, LABEL: Copy> ScopeContainer<'a, LABEL> for Vec<Scope>
     }
 }
 
-impl<'a, LABEL, SC: ScopeContainer<'a, LABEL>, E> ScopeContainer<'a, LABEL> for Result<SC, E>
-{
+impl<'a, LABEL, SC: ScopeContainer<LABEL>, E> ScopeContainer<LABEL> for Result<SC, E> {
     type PathContainer = Result<SC::PathContainer, E>;
 
     fn lift_step(self, lbl: LABEL, prefix: Path<LABEL>) -> Self::PathContainer {
@@ -36,15 +33,15 @@ impl<'a, LABEL, SC: ScopeContainer<'a, LABEL>, E> ScopeContainer<'a, LABEL> for 
     }
 }
 
-impl<'fut, LABEL, SC: ScopeContainer<'fut, LABEL> + Clone> ScopeContainer<'fut, LABEL>
-    for FutureWrapper<'fut, SC>
+impl<'rslv, LABEL, SC: ScopeContainer<LABEL> + Clone> ScopeContainer<LABEL>
+    for FutureWrapper<'rslv, SC>
 where
     LABEL: Copy,
     SC::PathContainer: Clone,
-    Self: 'fut,
-    LABEL: 'fut,
+    Self: 'rslv,
+    LABEL: 'rslv,
 {
-    type PathContainer = FutureWrapper<'fut, SC::PathContainer>;
+    type PathContainer = FutureWrapper<'rslv, SC::PathContainer>;
 
     fn lift_step(self, lbl: LABEL, prefix: Path<LABEL>) -> Self::PathContainer {
         let mut p_self = Box::pin(self); // FIXME: implement for pinned self?

@@ -3,7 +3,9 @@ use std::hash::Hash;
 use std::rc::Rc;
 
 /// Interface for environment containers that support the operations required for query resolution.
-pub trait EnvContainer<'sg, LABEL: 'sg, DATA: 'sg>: From<Env<'sg, LABEL, DATA>> {
+pub trait EnvContainer<'sg, 'rslv, LABEL: 'sg, DATA: 'sg>:
+    From<Env<'sg, LABEL, DATA>> + 'rslv
+{
     /// Creates a new, container with an empty environment.
     fn empty() -> Self;
 
@@ -11,7 +13,7 @@ pub trait EnvContainer<'sg, LABEL: 'sg, DATA: 'sg>: From<Env<'sg, LABEL, DATA>> 
     fn flat_map(&self, map: impl FnOnce(&Env<'sg, LABEL, DATA>) -> Self) -> Self;
 }
 
-impl<'sg, LABEL, DATA> EnvContainer<'sg, LABEL, DATA> for Env<'sg, LABEL, DATA>
+impl<'sg: 'rslv, 'rslv, LABEL, DATA> EnvContainer<'sg, 'rslv, LABEL, DATA> for Env<'sg, LABEL, DATA>
 where
     ResolvedPath<'sg, LABEL, DATA>: Hash + Eq,
 {
@@ -24,7 +26,8 @@ where
     }
 }
 
-impl<'sg, LABEL, DATA> EnvContainer<'sg, LABEL, DATA> for Rc<Env<'sg, LABEL, DATA>>
+impl<'sg: 'rslv, 'rslv, LABEL: 'sg, DATA: 'sg> EnvContainer<'sg, 'rslv, LABEL, DATA>
+    for Rc<Env<'sg, LABEL, DATA>>
 where
     ResolvedPath<'sg, LABEL, DATA>: Hash + Eq,
 {
@@ -46,7 +49,7 @@ impl<'sg, LABEL: 'sg, DATA: 'sg, E> From<Env<'sg, LABEL, DATA>>
     }
 }
 
-impl<'sg, LABEL: 'sg, DATA: 'sg, E> EnvContainer<'sg, LABEL, DATA>
+impl<'sg: 'rslv, 'rslv, LABEL: 'sg, DATA: 'sg, E: 'rslv> EnvContainer<'sg, 'rslv, LABEL, DATA>
     for Result<Env<'sg, LABEL, DATA>, E>
 where
     ResolvedPath<'sg, LABEL, DATA>: Hash + Eq,

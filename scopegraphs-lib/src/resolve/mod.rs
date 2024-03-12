@@ -2,6 +2,7 @@ use prust_lib::hashmap::HashSet as TrieSet;
 use std::collections::HashSet;
 use std::fmt::{Debug, Formatter};
 use std::hash::Hash;
+use std::marker::PhantomData;
 use std::sync::Arc;
 
 use super::{Scope, ScopeGraph};
@@ -268,15 +269,21 @@ impl<'sg, LABEL: 'sg + Clone, DATA> Clone for Env<'sg, LABEL, DATA> {
     }
 }
 
-pub trait Resolve {
-    type EnvContainer<'cont>
+pub trait Resolve<'sg, 'rslv> {
+    type EnvContainer<'env>
     where
-        Self: 'cont;
+        'sg: 'env,
+        'env: 'rslv,
+        Self: 'rslv,
+        'env: 'sg;
 
-    fn resolve(&self, scope: Scope) -> Self::EnvContainer<'_>;
+    fn resolve<'env: 'rslv>(&'rslv self, scope: Scope) -> Self::EnvContainer<'env>
+    where
+        'env: 'sg;
 }
 
-pub struct Query<'sg, LABEL, DATA, CMPL, PWF, DWF, LO, DEq> {
+pub struct Query<'sg, 'rslv, LABEL, DATA, CMPL, PWF, DWF, LO, DEq> {
+    _phantom: PhantomData<&'rslv ()>,
     scope_graph: &'sg ScopeGraph<LABEL, DATA, CMPL>,
     path_wellformedness: PWF,
     data_wellformedness: DWF,
@@ -284,12 +291,15 @@ pub struct Query<'sg, LABEL, DATA, CMPL, PWF, DWF, LO, DEq> {
     data_equivalence: DEq,
 }
 
-impl<'sg, LABEL, DATA, CMPL, PWF, DWF, LO, DEq> Query<'sg, LABEL, DATA, CMPL, PWF, DWF, LO, DEq> {
+impl<'sg, 'rslv, LABEL, DATA, CMPL, PWF, DWF, LO, DEq>
+    Query<'sg, 'rslv, LABEL, DATA, CMPL, PWF, DWF, LO, DEq>
+{
     pub fn with_path_wellformedness<NPWF>(
         self,
         new_path_wellformedness: NPWF,
-    ) -> Query<'sg, LABEL, DATA, CMPL, NPWF, DWF, LO, DEq> {
+    ) -> Query<'sg, 'rslv, LABEL, DATA, CMPL, NPWF, DWF, LO, DEq> {
         Query {
+            _phantom: PhantomData,
             scope_graph: self.scope_graph,
             path_wellformedness: new_path_wellformedness,
             data_wellformedness: self.data_wellformedness,
@@ -301,8 +311,9 @@ impl<'sg, LABEL, DATA, CMPL, PWF, DWF, LO, DEq> Query<'sg, LABEL, DATA, CMPL, PW
     pub fn with_data_wellformedness<NDWF>(
         self,
         new_data_wellformedness: NDWF,
-    ) -> Query<'sg, LABEL, DATA, CMPL, PWF, NDWF, LO, DEq> {
+    ) -> Query<'sg, 'rslv, LABEL, DATA, CMPL, PWF, NDWF, LO, DEq> {
         Query {
+            _phantom: PhantomData,
             scope_graph: self.scope_graph,
             path_wellformedness: self.path_wellformedness,
             data_wellformedness: new_data_wellformedness,
@@ -314,8 +325,9 @@ impl<'sg, LABEL, DATA, CMPL, PWF, DWF, LO, DEq> Query<'sg, LABEL, DATA, CMPL, PW
     pub fn with_label_order<NLO>(
         self,
         new_label_order: NLO,
-    ) -> Query<'sg, LABEL, DATA, CMPL, PWF, DWF, NLO, DEq> {
+    ) -> Query<'sg, 'rslv, LABEL, DATA, CMPL, PWF, DWF, NLO, DEq> {
         Query {
+            _phantom: PhantomData,
             scope_graph: self.scope_graph,
             path_wellformedness: self.path_wellformedness,
             data_wellformedness: self.data_wellformedness,
@@ -327,8 +339,9 @@ impl<'sg, LABEL, DATA, CMPL, PWF, DWF, LO, DEq> Query<'sg, LABEL, DATA, CMPL, PW
     pub fn with_data_equivalence<NDEq>(
         self,
         new_data_equivalence: NDEq,
-    ) -> Query<'sg, LABEL, DATA, CMPL, PWF, DWF, LO, NDEq> {
+    ) -> Query<'sg, 'rslv, LABEL, DATA, CMPL, PWF, DWF, LO, NDEq> {
         Query {
+            _phantom: PhantomData,
             scope_graph: self.scope_graph,
             path_wellformedness: self.path_wellformedness,
             data_wellformedness: self.data_wellformedness,
@@ -344,6 +357,7 @@ impl<LABEL, DATA, CMPL> ScopeGraph<LABEL, DATA, CMPL> {
     ) -> Query<LABEL, DATA, CMPL, (), DefaultDataWellformedness, DefaultLabelOrder, DefaultDataEquiv>
     {
         Query {
+            _phantom: PhantomData,
             scope_graph: self,
             path_wellformedness: (),
             data_wellformedness: DefaultDataWellformedness::default(),

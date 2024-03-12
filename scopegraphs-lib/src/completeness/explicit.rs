@@ -69,18 +69,20 @@ impl<LABEL: Hash + Eq + Label, DATA> Completeness<LABEL, DATA> for ExplicitClose
         }
     }
 
-    type GetEdgesResult<'a> = EdgesOrDelay<Vec<Scope>, LABEL>
+    type GetEdgesResult<'rslv> = EdgesOrDelay<Vec<Scope>, LABEL>
         where
-            DATA: 'a,
-            LABEL: 'a,
-            Self: 'a;
+            Self: 'rslv, LABEL: 'rslv, DATA: 'rslv;
 
-    fn cmpl_get_edges<'a>(
-        &'a self,
-        inner_scope_graph: &'a InnerScopeGraph<LABEL, DATA>,
+    fn cmpl_get_edges<'rslv>(
+        &self,
+        inner_scope_graph: &InnerScopeGraph<LABEL, DATA>,
         src: Scope,
         lbl: LABEL,
-    ) -> Self::GetEdgesResult<'a> {
+    ) -> Self::GetEdgesResult<'rslv>
+    where
+        LABEL: 'rslv,
+        DATA: 'rslv,
+    {
         if self.critical_edges.is_open(src, &lbl) {
             Err(Delay {
                 scope: src,

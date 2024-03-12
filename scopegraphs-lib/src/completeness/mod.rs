@@ -77,17 +77,20 @@ pub trait Completeness<LABEL, DATA>: Sealed {
     // type GetDataResult;
     // fn get_data(&mut self, inner_scope_graph: &InnerScopeGraph<LABEL, DATA>, scope: Scope) -> Self::GetDataResult;
 
-    type GetEdgesResult<'a>
+    type GetEdgesResult<'rslv>
     where
-        DATA: 'a,
-        LABEL: 'a,
-        Self: 'a;
-    fn cmpl_get_edges<'a>(
-        &'a self,
-        inner_scope_graph: &'a InnerScopeGraph<LABEL, DATA>,
+        Self: 'rslv,
+        LABEL: 'rslv,
+        DATA: 'rslv;
+    fn cmpl_get_edges<'rslv>(
+        &'rslv self,
+        inner_scope_graph: &'rslv InnerScopeGraph<LABEL, DATA>,
         src: Scope,
         lbl: LABEL,
-    ) -> Self::GetEdgesResult<'a>;
+    ) -> Self::GetEdgesResult<'rslv>
+    where
+        LABEL: 'rslv,
+        DATA: 'rslv;
 }
 
 // TODO: Asynchronous Completeness can be a wrapper around the ExplicitClose impl
