@@ -8,18 +8,14 @@ use std::hash::Hash;
 /// Interface for path containers that support the operations required for query resolution.
 pub trait PathContainer<'sg, 'rslv, LABEL: 'sg, DATA: 'sg>: 'rslv {
     /// Type returned by resolving a path to its sub-environment.
-    type EnvContainer<'env>
-    where
-        'sg: 'env;
+    type EnvContainer;
 
     /// Computes sub-environments for each path in the container,
     /// and composes them using the [`crate::containers::EnvContainer::lift_merge`] method.
-    fn map_into_env<'env, F: 'rslv + FnMut(Path<LABEL>) -> Self::EnvContainer<'env>>(
+    fn map_into_env<F: 'rslv + FnMut(Path<LABEL>) -> Self::EnvContainer>(
         self,
         f: F,
-    ) -> Self::EnvContainer<'env>
-    where
-        'sg: 'env;
+    ) -> Self::EnvContainer;
 }
 
 impl<'rslv, 'sg, LABEL: 'sg, DATA: 'sg> PathContainer<'sg, 'rslv, LABEL, DATA> for Vec<Path<LABEL>>
@@ -28,15 +24,9 @@ where
     LABEL: Clone + Hash + Eq,
     DATA: Hash + Eq,
 {
-    type EnvContainer<'env> = Env<'sg, LABEL, DATA> where 'sg: 'env;
+    type EnvContainer = Env<'sg, LABEL, DATA>;
 
-    fn map_into_env<'env, F: FnMut(Path<LABEL>) -> Self::EnvContainer<'env>>(
-        self,
-        f: F,
-    ) -> Self::EnvContainer<'env>
-    where
-        'sg: 'env,
-    {
+    fn map_into_env<F: FnMut(Path<LABEL>) -> Self::EnvContainer>(self, f: F) -> Self::EnvContainer {
         self.into_iter().map(f).collect()
     }
 }
@@ -51,15 +41,9 @@ where
     DATA: Hash,
     for<'a> ResolvedPath<'a, LABEL, DATA>: Hash + Eq,
 {
-    type EnvContainer<'env> = Result<Env<'sg, LABEL, DATA>, E> where 'sg: 'env;
+    type EnvContainer = Result<Env<'sg, LABEL, DATA>, E>;
 
-    fn map_into_env<'env, F: FnMut(Path<LABEL>) -> Self::EnvContainer<'env>>(
-        self,
-        f: F,
-    ) -> Self::EnvContainer<'env>
-    where
-        'sg: 'env,
-    {
+    fn map_into_env<F: FnMut(Path<LABEL>) -> Self::EnvContainer>(self, f: F) -> Self::EnvContainer {
         self.and_then(|paths| {
             paths
                 .into_iter()
@@ -76,15 +60,12 @@ where
     DATA: Hash,
     for<'a> ResolvedPath<'a, LABEL, DATA>: Hash + Eq,
 {
-    type EnvContainer<'env> = FutureWrapper<'rslv, Env<'sg, LABEL, DATA>> where 'sg: 'env;
+    type EnvContainer = FutureWrapper<'rslv, Env<'sg, LABEL, DATA>>;
 
-    fn map_into_env<'env, F: 'rslv + FnMut(Path<LABEL>) -> Self::EnvContainer<'env>>(
+    fn map_into_env<F: 'rslv + FnMut(Path<LABEL>) -> Self::EnvContainer>(
         self,
         f: F,
-    ) -> Self::EnvContainer<'sg>
-    where
-        'sg: 'env,
-    {
+    ) -> Self::EnvContainer {
         let p_self = Box::pin(self);
         let future = async move {
             let paths = p_self.await;
