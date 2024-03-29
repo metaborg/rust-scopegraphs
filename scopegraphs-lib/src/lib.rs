@@ -6,3 +6,4 @@ pub mod resolve;
 mod scopegraph;
 
 pub use scopegraph::*;
+pub use scopegraphs_macros;

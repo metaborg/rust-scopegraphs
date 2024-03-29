@@ -9,6 +9,8 @@ use super::{Scope, ScopeGraph};
 
 mod params;
 pub use params::*;
+use scopegraphs_regular_expressions::RegexMatcher;
+
 pub mod lookup;
 
 /// Representation of either a labeled edge or the special 'data' label.
@@ -293,7 +295,10 @@ impl<'sg, 'rslv, LABEL, DATA, CMPL, PWF, DWF, LO, DEq>
     pub fn with_path_wellformedness<NPWF>(
         self,
         new_path_wellformedness: NPWF,
-    ) -> Query<'sg, 'rslv, LABEL, DATA, CMPL, NPWF, DWF, LO, DEq> {
+    ) -> Query<'sg, 'rslv, LABEL, DATA, CMPL, NPWF, DWF, LO, DEq>
+    where
+        NPWF: for<'a> RegexMatcher<&'a LABEL> + 'rslv,
+    {
         Query {
             _phantom: PhantomData,
             scope_graph: self.scope_graph,
@@ -307,7 +312,10 @@ impl<'sg, 'rslv, LABEL, DATA, CMPL, PWF, DWF, LO, DEq>
     pub fn with_data_wellformedness<NDWF>(
         self,
         new_data_wellformedness: NDWF,
-    ) -> Query<'sg, 'rslv, LABEL, DATA, CMPL, PWF, NDWF, LO, DEq> {
+    ) -> Query<'sg, 'rslv, LABEL, DATA, CMPL, PWF, NDWF, LO, DEq>
+    where
+        NDWF: DataWellformedness<DATA> + 'rslv,
+    {
         Query {
             _phantom: PhantomData,
             scope_graph: self.scope_graph,
@@ -321,7 +329,10 @@ impl<'sg, 'rslv, LABEL, DATA, CMPL, PWF, DWF, LO, DEq>
     pub fn with_label_order<NLO>(
         self,
         new_label_order: NLO,
-    ) -> Query<'sg, 'rslv, LABEL, DATA, CMPL, PWF, DWF, NLO, DEq> {
+    ) -> Query<'sg, 'rslv, LABEL, DATA, CMPL, PWF, DWF, NLO, DEq>
+    where
+        NLO: LabelOrder<LABEL> + 'rslv,
+    {
         Query {
             _phantom: PhantomData,
             scope_graph: self.scope_graph,
@@ -335,7 +346,10 @@ impl<'sg, 'rslv, LABEL, DATA, CMPL, PWF, DWF, LO, DEq>
     pub fn with_data_equivalence<NDEq>(
         self,
         new_data_equivalence: NDEq,
-    ) -> Query<'sg, 'rslv, LABEL, DATA, CMPL, PWF, DWF, LO, NDEq> {
+    ) -> Query<'sg, 'rslv, LABEL, DATA, CMPL, PWF, DWF, LO, NDEq>
+    where
+        NDEq: DataEquiv<DATA> + 'rslv,
+    {
         Query {
             _phantom: PhantomData,
             scope_graph: self.scope_graph,
