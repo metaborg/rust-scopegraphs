@@ -66,13 +66,12 @@ where
         self,
         f: F,
     ) -> Self::EnvContainer {
-        let p_self = Box::pin(self);
         let future = async move {
-            let paths = p_self.await;
+            let paths = self.0.await;
             let env_futures = paths.into_iter().map(f);
             let envs = join_all(env_futures).await;
             envs.into_iter().collect::<Env<_, _>>()
         };
-        FutureWrapper(Box::new(future))
+        FutureWrapper::new(future)
     }
 }

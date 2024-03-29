@@ -9,9 +9,19 @@ use std::future::poll_fn;
 use std::hash::Hash;
 use std::task::{Poll, Waker};
 
+#[derive(Debug)]
 pub struct FutureCompleteness<LABEL> {
     explicit_close: ExplicitClose<LABEL>,
     wakers: RefCell<HashMap<Delay<LABEL>, Vec<Waker>>>,
+}
+
+impl<LABEL> Default for FutureCompleteness<LABEL> {
+    fn default() -> Self {
+        Self {
+            explicit_close: ExplicitClose::<LABEL>::default(),
+            wakers: RefCell::new(HashMap::default()),
+        }
+    }
 }
 
 impl<LABEL> Sealed for FutureCompleteness<LABEL> {}
@@ -48,7 +58,7 @@ impl<'sg, LABEL: Hash + Eq + Label + Copy, DATA> Completeness<LABEL, DATA>
         LABEL: 'rslv,
         DATA: 'rslv,
     {
-        FutureWrapper(Box::new(poll_fn(move |cx| {
+        FutureWrapper::new(poll_fn(move |cx| {
             match self
                 .explicit_close
                 .cmpl_get_edges(inner_scope_graph, src, lbl)
@@ -63,12 +73,12 @@ impl<'sg, LABEL: Hash + Eq + Label + Copy, DATA> Completeness<LABEL, DATA>
                     Poll::Pending
                 }
             }
-        })))
+        }))
     }
 }
 
 impl<LABEL: Hash + Eq + Copy> FutureCompleteness<LABEL> {
-    pub(super) fn close(&mut self, scope: Scope, label: &LABEL) {
+    pub(super) fn close(&self, scope: Scope, label: &LABEL) {
         self.explicit_close.close(scope, label);
         for waker in self
             .wakers

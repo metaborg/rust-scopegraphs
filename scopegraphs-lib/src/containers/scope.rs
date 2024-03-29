@@ -1,7 +1,5 @@
 use crate::future_wrapper::FutureWrapper;
 use crate::{resolve::Path, Scope};
-use std::future::{poll_fn, Future};
-use std::task::Poll;
 
 /// Interface for scope containers that support the operations required for query resolution.
 pub trait ScopeContainer<LABEL> {
@@ -44,11 +42,6 @@ where
     type PathContainer = FutureWrapper<'rslv, SC::PathContainer>;
 
     fn lift_step(self, lbl: LABEL, prefix: Path<LABEL>) -> Self::PathContainer {
-        let mut p_self = Box::pin(self); // FIXME: implement for pinned self?
-        let fut = poll_fn(move |cx| match p_self.as_mut().poll(cx) {
-            Poll::Ready(inner_sc) => Poll::Ready(inner_sc.lift_step(lbl, prefix.clone())),
-            Poll::Pending => Poll::Pending,
-        });
-        FutureWrapper(Box::new(fut))
+        FutureWrapper::new(async move { self.await.lift_step(lbl, prefix.clone()) })
     }
 }

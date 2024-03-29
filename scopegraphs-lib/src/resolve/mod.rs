@@ -224,7 +224,7 @@ impl<'sg, LABEL, DATA> Env<'sg, LABEL, DATA> {
 
 impl<'sg, LABEL, DATA> Env<'sg, LABEL, DATA>
 where
-    ResolvedPath<'sg, LABEL, DATA>: Eq + Hash,
+    ResolvedPath<'sg, LABEL, DATA>: Eq + Hash + Clone,
 {
     /// Create an environment with a single path.
     pub fn single(path: ResolvedPath<'sg, LABEL, DATA>) -> Self {
@@ -239,8 +239,8 @@ where
     }
 
     /// Add all paths in `other` to the current environment.
-    pub fn merge(&mut self, other: Self) {
-        self.0.extend(other.0)
+    pub fn merge(&mut self, other: &Self) {
+        self.0.extend(other.0.iter().cloned())
     }
 }
 

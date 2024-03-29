@@ -1,4 +1,6 @@
+use crate::future_wrapper::FutureWrapper;
 use crate::resolve::{Env, ResolvedPath};
+use futures::future::Shared;
 use std::hash::Hash;
 use std::rc::Rc;
 
@@ -10,7 +12,10 @@ pub trait EnvContainer<'sg, 'rslv, LABEL: 'sg, DATA: 'sg>:
     fn empty() -> Self;
 
     /// Maps the current container to a new one, based a provided mapping of the underlying environment.
-    fn flat_map(&self, map: impl FnOnce(&Env<'sg, LABEL, DATA>) -> Self) -> Self;
+    fn flat_map(
+        &self,
+        map: impl 'rslv + for<'short> FnOnce(&'short Env<'sg, LABEL, DATA>) -> Self,
+    ) -> Self;
 }
 
 impl<'sg: 'rslv, 'rslv, LABEL, DATA> EnvContainer<'sg, 'rslv, LABEL, DATA> for Env<'sg, LABEL, DATA>
@@ -21,7 +26,10 @@ where
         Self::new()
     }
 
-    fn flat_map(&self, map: impl FnOnce(&Env<'sg, LABEL, DATA>) -> Self) -> Self {
+    fn flat_map(
+        &self,
+        map: impl 'rslv + for<'short> FnOnce(&'short Env<'sg, LABEL, DATA>) -> Self,
+    ) -> Self {
         map(self)
     }
 }
@@ -35,7 +43,10 @@ where
         Self::new(Env::empty())
     }
 
-    fn flat_map(&self, map: impl FnOnce(&Env<'sg, LABEL, DATA>) -> Self) -> Self {
+    fn flat_map(
+        &self,
+        map: impl for<'short> FnOnce(&'short Env<'sg, LABEL, DATA>) -> Self,
+    ) -> Self {
         map(self)
     }
 }
@@ -59,10 +70,42 @@ where
         Ok(Env::empty())
     }
 
-    fn flat_map(&self, map: impl FnOnce(&Env<'sg, LABEL, DATA>) -> Self) -> Self {
+    fn flat_map(&self, map: impl for<'short> FnOnce(&Env<'sg, LABEL, DATA>) -> Self) -> Self {
         match self {
             Ok(env) => map(env),
             Err(err) => Err(err.clone()),
         }
+    }
+}
+
+impl<'sg: 'rslv, 'rslv, LABEL: 'sg, DATA: 'sg> EnvContainer<'sg, 'rslv, LABEL, DATA>
+    for FutureWrapper<'rslv, Env<'sg, LABEL, DATA>>
+where
+    ResolvedPath<'sg, LABEL, DATA>: Hash + Eq,
+    LABEL: Clone,
+{
+    fn empty() -> Self {
+        FutureWrapper::new(std::future::ready(Env::empty()))
+    }
+
+    fn flat_map(
+        &self,
+        map: impl 'rslv + for<'short> FnOnce(&'short Env<'sg, LABEL, DATA>) -> Self,
+    ) -> Self {
+        let fut = Shared::clone(&self.0);
+        FutureWrapper::new(async move {
+            let env = fut.await;
+            map(&env).await
+        })
+    }
+}
+
+impl<'sg: 'rslv, 'rslv, LABEL, DATA> From<Env<'sg, LABEL, DATA>>
+    for FutureWrapper<'rslv, Env<'sg, LABEL, DATA>>
+where
+    LABEL: Clone,
+{
+    fn from(value: Env<'sg, LABEL, DATA>) -> Self {
+        FutureWrapper::new(std::future::ready(value))
     }
 }

@@ -15,6 +15,7 @@
 use crate::{InnerScopeGraph, Scope};
 
 mod future;
+pub use future::*;
 
 mod critical_edge;
 pub use critical_edge::*;

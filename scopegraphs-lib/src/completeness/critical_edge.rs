@@ -2,6 +2,7 @@ use crate::{completeness::Completeness, Scope, ScopeGraph};
 use std::cell::RefCell;
 use std::{collections::HashSet, hash::Hash};
 
+#[derive(Debug)]
 pub(super) struct CriticalEdgeSet<LABEL> {
     open_edges: RefCell<Vec<HashSet<LABEL>>>,
 }

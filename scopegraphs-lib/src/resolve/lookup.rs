@@ -189,10 +189,10 @@ where
             })
             .fold(Self::empty_env_container(), |env1, env2| {
                 // env1 and env2 are Rc<ENVC> clones not owned by a cache
-                env1.flat_map(|agg_env| {
-                    env2.flat_map(|new_env| {
-                        let mut merged_env = agg_env.clone();
-                        merged_env.merge(new_env.clone());
+                env1.flat_map(move |agg_env| {
+                    let mut merged_env = agg_env.clone();
+                    env2.flat_map(move |new_env| {
+                        merged_env.merge(&new_env);
                         <EnvC<'sg, 'rslv, CMPL, LABEL, DATA> as From<Env<'sg, LABEL, DATA>>>::from(
                             merged_env,
                         )
@@ -206,7 +206,7 @@ where
     /// - Compute the environment for `edge` (the _sub-environment_).
     /// - Insert the paths in the sub-environment in the base environment
     ///   iff it is not shadowed by some path in the base environment.
-    fn resolve_shadow<'env>(
+    fn resolve_shadow(
         self: &Arc<Self>,
         path_wellformedness: impl for<'a> RegexMatcher<&'a LABEL> + 'rslv,
         edge: EdgeOrData<LABEL>,     // current max label
@@ -217,21 +217,25 @@ where
         // base environment
         let base_env: EnvC<'sg, 'rslv, CMPL, LABEL, DATA> =
             self.resolve_edges(path_wellformedness.clone(), edges, path.clone(), cache);
+        let local_self = Arc::clone(self);
         // environment of current (max) label, which might be shadowed by the base environment
-        Rc::new(base_env.flat_map(|base_env| {
-            if !base_env.is_empty() && self.data_equiv.always_true() {
+        Rc::new(base_env.flat_map(move |base_env| {
+            if !base_env.is_empty() && local_self.data_equiv.always_true() {
                 <EnvC<'sg, 'rslv, CMPL, LABEL, DATA> as From<Env<'sg, LABEL, DATA>>>::from(
                     base_env.clone(),
                 )
             } else {
-                let sub_env = self.resolve_edge(path_wellformedness.clone(), edge, path);
-                sub_env.flat_map(|sub_env| {
+                let sub_env = local_self.resolve_edge(path_wellformedness.clone(), edge, path);
+                let local_self = Arc::clone(&local_self);
+                let base_env = base_env.clone();
+
+                sub_env.flat_map(move |sub_env| {
                     let filtered_env = sub_env
                         .iter()
                         .filter(|p1| {
                             if let Some(p2) = base_env
                                 .iter()
-                                .find(|p2| self.data_equiv.data_equiv(p1.data, p2.data))
+                                .find(|p2| local_self.data_equiv.data_equiv(p1.data, p2.data))
                             {
                                 log::info!(
                                     "Discarding {:?} in {:?}; shadowed by {:?} in {:?}",
@@ -246,7 +250,8 @@ where
                             }
                         })
                         .collect::<Vec<_>>();
-                    let mut new_env = base_env.clone();
+
+                    let mut new_env = base_env;
                     for path in filtered_env {
                         new_env.insert(path.clone())
                     }
@@ -345,7 +350,7 @@ mod tests {
     use scopegraphs_macros::{label_order, Label};
 
     use scopegraphs::{
-        completeness::{ExplicitClose, ImplicitClose, UncheckedCompleteness},
+        completeness::{ExplicitClose, FutureCompleteness, ImplicitClose, UncheckedCompleteness},
         label::query_regex,
         resolve::{DataWellformedness, Resolve, ResolvedPath},
         ScopeGraph,
@@ -391,6 +396,58 @@ mod tests {
     #[ctor::ctor]
     fn init() {
         env_logger::init();
+    }
+
+    #[test]
+    fn test_label_order_async() {
+        smol::block_on(async {
+            let mut scope_graph: ScopeGraph<Lbl, TData, FutureCompleteness<Lbl>> =
+                ScopeGraph::new(FutureCompleteness::default());
+
+            let s0 = scope_graph.add_scope_default_closed();
+            let s_with = scope_graph.add_scope_default_with([Lex, Imp]);
+            let s_rec = scope_graph.add_scope_default_with([Def]);
+            let s_let = scope_graph.add_scope_default_with([Lex, Def]);
+
+            scope_graph
+                .add_edge(s_with, Lex, s0)
+                .expect("edge closed unexpectedly");
+            scope_graph
+                .add_edge(s_with, Imp, s_rec)
+                .expect("edge closed unexpectedly");
+            scope_graph
+                .add_edge(s_let, Lex, s_with)
+                .expect("edge closed unexpectedly");
+
+            scope_graph
+                .add_decl(s_rec, Def, Data { name: "x", data: 1 })
+                .expect("edge closed unexpectedly");
+            scope_graph
+                .add_decl(s_let, Def, Data { name: "x", data: 2 })
+                .expect("edge closed unexpectedly");
+
+            scope_graph.close(s_with, &Lex);
+            scope_graph.close(s_with, &Imp);
+            scope_graph.close(s_rec, &Def);
+            scope_graph.close(s_let, &Lex);
+            scope_graph.close(s_let, &Def);
+
+            let env = scope_graph
+                .query()
+                .with_path_wellformedness(query_regex!(Lbl: Lex* Imp? Def))
+                .with_data_wellformedness(TData::matcher("x"))
+                .with_label_order(label_order!(Lbl: Def < Imp < Lex))
+                .resolve(s_let)
+                .await;
+
+            let env_vec = env.into_iter().collect::<Vec<_>>();
+            assert_eq!(1, env_vec.len());
+
+            let path: &ResolvedPath<Lbl, TData> = &env_vec[0];
+            assert!(matches!(path.data(), &Data { name: "x", data: 2 }));
+
+            // todo!("assert the correct edges are closed!")
+        });
     }
 
     #[test]
