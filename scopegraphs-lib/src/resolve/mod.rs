@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use std::fmt::{Debug, Formatter};
 use std::hash::Hash;
 use std::marker::PhantomData;
-use std::sync::Arc;
+use std::rc::Rc;
 
 use super::{Scope, ScopeGraph};
 
@@ -54,7 +54,7 @@ enum InnerPath<LABEL> {
 /// Path (alternating sequence of scopes and labels) in a scope graph.
 #[derive(Clone)]
 pub struct Path<LABEL> {
-    inner_path: Arc<InnerPath<LABEL>>,
+    inner_path: Rc<InnerPath<LABEL>>,
     /// Set of all scopes in this path.
     ///
     /// Paths are alternating sequences of scopes and labels.
@@ -64,7 +64,7 @@ pub struct Path<LABEL> {
     /// This is cheaper than traversing the [`Path::inner_path`], at the cost of some more memory usage.
     ///
     /// In order to make paths cheap to extend multiple times, we use a persistent data structure.
-    scopes: Arc<TrieSet<Scope>>,
+    scopes: Rc<TrieSet<Scope>>,
     // FIXME: put fields in same Arc
 }
 
@@ -139,8 +139,8 @@ impl<LABEL> Path<LABEL> {
     /// Creates a new path that contains of a single scope.
     pub fn new(source: Scope) -> Self {
         Self {
-            inner_path: Arc::new(InnerPath::Start { source }),
-            scopes: Arc::new(TrieSet::new().insert(source)),
+            inner_path: Rc::new(InnerPath::Start { source }),
+            scopes: Rc::new(TrieSet::new().insert(source)),
         }
     }
 
@@ -160,7 +160,7 @@ impl<LABEL> Path<LABEL> {
             None
         } else {
             Some(Self {
-                inner_path: Arc::new(InnerPath::Step {
+                inner_path: Rc::new(InnerPath::Step {
                     prefix: Self {
                         inner_path: self.inner_path.clone(),
                         scopes: self.scopes.clone(),
@@ -168,7 +168,7 @@ impl<LABEL> Path<LABEL> {
                     label,
                     target,
                 }),
-                scopes: Arc::new(self.scopes.insert(target)),
+                scopes: Rc::new(self.scopes.insert(target)),
             })
         }
     }

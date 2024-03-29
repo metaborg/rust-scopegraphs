@@ -26,7 +26,7 @@ impl<LABEL> Default for FutureCompleteness<LABEL> {
 
 impl<LABEL> Sealed for FutureCompleteness<LABEL> {}
 
-impl<'sg, LABEL: Hash + Eq + Label + Copy, DATA> Completeness<LABEL, DATA>
+impl<LABEL: Hash + Eq + Label + Copy, DATA> Completeness<LABEL, DATA>
     for FutureCompleteness<LABEL>
 {
     fn cmpl_new_scope(&self, inner_scope_graph: &mut InnerScopeGraph<LABEL, DATA>, scope: Scope) {

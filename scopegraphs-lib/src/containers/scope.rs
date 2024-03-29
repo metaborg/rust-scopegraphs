@@ -13,7 +13,7 @@ pub trait ScopeContainer<LABEL> {
     fn lift_step(self, lbl: LABEL, prefix: Path<LABEL>) -> Self::PathContainer;
 }
 
-impl<'a, LABEL: Copy> ScopeContainer<LABEL> for Vec<Scope> {
+impl<LABEL: Copy> ScopeContainer<LABEL> for Vec<Scope> {
     type PathContainer = Vec<Path<LABEL>>;
 
     fn lift_step(self, lbl: LABEL, prefix: Path<LABEL>) -> Self::PathContainer {
@@ -23,7 +23,7 @@ impl<'a, LABEL: Copy> ScopeContainer<LABEL> for Vec<Scope> {
     }
 }
 
-impl<'a, LABEL, SC: ScopeContainer<LABEL>, E> ScopeContainer<LABEL> for Result<SC, E> {
+impl<LABEL, SC: ScopeContainer<LABEL>, E> ScopeContainer<LABEL> for Result<SC, E> {
     type PathContainer = Result<SC::PathContainer, E>;
 
     fn lift_step(self, lbl: LABEL, prefix: Path<LABEL>) -> Self::PathContainer {

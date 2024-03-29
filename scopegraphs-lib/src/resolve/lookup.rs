@@ -192,7 +192,7 @@ where
                 env1.flat_map(move |agg_env| {
                     let mut merged_env = agg_env.clone();
                     env2.flat_map(move |new_env| {
-                        merged_env.merge(&new_env);
+                        merged_env.merge(new_env);
                         <EnvC<'sg, 'rslv, CMPL, LABEL, DATA> as From<Env<'sg, LABEL, DATA>>>::from(
                             merged_env,
                         )
@@ -301,7 +301,7 @@ where
     }
 
     /// Creates single-path environment if the data `path.target()` is matching, or an empty environment otherwise.
-    fn resolve_data<'env>(&self, path: Path<LABEL>) -> EnvC<'sg, 'rslv, CMPL, LABEL, DATA> {
+    fn resolve_data(&self, path: Path<LABEL>) -> EnvC<'sg, 'rslv, CMPL, LABEL, DATA> {
         let data = self.sg.get_data(path.target());
         if self.data_wellformedness.data_wf(data) {
             log::info!("{:?} matched: return singleton env.", data);
@@ -340,7 +340,7 @@ where
         smaller
     }
 
-    fn empty_env_container<'env>() -> EnvC<'sg, 'rslv, CMPL, LABEL, DATA> {
+    fn empty_env_container() -> EnvC<'sg, 'rslv, CMPL, LABEL, DATA> {
         <EnvC<'sg, 'rslv, CMPL, LABEL, DATA> as EnvContainer<'sg, 'rslv, LABEL, DATA>>::empty()
     }
 }
