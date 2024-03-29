@@ -42,6 +42,6 @@ where
     type PathContainer = FutureWrapper<'rslv, SC::PathContainer>;
 
     fn lift_step(self, lbl: LABEL, prefix: Path<LABEL>) -> Self::PathContainer {
-        FutureWrapper::new(async move { self.await.lift_step(lbl, prefix.clone()) })
+        FutureWrapper::new(async move { self.0.await.lift_step(lbl, prefix.clone()) })
     }
 }

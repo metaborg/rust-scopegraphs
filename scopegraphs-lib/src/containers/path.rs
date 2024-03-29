@@ -68,7 +68,7 @@ where
     ) -> Self::EnvContainer {
         let future = async move {
             let paths = self.0.await;
-            let env_futures = paths.into_iter().map(f);
+            let env_futures = paths.into_iter().map(f).map(|i| i.0);
             let envs = join_all(env_futures).await;
             envs.into_iter().collect::<Env<_, _>>()
         };

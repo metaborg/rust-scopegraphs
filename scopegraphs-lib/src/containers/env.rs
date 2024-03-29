@@ -95,7 +95,7 @@ where
         let fut = Shared::clone(&self.0);
         FutureWrapper::new(async move {
             let env = fut.await;
-            map(&env).await
+            map(&env).0.await
         })
     }
 }

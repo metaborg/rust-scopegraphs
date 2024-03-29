@@ -30,11 +30,10 @@ impl<T> Debug for FutureWrapper<'_, T> {
     }
 }
 
-impl<'fut, T> Future for FutureWrapper<'fut, T> {
+impl<'fut, T: Clone> Future for FutureWrapper<'fut, T> {
     type Output = T;
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        let p: Pin<&mut dyn Future<Output = T>> = self.as_mut();
-        p.poll(cx)
+        Pin::new(&mut self.0).poll(cx)
     }
 }
