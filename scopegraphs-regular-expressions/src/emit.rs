@@ -45,6 +45,7 @@ impl Automaton {
             .collect();
 
         let mut result = quote!(
+            #[derive(Clone)]
             struct #name {
                 state: usize,
             }
@@ -55,6 +56,35 @@ impl Automaton {
 
             impl scopegraphs::RegexMatcher<#alphabet> for #name {
                 fn step(&mut self, token: #alphabet) {
+                    match self.state {
+                        #(
+                            #ids => #arms
+                        ),*
+                        _ => unreachable!(),
+                    }
+                }
+
+                fn is_final(&self) -> bool {
+                    match self.state {
+                        #(
+                            #ids => {return #finals;}
+                        ),*
+                        _ => unreachable!(),
+                    }
+                }
+
+                fn is_accepting(&self) -> bool {
+                    match self.state {
+                        #(
+                            #ids => {return #accepting;}
+                        ),*
+                        _ => unreachable!(),
+                    }
+                }
+            }
+
+            impl scopegraphs::RegexMatcher<&#alphabet> for #name {
+                fn step(&mut self, token: &#alphabet) {
                     match self.state {
                         #(
                             #ids => #arms

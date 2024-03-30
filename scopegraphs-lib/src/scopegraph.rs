@@ -1,92 +1,181 @@
-use std::marker::PhantomData;
+use std::{
+    cell::RefCell,
+    collections::{HashMap, HashSet},
+    fmt::{Debug, Formatter},
+    hash::Hash,
+};
 
-/// Scope Graph operations.
-///
-/// This trait describes scope graphs, and the primitive operations that can be applied on them.
-/// As a data structure, scope graphs are simple graphs with labeled nodes and labeled, directed edges.
-///
-/// This trait has three associated types:
-/// - [`ScopeGraph::Scope`]: the type of the nodes.
-/// - [`ScopeGraph::Label`]: the type of the edge labels.
-/// - [`ScopeGraph::Data`]: the type of the scope/node labels.
-///
-/// The data structure has been designed for typical scope graph usage scenario's.
-/// For example, there is no support for _removing_ scopes or edges, as this usually does not happen in scope graphs.
-/// In addition, there is no data type for edges, as edges should only be traversed, but never leak outside the scope graph structure.
-/// Finally, although not made explicit, [`ScopeGraph::Label`] should be a finite, iterable set.
-///
-/// Typical scope graph implementations will take ownership of the nodes, but only store references to the data that is associated with them.
-///
-/// Type parameters:
-/// - [`SCOPE`] Type of nodes.
-/// - [`LABEL`] Type of edge labels.
-/// - [`DATA`] Type of data associated with nodes.
-pub struct ScopeGraph<SCOPE, LABEL, DATA> {
-    phantom: PhantomData<(SCOPE, LABEL, DATA)>,
-}
+use crate::completeness::{Completeness, UncheckedCompleteness};
 
-impl<SCOPE, LABEL, DATA> Default for ScopeGraph<SCOPE, LABEL, DATA> {
-    fn default() -> Self {
-        Self::new()
+/// Representation of scopes (nodes in the scope graph).
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Scope(pub(crate) usize);
+
+impl Debug for Scope {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "#{}", self.0)
     }
 }
 
-impl<SCOPE, LABEL, DATA> ScopeGraph<SCOPE, LABEL, DATA> {
-    pub fn new() -> Self {
+// Mutability: RefCell in Scope, not Scope in RefCell
+// Concurrency: RW-lock on edges
+
+pub struct InnerScopeGraph<LABEL, DATA> {
+    edges: Vec<HashMap<LABEL, HashSet<Scope>>>, // FIXME: BTreeMap? Vectors? Whatever?
+    data: Vec<DATA>,
+}
+
+impl<LABEL, DATA> InnerScopeGraph<LABEL, DATA> {
+    fn new() -> Self {
         Self {
-            phantom: PhantomData,
+            edges: Vec::new(),
+            data: Vec::new(),
         }
     }
 
     /// Adds a new scope to the graph, with `data` as its associated data.
-    /// After this operation, all future calls to [`ScopeGraph::get_data`] on this scope will return the associated data.
-    ///
-    /// Example:
-    /// ```ignore
-    /// # use scopegraphs::scopegraph::ScopeGraph;
-    /// let mut sg : ScopeGraph<i32, i32, i32> = ScopeGraph::new();
-    /// let data = 42;
-    ///
-    /// let scope = sg.add_scope(&data);
-    ///
-    /// let newData = sg.get_data(scope);
-    /// assert_eq!(data, *newData);
-    /// ```
-    pub fn add_scope(&mut self, _data: &DATA) -> &SCOPE {
-        todo!()
-    }
-
-    /// Adds a new edge from `src`, to `dst`, with label `lbl` to the scope graph.
-    /// After this operation, all future calls to [`ScopeGraph::get_edges`] on the source will contain the destination.
-    ///
-    /// Example:
-    /// ```ignore
-    /// # use scopegraphs::{scopegraph::ScopeGraph, Label};
-    ///
-    /// #[derive(Label, Eq, PartialEq, Copy, Clone)]
-    /// enum Label { LEX }
-    /// let mut sg : ScopeGraph<i32, Label, i32> = ScopeGraph::new();
-    /// let data = 42;
-    ///
-    /// let src = sg.add_scope(&data);
-    /// let dst = sg.add_scope(&data);
-    /// sg.add_edge(src, &Label::LEX, dst);
-    ///
-    /// let mut  dst_iter = sg.get_edges(src, &Label::LEX);
-    /// assert!(dst_iter.any(|d| d == *dst));
-    /// ```
-    ///
-    pub fn add_edge(&mut self, _src: &SCOPE, _lbl: &LABEL, _dst: &SCOPE) {
-        todo!()
+    /// After this operation, all future calls to [`InnerScopeGraph::get_data`] on this scope will return the associated data.
+    pub(super) fn add_scope(&mut self, data: DATA) -> Scope {
+        let id = self.data.len();
+        self.data.push(data);
+        self.edges.push(HashMap::with_capacity(0));
+        Scope(id)
     }
 
     /// Returns the data associated with the `scope` argument.
-    pub fn get_data(&self, _scope: &SCOPE) -> &DATA {
-        todo!()
+    fn get_data(&self, scope: Scope) -> &DATA {
+        // panics if src.0 is out of bounds
+        // the methods that update `ScopeGraphs` retain the invariant that each scope has an appropriate entry in this vector
+        // however, panics can still happen when a scope from a different scope graph is used
+        &self.data[scope.0]
+    }
+}
+
+impl<'a, LABEL: Hash + Eq, DATA> InnerScopeGraph<LABEL, DATA> {
+    /// Adds a new edge from `src`, to `dst`, with label `lbl` to the scope graph.
+    /// After this operation, all future calls to [`InnerScopeGraph::get_edges`] on the source will contain the destination.
+    pub(crate) fn add_edge(&mut self, src: Scope, lbl: LABEL, dst: Scope) {
+        // panics if src.0 is out of bounds
+        // the methods that update `ScopeGraphs` retain the invariant that each scope has an appropriate entry in this vector
+        // however, panics can still happen when a scope from a different scope graph is used
+        self.edges[src.0].entry(lbl).or_default().insert(dst);
     }
 
     /// Returns the targets of the outgoing edges of `src` with label `lbl`.
-    pub fn get_edges(&self, _scope: &SCOPE, _lbl: &LABEL) -> impl Iterator<Item = SCOPE> {
-        std::iter::empty()
+    pub(crate) fn get_edges(&'a self, scope: Scope, lbl: LABEL) -> Vec<Scope> {
+        // panics if scope.0 is out of bounds
+        // the methods that update `ScopeGraphs` retain the invariant that each scope has an appropriate entry in this vector
+        // however, panics can still happen when a scope from a different scope graph is used
+        self.edges[scope.0]
+            .get(&lbl)
+            .into_iter()
+            .flatten()
+            .copied()
+            .collect()
+    }
+}
+
+/// Scope Graph data structure.
+///
+/// As a data structure, scope graphs are simple graphs with labeled nodes and labeled, directed edges.
+///
+/// This trait has three type parameters:
+/// - [`LABEL`]: the type of the edge labels.
+/// - [`DATA`]: the type of the scope/node labels.
+/// - [`CMPL`]: metadata that guarantees query stability (i.e., query results remain valid in the future).
+///
+/// The data structure has been designed for typical scope graph usage scenario's.
+/// For example, there is no support for _removing_ scopes or edges, as this usually does not happen in scope graphs.
+/// In addition, there is no data type for edges, as edges should only be traversed, but never leak outside the scope graph structure.
+/// Finally, although not made explicit, [`LABEL`] should be a finite, iterable set.
+pub struct ScopeGraph<LABEL, DATA, CMPL> {
+    pub(super) inner_scope_graph: InnerScopeGraph<LABEL, DATA>,
+    pub(super) completeness: RefCell<CMPL>,
+}
+
+impl<LABEL, DATA, CMPL> ScopeGraph<LABEL, DATA, CMPL> {
+    pub fn new(completeness: CMPL) -> Self {
+        ScopeGraph {
+            inner_scope_graph: InnerScopeGraph::new(),
+            completeness: RefCell::new(completeness),
+        }
+    }
+}
+
+impl<LABEL, DATA> ScopeGraph<LABEL, DATA, UncheckedCompleteness> {
+    /// Creates a new scope graph with [`UncheckedCompleteness`] as its completeness validation.
+    ///
+    /// # Safety
+    ///
+    /// Unsafe, because [`UncheckedCompleteness`] does not actually guarantee query stability.
+    pub unsafe fn raw() -> Self {
+        Self::new(UncheckedCompleteness::new())
+    }
+}
+
+impl<LABEL, DATA, CMPL> ScopeGraph<LABEL, DATA, CMPL>
+where
+    CMPL: Completeness<LABEL, DATA>,
+{
+    /// Add a new scope to the scope graph, with `data` as its label.
+    pub fn add_scope(&mut self, data: DATA) -> Scope {
+        let scope = self.inner_scope_graph.add_scope(data);
+        self.completeness
+            .borrow_mut()
+            .cmpl_new_scope(&self.inner_scope_graph, scope);
+        scope
+    }
+
+    /// Add a new edge in the scope graph.
+    ///
+    /// Permission for this is checked by `CMPL`.
+    pub fn add_edge(&mut self, src: Scope, lbl: LABEL, dst: Scope) -> CMPL::NewEdgeResult {
+        self.completeness
+            .borrow_mut()
+            .cmpl_new_edge(&mut self.inner_scope_graph, src, lbl, dst)
+    }
+
+    /// Get the data associated with a scope.
+    pub fn get_data(&self, scope: Scope) -> &DATA {
+        self.inner_scope_graph.get_data(scope)
+    }
+
+    /// Get the targets of the outgoing edges of a scope with some label.
+    ///
+    /// Permission for this operation is checked by `CMPL`.
+    pub fn get_edges(&self, src: Scope, lbl: LABEL) -> CMPL::GetEdgesResult {
+        self.completeness
+            .borrow_mut()
+            .cmpl_get_edges(&self.inner_scope_graph, src, lbl)
+    }
+
+    /// Utility function to add declarations (i.e., scopes with data, without any outgoing edges).
+    ///
+    /// It performs (roughly) the following operation:
+    ///
+    /// ```ignore
+    /// fn add_decl(&mut self, src: Scope, lbl: LABEL, data: DATA) -> CMPL::NewEdgeResult {
+    ///     let s_data = self.add_scope(data);
+    ///     self.add_edge(src, lbl, s_data);
+    /// }
+    /// ```
+    pub fn add_decl(&mut self, src: Scope, lbl: LABEL, data: DATA) -> CMPL::NewEdgeResult {
+        // Create scope with no open edges.
+        let s_data = self.inner_scope_graph.add_scope(data);
+        self.completeness
+            .borrow_mut()
+            .cmpl_new_complete_scope(&self.inner_scope_graph, s_data);
+        self.add_edge(src, lbl, s_data)
+    }
+}
+
+impl<LABEL, DATA, CMPL> ScopeGraph<LABEL, DATA, CMPL>
+where
+    DATA: Default,
+    CMPL: Completeness<LABEL, DATA>,
+{
+    /// Add a new scope to the scope graph, with default data.
+    pub fn add_scope_default(&mut self) -> Scope {
+        self.add_scope(DATA::default())
     }
 }

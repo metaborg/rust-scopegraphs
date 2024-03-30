@@ -50,6 +50,14 @@ pub fn impl_label(input: DeriveInput) -> TokenStream {
                     ),*
                 ].into_iter()
             }
+
+            fn iter_ref() -> impl Iterator<Item = &'static Self> {
+                [
+                    #(
+                        &Self::#variant_names
+                    ),*
+                ].into_iter()
+            }
         }
     }
     .into()
