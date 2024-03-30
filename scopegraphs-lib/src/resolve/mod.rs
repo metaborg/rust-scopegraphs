@@ -1,4 +1,4 @@
-use prust_lib::hashmap::HashSet as TrieSet;
+use scopegraphs_prust_lib::hashmap::HashSet as TrieSet;
 use std::collections::HashSet;
 use std::fmt::{Debug, Formatter};
 use std::hash::Hash;
