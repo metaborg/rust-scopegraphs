@@ -29,7 +29,7 @@ impl<LABEL> Sealed for FutureCompleteness<LABEL> {}
 impl<LABEL: Hash + Eq + Label + Copy, DATA> Completeness<LABEL, DATA>
     for FutureCompleteness<LABEL>
 {
-    fn cmpl_new_scope(&self, inner_scope_graph: &mut InnerScopeGraph<LABEL, DATA>, scope: Scope) {
+    fn cmpl_new_scope(&self, inner_scope_graph: &InnerScopeGraph<LABEL, DATA>, scope: Scope) {
         self.explicit_close.cmpl_new_scope(inner_scope_graph, scope)
     }
 
@@ -37,7 +37,7 @@ impl<LABEL: Hash + Eq + Label + Copy, DATA> Completeness<LABEL, DATA>
 
     fn cmpl_new_edge(
         &self,
-        inner_scope_graph: &mut InnerScopeGraph<LABEL, DATA>,
+        inner_scope_graph: &InnerScopeGraph<LABEL, DATA>,
         src: Scope,
         lbl: LABEL,
         dst: Scope,

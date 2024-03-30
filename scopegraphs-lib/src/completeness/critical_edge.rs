@@ -56,7 +56,7 @@ pub struct Delay<LABEL> {
 
 pub(crate) type EdgesOrDelay<EDGES, LABEL> = Result<EDGES, Delay<LABEL>>;
 
-impl<LABEL: Hash + Eq, DATA, CMPL> ScopeGraph<LABEL, DATA, CMPL>
+impl<'sg, LABEL: Hash + Eq, DATA, CMPL> ScopeGraph<'sg, LABEL, DATA, CMPL>
 where
     CMPL: CriticalEdgeBasedCompleteness<LABEL, DATA>,
 {
@@ -79,7 +79,7 @@ where
     }
 }
 
-impl<LABEL: Hash + Eq, DATA, CMPL> ScopeGraph<LABEL, DATA, CMPL>
+impl<'sg, LABEL: Hash + Eq, DATA, CMPL> ScopeGraph<'sg, LABEL, DATA, CMPL>
 where
     DATA: Default,
     CMPL: CriticalEdgeBasedCompleteness<LABEL, DATA>,

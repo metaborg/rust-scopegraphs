@@ -37,14 +37,14 @@ impl<LABEL> Default for ExplicitClose<LABEL> {
 impl<LABEL> Sealed for ExplicitClose<LABEL> {}
 
 impl<LABEL: Hash + Eq + Label, DATA> Completeness<LABEL, DATA> for ExplicitClose<LABEL> {
-    fn cmpl_new_scope(&self, _: &mut InnerScopeGraph<LABEL, DATA>, _: Scope) {
+    fn cmpl_new_scope(&self, _: &InnerScopeGraph<LABEL, DATA>, _: Scope) {
         <ExplicitClose<LABEL> as CriticalEdgeBasedCompleteness<LABEL, DATA>>::init_scope_with(
             self,
             LABEL::iter().collect(), // init with all labels: programmer is responsible for closing edges
         )
     }
 
-    fn cmpl_new_complete_scope(&self, _: &mut InnerScopeGraph<LABEL, DATA>, _: Scope) {
+    fn cmpl_new_complete_scope(&self, _: &InnerScopeGraph<LABEL, DATA>, _: Scope) {
         <ExplicitClose<LABEL> as CriticalEdgeBasedCompleteness<LABEL, DATA>>::init_scope_with(
             self,
             HashSet::new(), // init with empty label set to prevent extension
@@ -55,7 +55,7 @@ impl<LABEL: Hash + Eq + Label, DATA> Completeness<LABEL, DATA> for ExplicitClose
 
     fn cmpl_new_edge(
         &self,
-        inner_scope_graph: &mut InnerScopeGraph<LABEL, DATA>,
+        inner_scope_graph: &InnerScopeGraph<LABEL, DATA>,
         src: Scope,
         lbl: LABEL,
         dst: Scope,
@@ -110,7 +110,7 @@ impl<LABEL: Hash + Eq> ExplicitClose<LABEL> {
     }
 }
 
-impl<LABEL: Hash + Eq, DATA> ScopeGraph<LABEL, DATA, ExplicitClose<LABEL>> {
+impl<'sg, LABEL: Hash + Eq, DATA> ScopeGraph<'sg, LABEL, DATA, ExplicitClose<LABEL>> {
     /// Closes an edge, (i.e., prohibit future new
     ///
     /// For example, the following program will return an error.
@@ -118,9 +118,12 @@ impl<LABEL: Hash + Eq, DATA> ScopeGraph<LABEL, DATA, ExplicitClose<LABEL>> {
     /// # use scopegraphs_lib::completeness::ExplicitClose;
     /// # use scopegraphs_lib::ScopeGraph;
     /// # use scopegraphs_macros::Label;
+    /// # use scopegraphs::storage::Storage;
+    ///
     /// # #[derive(Eq, Hash, PartialEq, Label)] enum Lbl { Def }
     /// # use Lbl::*;
-    /// let mut sg = ScopeGraph::<Lbl, usize, _>::new(ExplicitClose::default());
+    /// let storage = Storage::new();
+    /// let mut sg = ScopeGraph::<Lbl, usize, _>::new(&storage, ExplicitClose::default());
     ///
     /// let s1 = sg.add_scope_with(0, [Def]);
     /// let s2 = sg.add_scope_closed(42);
@@ -136,6 +139,7 @@ impl<LABEL: Hash + Eq, DATA> ScopeGraph<LABEL, DATA, ExplicitClose<LABEL>> {
     /// # use scopegraphs_lib::ScopeGraph;
     /// # use scopegraphs_lib::resolve::{DefaultDataEquiv, DefaultLabelOrder, EdgeOrData, Resolve};
     /// # use scopegraphs_macros::{compile_regex, Label};
+    /// # use scopegraphs::storage::Storage;
     /// #
     /// # #[derive(Eq, Hash, PartialEq, Label, Debug, Copy, Clone)]
     /// # enum Lbl { Def }
@@ -143,7 +147,8 @@ impl<LABEL: Hash + Eq, DATA> ScopeGraph<LABEL, DATA, ExplicitClose<LABEL>> {
     /// # type LblD = EdgeOrData<Lbl>;
     /// #
     /// # compile_regex!(type Regex<Lbl> = Def);
-    /// let mut sg = ScopeGraph::<Lbl, usize, _>::new(ExplicitClose::default());
+    /// let storage = Storage::new();
+    /// let mut sg = ScopeGraph::<Lbl, usize, _>::new(&storage, ExplicitClose::default());
     ///
     /// let s1 = sg.add_scope_with(0, [Def]);
     /// let s2 = sg.add_scope_closed(42);
@@ -165,6 +170,7 @@ impl<LABEL: Hash + Eq, DATA> ScopeGraph<LABEL, DATA, ExplicitClose<LABEL>> {
     /// # use scopegraphs_lib::ScopeGraph;
     /// # use scopegraphs_lib::resolve::{DefaultDataEquiv, DefaultLabelOrder, EdgeOrData, Resolve};
     /// # use scopegraphs_macros::{compile_regex, Label};
+    /// # use scopegraphs_lib::storage::Storage;
     /// #
     /// # #[derive(Eq, Hash, PartialEq, Label, Debug, Copy, Clone)]
     /// # enum Lbl { Def }
@@ -172,7 +178,8 @@ impl<LABEL: Hash + Eq, DATA> ScopeGraph<LABEL, DATA, ExplicitClose<LABEL>> {
     /// # type LblD = EdgeOrData<Lbl>;
     /// #
     /// # compile_regex!(type Regex<Lbl> = Def);
-    /// let mut sg = ScopeGraph::<Lbl, usize, _>::new(ExplicitClose::default());
+    /// let storage = Storage::new();
+    /// let mut sg = ScopeGraph::<Lbl, usize, _>::new(&storage, ExplicitClose::default());
     ///
     /// let s1 = sg.add_scope_with(0, [Def]);
     /// let s2 = sg.add_scope_closed(42);
@@ -192,18 +199,20 @@ impl<LABEL: Hash + Eq, DATA> ScopeGraph<LABEL, DATA, ExplicitClose<LABEL>> {
     }
 }
 
-impl<LABEL: Hash + Eq + Copy, DATA> ScopeGraph<LABEL, DATA, FutureCompleteness<LABEL>> {
+impl<'sg, LABEL: Hash + Eq + Copy, DATA> ScopeGraph<'sg, LABEL, DATA, FutureCompleteness<LABEL>> {
     /// TODO: update this example to use futures
     /// Closes an edge, (i.e., prohibit future new
     ///
     /// For example, the following program will return an error.
     /// ```
     /// # use scopegraphs_lib::completeness::ExplicitClose;
-    /// # use scopegraphs_lib::ScopeGraph;
+    /// # use scopegraphs_lib::{ScopeGraph, storage};
     /// # use scopegraphs_macros::Label;
+    /// # use scopegraphs_lib::storage::Storage;
     /// # #[derive(Eq, Hash, PartialEq, Label)] enum Lbl { Def }
     /// # use Lbl::*;
-    /// let mut sg = ScopeGraph::<Lbl, usize, _>::new(ExplicitClose::default());
+    /// let storage = Storage::new();
+    /// let mut sg = ScopeGraph::<Lbl, usize, _>::new(&storage, ExplicitClose::default());
     ///
     /// let s1 = sg.add_scope_with(0, [Def]);
     /// let s2 = sg.add_scope_closed(42);
@@ -219,6 +228,7 @@ impl<LABEL: Hash + Eq + Copy, DATA> ScopeGraph<LABEL, DATA, FutureCompleteness<L
     /// # use scopegraphs_lib::ScopeGraph;
     /// # use scopegraphs_lib::resolve::{DefaultDataEquiv, DefaultLabelOrder, EdgeOrData, Resolve};
     /// # use scopegraphs_macros::{compile_regex, Label};
+    /// # use scopegraphs_lib::storage::Storage;
     /// #
     /// # #[derive(Eq, Hash, PartialEq, Label, Debug, Copy, Clone)]
     /// # enum Lbl { Def }
@@ -226,7 +236,8 @@ impl<LABEL: Hash + Eq + Copy, DATA> ScopeGraph<LABEL, DATA, FutureCompleteness<L
     /// # type LblD = EdgeOrData<Lbl>;
     /// #
     /// # compile_regex!(type Regex<Lbl> = Def);
-    /// let mut sg = ScopeGraph::<Lbl, usize, _>::new(ExplicitClose::default());
+    /// let storage = Storage::new();
+    /// let mut sg = ScopeGraph::<Lbl, usize, _>::new(&storage, ExplicitClose::default());
     ///
     /// let s1 = sg.add_scope_with(0, [Def]);
     /// let s2 = sg.add_scope_closed(42);
@@ -248,6 +259,7 @@ impl<LABEL: Hash + Eq + Copy, DATA> ScopeGraph<LABEL, DATA, FutureCompleteness<L
     /// # use scopegraphs_lib::ScopeGraph;
     /// # use scopegraphs_lib::resolve::{DefaultDataEquiv, DefaultLabelOrder, EdgeOrData, Resolve};
     /// # use scopegraphs_macros::{compile_regex, Label};
+    /// # use scopegraphs_lib::storage::Storage;
     /// #
     /// # #[derive(Eq, Hash, PartialEq, Label, Debug, Copy, Clone)]
     /// # enum Lbl { Def }
@@ -255,7 +267,8 @@ impl<LABEL: Hash + Eq + Copy, DATA> ScopeGraph<LABEL, DATA, FutureCompleteness<L
     /// # type LblD = EdgeOrData<Lbl>;
     /// #
     /// # compile_regex!(type Regex<Lbl> = Def);
-    /// let mut sg = ScopeGraph::<Lbl, usize, _>::new(ExplicitClose::default());
+    /// let storage = Storage::new();
+    /// let mut sg = ScopeGraph::<Lbl, usize, _>::new(&storage, ExplicitClose::default());
     ///
     /// let s1 = sg.add_scope_with(0, [Def]);
     /// let s2 = sg.add_scope_closed(42);

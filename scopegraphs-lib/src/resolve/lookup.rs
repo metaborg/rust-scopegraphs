@@ -22,9 +22,10 @@ use crate::{
 };
 use scopegraphs_regular_expressions::RegexMatcher;
 
-impl<'sg: 'rslv, 'rslv, LABEL, DATA, CMPL, PWF, DWF, LO, DEq> Resolve<'sg, 'rslv>
-    for Query<'sg, 'rslv, LABEL, DATA, CMPL, PWF, DWF, LO, DEq>
+impl<'sg: 'rslv, 'storage, 'rslv, LABEL, DATA, CMPL, PWF, DWF, LO, DEq> Resolve<'sg, 'rslv>
+    for Query<'storage, 'sg, 'rslv, LABEL, DATA, CMPL, PWF, DWF, LO, DEq>
 where
+    'storage: 'sg,
     LABEL: Label + Copy + Debug + Hash + Eq,
     DATA: Debug,
     CMPL: Completeness<LABEL, DATA>,
@@ -89,9 +90,9 @@ where
     }
 }
 
-struct ResolutionContext<'sg: 'rslv, 'rslv, LABEL, DATA, CMPL, DWF, LO, DEq> {
+struct ResolutionContext<'storage, 'sg: 'rslv, 'rslv, LABEL, DATA, CMPL, DWF, LO, DEq> {
     all_edges: Vec<EdgeOrData<LABEL>>,
-    sg: &'sg ScopeGraph<LABEL, DATA, CMPL>,
+    sg: &'sg ScopeGraph<'storage, LABEL, DATA, CMPL>,
     data_wellformedness: &'rslv DWF,
     label_order: &'rslv LO,
     data_equiv: &'rslv DEq,
@@ -103,8 +104,8 @@ type EnvC<'sg, 'rslv, CMPL, LABEL, DATA> = <<<CMPL as Completeness<LABEL, DATA>>
 
 type EnvCache<LABEL, ENVC> = RefCell<HashMap<EdgeOrData<LABEL>, Rc<ENVC>>>;
 
-impl<'sg: 'rslv, 'rslv, LABEL, DATA, CMPL, DWF, LO, DEq>
-    ResolutionContext<'sg, 'rslv, LABEL, DATA, CMPL, DWF, LO, DEq>
+impl<'storage, 'sg: 'rslv, 'rslv, LABEL, DATA, CMPL, DWF, LO, DEq>
+    ResolutionContext<'storage, 'sg, 'rslv, LABEL, DATA, CMPL, DWF, LO, DEq>
 where
     LABEL: Copy + Debug + Hash + Eq,
     DATA: Debug,
@@ -353,6 +354,7 @@ mod tests {
         completeness::{ExplicitClose, FutureCompleteness, ImplicitClose, UncheckedCompleteness},
         label::query_regex,
         resolve::{DataWellformedness, Resolve, ResolvedPath},
+        storage::Storage,
         ScopeGraph,
     };
 
@@ -400,9 +402,10 @@ mod tests {
 
     #[test]
     fn test_label_order_async() {
-        smol::block_on(async {
+        futures::executor::block_on(async {
+            let storage = Storage::new();
             let mut scope_graph: ScopeGraph<Lbl, TData, FutureCompleteness<Lbl>> =
-                ScopeGraph::new(FutureCompleteness::default());
+                ScopeGraph::new(&storage, FutureCompleteness::default());
 
             let s0 = scope_graph.add_scope_default_closed();
             let s_with = scope_graph.add_scope_default_with([Lex, Imp]);
@@ -452,8 +455,9 @@ mod tests {
 
     #[test]
     fn test_match_data() {
-        let mut scope_graph: ScopeGraph<Lbl, TData, UncheckedCompleteness> =
-            unsafe { ScopeGraph::raw() };
+        let storage = Storage::new();
+        let scope_graph: ScopeGraph<Lbl, TData, UncheckedCompleteness> =
+            unsafe { ScopeGraph::raw(&storage) };
 
         let s0 = scope_graph.add_scope_default();
         scope_graph.add_decl(s0, Def, TData::from_default("x"));
@@ -473,8 +477,9 @@ mod tests {
 
     #[test]
     fn test_no_match_other_data() {
-        let mut scope_graph: ScopeGraph<Lbl, TData, UncheckedCompleteness> =
-            unsafe { ScopeGraph::raw() };
+        let storage = Storage::new();
+        let scope_graph: ScopeGraph<Lbl, TData, UncheckedCompleteness> =
+            unsafe { ScopeGraph::raw(&storage) };
 
         let s0 = scope_graph.add_scope_default();
         scope_graph.add_decl(s0, Def, TData::from_default("x"));
@@ -491,8 +496,9 @@ mod tests {
 
     #[test]
     fn test_regex_enforces_step() {
-        let mut scope_graph: ScopeGraph<Lbl, TData, UncheckedCompleteness> =
-            unsafe { ScopeGraph::raw() };
+        let storage = Storage::new();
+        let scope_graph: ScopeGraph<Lbl, TData, UncheckedCompleteness> =
+            unsafe { ScopeGraph::raw(&storage) };
 
         let s0 = scope_graph.add_scope_default();
         let s1 = scope_graph.add_scope_default();
@@ -515,8 +521,9 @@ mod tests {
 
     #[test]
     fn test_regex_filter() {
-        let mut scope_graph: ScopeGraph<Lbl, TData, UncheckedCompleteness> =
-            unsafe { ScopeGraph::raw() };
+        let storage = Storage::new();
+        let scope_graph: ScopeGraph<Lbl, TData, UncheckedCompleteness> =
+            unsafe { ScopeGraph::raw(&storage) };
 
         let s0 = scope_graph.add_scope_default();
         let s1 = scope_graph.add_scope_default();
@@ -535,8 +542,9 @@ mod tests {
 
     #[test]
     fn test_shadow_applied() {
-        let mut scope_graph: ScopeGraph<Lbl, TData, UncheckedCompleteness> =
-            unsafe { ScopeGraph::raw() };
+        let storage = Storage::new();
+        let scope_graph: ScopeGraph<Lbl, TData, UncheckedCompleteness> =
+            unsafe { ScopeGraph::raw(&storage) };
 
         let s0 = scope_graph.add_scope_default();
         let s1 = scope_graph.add_scope_default();
@@ -562,8 +570,9 @@ mod tests {
 
     #[test]
     fn test_label_order_complex_raw() {
-        let mut scope_graph: ScopeGraph<Lbl, TData, UncheckedCompleteness> =
-            unsafe { ScopeGraph::raw() };
+        let storage = Storage::new();
+        let scope_graph: ScopeGraph<Lbl, TData, UncheckedCompleteness> =
+            unsafe { ScopeGraph::raw(&storage) };
 
         let s0 = scope_graph.add_scope_default();
         let s_with = scope_graph.add_scope_default();
@@ -593,8 +602,9 @@ mod tests {
 
     #[test]
     fn test_label_order_complex_implicit_close() {
-        let mut scope_graph: ScopeGraph<Lbl, TData, ImplicitClose<Lbl>> =
-            ScopeGraph::new(ImplicitClose::default());
+        let storage = Storage::new();
+        let scope_graph: ScopeGraph<Lbl, TData, ImplicitClose<Lbl>> =
+            ScopeGraph::new(&storage, ImplicitClose::default());
 
         let s0 = scope_graph.add_scope_default();
         let s_with = scope_graph.add_scope_default();
@@ -636,8 +646,9 @@ mod tests {
 
     #[test]
     fn test_label_order_complex_explicit_close() {
+        let storage = Storage::new();
         let mut scope_graph: ScopeGraph<Lbl, TData, ExplicitClose<Lbl>> =
-            ScopeGraph::new(ExplicitClose::default());
+            ScopeGraph::new(&storage, ExplicitClose::default());
 
         let s0 = scope_graph.add_scope_default_closed();
         let s_with = scope_graph.add_scope_default_with([Lex, Imp]);
@@ -686,8 +697,9 @@ mod tests {
 
     #[test]
     fn test_caching() {
+        let storage = Storage::new();
         let mut scope_graph: ScopeGraph<Lbl, TData, ImplicitClose<Lbl>> =
-            ScopeGraph::new(ImplicitClose::default());
+            ScopeGraph::new(&storage, ImplicitClose::default());
 
         let s0 = scope_graph.add_scope_default_with([Def]);
         scope_graph

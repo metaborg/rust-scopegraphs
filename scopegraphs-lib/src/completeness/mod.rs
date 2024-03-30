@@ -55,12 +55,12 @@ use private::Sealed;
 ///
 /// This trait is sealed to ensure only verified implementations are available.
 pub trait Completeness<LABEL, DATA>: Sealed {
-    fn cmpl_new_scope(&self, inner_scope_graph: &mut InnerScopeGraph<LABEL, DATA>, scope: Scope);
+    fn cmpl_new_scope(&self, inner_scope_graph: &InnerScopeGraph<LABEL, DATA>, scope: Scope);
 
     /// Should initialize a scope without possibility to extend it with edges
     fn cmpl_new_complete_scope(
         &self,
-        inner_scope_graph: &mut InnerScopeGraph<LABEL, DATA>,
+        inner_scope_graph: &InnerScopeGraph<LABEL, DATA>,
         scope: Scope,
     ) {
         self.cmpl_new_scope(inner_scope_graph, scope)
@@ -69,7 +69,7 @@ pub trait Completeness<LABEL, DATA>: Sealed {
     type NewEdgeResult;
     fn cmpl_new_edge(
         &self,
-        inner_scope_graph: &mut InnerScopeGraph<LABEL, DATA>,
+        inner_scope_graph: &InnerScopeGraph<LABEL, DATA>,
         src: Scope,
         lbl: LABEL,
         dst: Scope,

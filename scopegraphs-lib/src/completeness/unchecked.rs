@@ -22,13 +22,13 @@ impl UncheckedCompleteness {
 }
 
 impl<LABEL: Hash + Eq, DATA> Completeness<LABEL, DATA> for UncheckedCompleteness {
-    fn cmpl_new_scope(&self, _: &mut InnerScopeGraph<LABEL, DATA>, _: Scope) {}
+    fn cmpl_new_scope(&self, _: &InnerScopeGraph<LABEL, DATA>, _: Scope) {}
 
     type NewEdgeResult = ();
 
     fn cmpl_new_edge(
         &self,
-        inner_scope_graph: &mut InnerScopeGraph<LABEL, DATA>,
+        inner_scope_graph: &InnerScopeGraph<LABEL, DATA>,
         src: Scope,
         lbl: LABEL,
         dst: Scope,

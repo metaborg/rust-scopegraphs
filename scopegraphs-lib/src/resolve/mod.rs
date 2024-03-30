@@ -280,22 +280,22 @@ pub trait Resolve<'sg, 'rslv> {
     fn resolve(&'rslv self, scope: Scope) -> Self::EnvContainer;
 }
 
-pub struct Query<'sg, 'rslv, LABEL, DATA, CMPL, PWF, DWF, LO, DEq> {
+pub struct Query<'storage, 'sg, 'rslv, LABEL, DATA, CMPL, PWF, DWF, LO, DEq> {
     _phantom: PhantomData<&'rslv ()>,
-    scope_graph: &'sg ScopeGraph<LABEL, DATA, CMPL>,
+    scope_graph: &'sg ScopeGraph<'storage, LABEL, DATA, CMPL>,
     path_wellformedness: PWF,
     data_wellformedness: DWF,
     label_order: LO,
     data_equivalence: DEq,
 }
 
-impl<'sg, 'rslv, LABEL, DATA, CMPL, PWF, DWF, LO, DEq>
-    Query<'sg, 'rslv, LABEL, DATA, CMPL, PWF, DWF, LO, DEq>
+impl<'sg, 'storage, 'rslv, LABEL, DATA, CMPL, PWF, DWF, LO, DEq>
+    Query<'sg, 'storage, 'rslv, LABEL, DATA, CMPL, PWF, DWF, LO, DEq>
 {
     pub fn with_path_wellformedness<NPWF>(
         self,
         new_path_wellformedness: NPWF,
-    ) -> Query<'sg, 'rslv, LABEL, DATA, CMPL, NPWF, DWF, LO, DEq>
+    ) -> Query<'sg, 'storage, 'rslv, LABEL, DATA, CMPL, NPWF, DWF, LO, DEq>
     where
         NPWF: for<'a> RegexMatcher<&'a LABEL> + 'rslv,
     {
@@ -312,7 +312,7 @@ impl<'sg, 'rslv, LABEL, DATA, CMPL, PWF, DWF, LO, DEq>
     pub fn with_data_wellformedness<NDWF>(
         self,
         new_data_wellformedness: NDWF,
-    ) -> Query<'sg, 'rslv, LABEL, DATA, CMPL, PWF, NDWF, LO, DEq>
+    ) -> Query<'sg, 'storage, 'rslv, LABEL, DATA, CMPL, PWF, NDWF, LO, DEq>
     where
         NDWF: DataWellformedness<DATA> + 'rslv,
     {
@@ -329,7 +329,7 @@ impl<'sg, 'rslv, LABEL, DATA, CMPL, PWF, DWF, LO, DEq>
     pub fn with_label_order<NLO>(
         self,
         new_label_order: NLO,
-    ) -> Query<'sg, 'rslv, LABEL, DATA, CMPL, PWF, DWF, NLO, DEq>
+    ) -> Query<'sg, 'storage, 'rslv, LABEL, DATA, CMPL, PWF, DWF, NLO, DEq>
     where
         NLO: LabelOrder<LABEL> + 'rslv,
     {
@@ -346,7 +346,7 @@ impl<'sg, 'rslv, LABEL, DATA, CMPL, PWF, DWF, LO, DEq>
     pub fn with_data_equivalence<NDEq>(
         self,
         new_data_equivalence: NDEq,
-    ) -> Query<'sg, 'rslv, LABEL, DATA, CMPL, PWF, DWF, LO, NDEq>
+    ) -> Query<'sg, 'storage, 'rslv, LABEL, DATA, CMPL, PWF, DWF, LO, NDEq>
     where
         NDEq: DataEquiv<DATA> + 'rslv,
     {
@@ -361,10 +361,23 @@ impl<'sg, 'rslv, LABEL, DATA, CMPL, PWF, DWF, LO, DEq>
     }
 }
 
-impl<LABEL, DATA, CMPL> ScopeGraph<LABEL, DATA, CMPL> {
-    pub fn query(
-        &self,
-    ) -> Query<LABEL, DATA, CMPL, (), DefaultDataWellformedness, DefaultLabelOrder, DefaultDataEquiv>
+impl<'storage, LABEL, DATA, CMPL> ScopeGraph<'storage, LABEL, DATA, CMPL> {
+    pub fn query<'sg>(
+        &'sg self,
+    ) -> Query<
+        'storage,
+        'sg,
+        '_,
+        LABEL,
+        DATA,
+        CMPL,
+        (),
+        DefaultDataWellformedness,
+        DefaultLabelOrder,
+        DefaultDataEquiv,
+    >
+    where
+        'storage: 'sg,
     {
         Query {
             _phantom: PhantomData,
