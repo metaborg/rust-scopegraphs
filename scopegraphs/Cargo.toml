@@ -19,5 +19,5 @@ scopegraphs-regular-expressions = {path="../scopegraphs-regular-expressions", ve
 
 [features]
 default = ["dot", "dynamic-regex"]
-dot = ["scopegraphs-regular-expressions/dot", "scopegraphs-macros/dot"]
+dot = ["scopegraphs-regular-expressions/dot", "scopegraphs-macros/dot", "scopegraphs-lib/dot"]
 dynamic-regex = ["scopegraphs-regular-expressions/dynamic"]
