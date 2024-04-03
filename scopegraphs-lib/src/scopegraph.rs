@@ -23,10 +23,10 @@ impl Debug for Scope {
 
 #[derive(Debug)]
 pub struct InnerScopeGraph<'sg, LABEL, DATA> {
-    storage: &'sg Storage,
+    pub(crate) storage: &'sg Storage,
     #[allow(clippy::type_complexity)]
-    edges: RefCell<Vec<&'sg RefCell<HashMap<LABEL, HashSet<Scope>>>>>, // FIXME: BTreeMap? Vectors? Whatever?
-    data: RefCell<Vec<&'sg DATA>>,
+    pub(crate) edges: RefCell<Vec<&'sg RefCell<HashMap<LABEL, HashSet<Scope>>>>>, // FIXME: BTreeMap? Vectors? Whatever?
+    pub(crate) data: RefCell<Vec<&'sg DATA>>,
 }
 
 impl<'sg, LABEL, DATA> InnerScopeGraph<'sg, LABEL, DATA> {
