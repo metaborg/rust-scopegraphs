@@ -66,7 +66,7 @@ where
         let scope = self.inner_scope_graph.add_scope(data);
         self.completeness
             .borrow_mut()
-            .init_scope_with(HashSet::from_iter(open_edges.into_iter()));
+            .init_scope_with(HashSet::from_iter(open_edges));
         scope
     }
 
