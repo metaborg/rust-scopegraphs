@@ -22,3 +22,12 @@ scopegraphs-regular-expressions = { path = "../scopegraphs-regular-expressions",
 default = ["dot", "dynamic-regex"]
 dot = ["scopegraphs-regular-expressions/dot", "scopegraphs-macros/dot", "scopegraphs-lib/dot"]
 dynamic-regex = ["scopegraphs-regular-expressions/dynamic"]
+unstable-doc = []
+
+[package.metadata.playground]
+features = ["unstable-doc"]
+
+[package.metadata.docs.rs]
+features = ["unstable-doc"]
+rustdoc-args = ["--cfg", "docsrs", "--generate-link-to-definition"]
+cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
