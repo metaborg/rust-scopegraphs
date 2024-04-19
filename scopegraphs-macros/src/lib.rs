@@ -1,8 +1,11 @@
+#![deny(missing_docs)]
+
 use crate::label::impl_label;
 use crate::order::OrderInput;
 use crate::regex::RegexInput;
 
 use proc_macro::TokenStream;
+
 use syn::{parse_macro_input, DeriveInput};
 
 mod label;

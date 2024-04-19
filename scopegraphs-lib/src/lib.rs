@@ -1,3 +1,5 @@
+#![deny(missing_docs)]
+
 pub mod completeness;
 pub mod containers;
 pub mod future_wrapper;

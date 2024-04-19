@@ -1,3 +1,5 @@
+#![deny(missing_docs)]
+
 use proc_macro2::{LexError, TokenStream};
 use thiserror::Error;
 
