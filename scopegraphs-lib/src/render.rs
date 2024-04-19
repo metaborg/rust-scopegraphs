@@ -52,14 +52,6 @@ impl<'a, LABEL: Clone + Debug, DATA: Clone + RenderScopeData, CMPL: Completeness
         Id::new(format!("s{}", n.0)).unwrap()
     }
 
-    fn node_label(&self, n: &Scope) -> LabelText {
-        let data = self.0.get_data(*n);
-        LabelText::label(data.render().unwrap_or_else(|| format!("scope {}", n.0)))
-    }
-    fn edge_label(&self, edge: &(Scope, LABEL, Scope)) -> LabelText {
-        LabelText::label(format!("{:?}", edge.1))
-    }
-
     fn node_shape(&'a self, node: &Scope) -> Option<LabelText<'a>> {
         let data = self.0.get_data(*node);
         if data.definition() {
@@ -67,6 +59,14 @@ impl<'a, LABEL: Clone + Debug, DATA: Clone + RenderScopeData, CMPL: Completeness
         } else {
             Some(LabelStr(Cow::Borrowed("circle")))
         }
+    }
+    fn node_label(&self, n: &Scope) -> LabelText {
+        let data = self.0.get_data(*n);
+        LabelText::label(data.render().unwrap_or_else(|| format!("scope {}", n.0)))
+    }
+
+    fn edge_label(&self, edge: &(Scope, LABEL, Scope)) -> LabelText {
+        LabelText::label(format!("{:?}", edge.1))
     }
 }
 
