@@ -22,15 +22,15 @@ scopegraphs-regular-expressions = { path = "../scopegraphs-regular-expressions",
 default = ["dot", "dynamic-regex"]
 dot = ["scopegraphs-regular-expressions/dot", "scopegraphs-macros/dot", "scopegraphs-lib/dot"]
 dynamic-regex = ["scopegraphs-regular-expressions/dynamic"]
-unstable-doc = []
+doc = []
 
 [build-dependencies]
 rustc_version = "0.4.0"
 
 [package.metadata.playground]
-features = ["unstable-doc"]
+features = ["doc"]
 
 [package.metadata.docs.rs]
-features = ["unstable-doc"]
+features = ["doc"]
 rustdoc-args = ["--cfg", "docsrs", "--generate-link-to-definition"]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
