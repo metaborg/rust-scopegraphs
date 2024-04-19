@@ -9,3 +9,6 @@ pub mod storage;
 pub use label::Label;
 pub use scopegraph::*;
 pub use scopegraphs_macros;
+
+#[cfg(feature = "dot")]
+pub mod render;

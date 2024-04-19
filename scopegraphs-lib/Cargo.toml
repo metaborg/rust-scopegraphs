@@ -12,6 +12,9 @@ rust-version = "1.77"
 
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[features]
+default = []
+dot = ["dep:dot"]
 
 [dependencies]
 log = "0.4.20"
@@ -22,6 +25,7 @@ scopegraphs-regular-expressions = { path = "../scopegraphs-regular-expressions",
 scopegraphs-macros = { path = "../scopegraphs-macros", version = "0.1.0" }
 futures = "0.3.30"
 bumpalo = "3.14.0"
+dot = { version = "0.1.4", optional = true }
 
 [dev-dependencies]
 scopegraphs = { path = "../scopegraphs" }
