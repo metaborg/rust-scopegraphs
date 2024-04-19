@@ -1,13 +1,16 @@
-use prust_lib::hashmap::HashSet as TrieSet;
+use scopegraphs_prust_lib::hashmap::HashSet as TrieSet;
 use std::collections::HashSet;
 use std::fmt::{Debug, Formatter};
 use std::hash::Hash;
-use std::sync::Arc;
+use std::marker::PhantomData;
+use std::rc::Rc;
 
 use super::{Scope, ScopeGraph};
 
 mod params;
 pub use params::*;
+use scopegraphs_regular_expressions::RegexMatcher;
+
 pub mod lookup;
 
 /// Representation of either a labeled edge or the special 'data' label.
@@ -53,7 +56,7 @@ enum InnerPath<LABEL> {
 /// Path (alternating sequence of scopes and labels) in a scope graph.
 #[derive(Clone)]
 pub struct Path<LABEL> {
-    inner_path: Arc<InnerPath<LABEL>>,
+    inner_path: Rc<InnerPath<LABEL>>,
     /// Set of all scopes in this path.
     ///
     /// Paths are alternating sequences of scopes and labels.
@@ -63,7 +66,8 @@ pub struct Path<LABEL> {
     /// This is cheaper than traversing the [`Path::inner_path`], at the cost of some more memory usage.
     ///
     /// In order to make paths cheap to extend multiple times, we use a persistent data structure.
-    scopes: TrieSet<Scope>,
+    scopes: Rc<TrieSet<Scope>>,
+    // FIXME: put fields in same Arc
 }
 
 impl<LABEL> PartialEq for Path<LABEL>
@@ -137,8 +141,8 @@ impl<LABEL> Path<LABEL> {
     /// Creates a new path that contains of a single scope.
     pub fn new(source: Scope) -> Self {
         Self {
-            inner_path: Arc::new(InnerPath::Start { source }),
-            scopes: TrieSet::new().insert(source),
+            inner_path: Rc::new(InnerPath::Start { source }),
+            scopes: Rc::new(TrieSet::new().insert(source)),
         }
     }
 
@@ -158,7 +162,7 @@ impl<LABEL> Path<LABEL> {
             None
         } else {
             Some(Self {
-                inner_path: Arc::new(InnerPath::Step {
+                inner_path: Rc::new(InnerPath::Step {
                     prefix: Self {
                         inner_path: self.inner_path.clone(),
                         scopes: self.scopes.clone(),
@@ -166,7 +170,7 @@ impl<LABEL> Path<LABEL> {
                     label,
                     target,
                 }),
-                scopes: self.scopes.insert(target),
+                scopes: Rc::new(self.scopes.insert(target)),
             })
         }
     }
@@ -222,7 +226,7 @@ impl<'sg, LABEL, DATA> Env<'sg, LABEL, DATA> {
 
 impl<'sg, LABEL, DATA> Env<'sg, LABEL, DATA>
 where
-    ResolvedPath<'sg, LABEL, DATA>: Eq + Hash,
+    ResolvedPath<'sg, LABEL, DATA>: Eq + Hash + Clone,
 {
     /// Create an environment with a single path.
     pub fn single(path: ResolvedPath<'sg, LABEL, DATA>) -> Self {
@@ -237,8 +241,8 @@ where
     }
 
     /// Add all paths in `other` to the current environment.
-    pub fn merge(&mut self, other: Self) {
-        self.0.extend(other.0)
+    pub fn merge(&mut self, other: &Self) {
+        self.0.extend(other.0.iter().cloned())
     }
 }
 
@@ -267,26 +271,36 @@ impl<'sg, LABEL: 'sg + Clone, DATA> Clone for Env<'sg, LABEL, DATA> {
     }
 }
 
-pub trait Resolve {
-    type EnvContainer;
+pub trait Resolve<'sg, 'rslv> {
+    type EnvContainer
+    where
+        'sg: 'rslv,
+        Self: 'rslv;
 
-    fn resolve(&self, scope: Scope) -> Self::EnvContainer;
+    fn resolve(&'rslv self, scope: Scope) -> Self::EnvContainer;
 }
 
-pub struct Query<'sg, LABEL, DATA, CMPL, PWF, DWF, LO, DEq> {
-    scope_graph: &'sg ScopeGraph<LABEL, DATA, CMPL>,
+pub struct Query<'storage, 'sg, 'rslv, LABEL, DATA, CMPL, PWF, DWF, LO, DEq> {
+    _phantom: PhantomData<&'rslv ()>,
+    scope_graph: &'sg ScopeGraph<'storage, LABEL, DATA, CMPL>,
     path_wellformedness: PWF,
     data_wellformedness: DWF,
     label_order: LO,
     data_equivalence: DEq,
 }
 
-impl<'sg, LABEL, DATA, CMPL, PWF, DWF, LO, DEq> Query<'sg, LABEL, DATA, CMPL, PWF, DWF, LO, DEq> {
+impl<'sg, 'storage, 'rslv, LABEL, DATA, CMPL, PWF, DWF, LO, DEq>
+    Query<'sg, 'storage, 'rslv, LABEL, DATA, CMPL, PWF, DWF, LO, DEq>
+{
     pub fn with_path_wellformedness<NPWF>(
         self,
         new_path_wellformedness: NPWF,
-    ) -> Query<'sg, LABEL, DATA, CMPL, NPWF, DWF, LO, DEq> {
+    ) -> Query<'sg, 'storage, 'rslv, LABEL, DATA, CMPL, NPWF, DWF, LO, DEq>
+    where
+        NPWF: for<'a> RegexMatcher<&'a LABEL> + 'rslv,
+    {
         Query {
+            _phantom: PhantomData,
             scope_graph: self.scope_graph,
             path_wellformedness: new_path_wellformedness,
             data_wellformedness: self.data_wellformedness,
@@ -298,8 +312,12 @@ impl<'sg, LABEL, DATA, CMPL, PWF, DWF, LO, DEq> Query<'sg, LABEL, DATA, CMPL, PW
     pub fn with_data_wellformedness<NDWF>(
         self,
         new_data_wellformedness: NDWF,
-    ) -> Query<'sg, LABEL, DATA, CMPL, PWF, NDWF, LO, DEq> {
+    ) -> Query<'sg, 'storage, 'rslv, LABEL, DATA, CMPL, PWF, NDWF, LO, DEq>
+    where
+        NDWF: DataWellformedness<DATA> + 'rslv,
+    {
         Query {
+            _phantom: PhantomData,
             scope_graph: self.scope_graph,
             path_wellformedness: self.path_wellformedness,
             data_wellformedness: new_data_wellformedness,
@@ -311,8 +329,12 @@ impl<'sg, LABEL, DATA, CMPL, PWF, DWF, LO, DEq> Query<'sg, LABEL, DATA, CMPL, PW
     pub fn with_label_order<NLO>(
         self,
         new_label_order: NLO,
-    ) -> Query<'sg, LABEL, DATA, CMPL, PWF, DWF, NLO, DEq> {
+    ) -> Query<'sg, 'storage, 'rslv, LABEL, DATA, CMPL, PWF, DWF, NLO, DEq>
+    where
+        NLO: LabelOrder<LABEL> + 'rslv,
+    {
         Query {
+            _phantom: PhantomData,
             scope_graph: self.scope_graph,
             path_wellformedness: self.path_wellformedness,
             data_wellformedness: self.data_wellformedness,
@@ -324,8 +346,12 @@ impl<'sg, LABEL, DATA, CMPL, PWF, DWF, LO, DEq> Query<'sg, LABEL, DATA, CMPL, PW
     pub fn with_data_equivalence<NDEq>(
         self,
         new_data_equivalence: NDEq,
-    ) -> Query<'sg, LABEL, DATA, CMPL, PWF, DWF, LO, NDEq> {
+    ) -> Query<'sg, 'storage, 'rslv, LABEL, DATA, CMPL, PWF, DWF, LO, NDEq>
+    where
+        NDEq: DataEquiv<DATA> + 'rslv,
+    {
         Query {
+            _phantom: PhantomData,
             scope_graph: self.scope_graph,
             path_wellformedness: self.path_wellformedness,
             data_wellformedness: self.data_wellformedness,
@@ -335,12 +361,26 @@ impl<'sg, LABEL, DATA, CMPL, PWF, DWF, LO, DEq> Query<'sg, LABEL, DATA, CMPL, PW
     }
 }
 
-impl<LABEL, DATA, CMPL> ScopeGraph<LABEL, DATA, CMPL> {
-    pub fn query(
-        &self,
-    ) -> Query<LABEL, DATA, CMPL, (), DefaultDataWellformedness, DefaultLabelOrder, DefaultDataEquiv>
+impl<'storage, LABEL, DATA, CMPL> ScopeGraph<'storage, LABEL, DATA, CMPL> {
+    pub fn query<'sg>(
+        &'sg self,
+    ) -> Query<
+        'storage,
+        'sg,
+        '_,
+        LABEL,
+        DATA,
+        CMPL,
+        (),
+        DefaultDataWellformedness,
+        DefaultLabelOrder,
+        DefaultDataEquiv,
+    >
+    where
+        'storage: 'sg,
     {
         Query {
+            _phantom: PhantomData,
             scope_graph: self,
             path_wellformedness: (),
             data_wellformedness: DefaultDataWellformedness::default(),

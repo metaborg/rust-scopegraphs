@@ -10,6 +10,7 @@ use std::fmt::Debug;
 use std::hash::Hash;
 use std::iter;
 use std::rc::Rc;
+use std::sync::Arc;
 
 use crate::containers::{EnvContainer, PathContainer, ScopeContainer};
 use crate::resolve::{Query, Resolve};
@@ -21,24 +22,30 @@ use crate::{
 };
 use scopegraphs_regular_expressions::RegexMatcher;
 
-impl<'sg, LABEL, DATA, CMPL, PWF, DWF, LO, DEq, ENVC> Resolve
-    for Query<'sg, LABEL, DATA, CMPL, PWF, DWF, LO, DEq>
+impl<'sg: 'rslv, 'storage, 'rslv, LABEL, DATA, CMPL, PWF, DWF, LO, DEq> Resolve<'sg, 'rslv>
+    for Query<'storage, 'sg, 'rslv, LABEL, DATA, CMPL, PWF, DWF, LO, DEq>
 where
+    'storage: 'sg,
     LABEL: Label + Copy + Debug + Hash + Eq,
     DATA: Debug,
     CMPL: Completeness<LABEL, DATA>,
-    CMPL::GetEdgesResult: ScopeContainer<LABEL>,
-    <CMPL::GetEdgesResult as ScopeContainer<LABEL>>::PathContainer:
-        PathContainer<LABEL, DATA, EnvContainer<'sg> = ENVC>,
-    ENVC: EnvContainer<'sg, LABEL, DATA> + Debug,
-    PWF: for<'a> RegexMatcher<&'a LABEL>,
-    DWF: DataWellformedness<DATA>,
-    LO: LabelOrder<LABEL>,
-    DEq: DataEquiv<DATA>,
+    CMPL::GetEdgesResult<'rslv>: ScopeContainer<LABEL>,
+    <CMPL::GetEdgesResult<'rslv> as ScopeContainer<LABEL>>::PathContainer:
+        PathContainer<'sg, 'rslv, LABEL, DATA>,
+    <<CMPL::GetEdgesResult<'rslv> as ScopeContainer<LABEL>>::PathContainer as PathContainer<
+        'sg,
+        'rslv,
+        LABEL,
+        DATA,
+    >>::EnvContainer: EnvContainer<'sg, 'rslv, LABEL, DATA> + Debug,
+    PWF: for<'a> RegexMatcher<&'a LABEL> + 'rslv,
+    DWF: DataWellformedness<DATA> + 'rslv,
+    LO: LabelOrder<LABEL> + 'rslv,
+    DEq: DataEquiv<DATA> + 'rslv,
     ResolvedPath<'sg, LABEL, DATA>: Hash + Eq,
     Path<LABEL>: Clone,
 {
-    type EnvContainer = ENVC;
+    type EnvContainer = EnvC<'sg, 'rslv, CMPL, LABEL, DATA> where 'sg: 'rslv, Self: 'rslv;
 
     /// Entry point of lookup-based query resolution. Performs a traversal of the scope graph that
     /// results in an environment containing all declarations matching a reference.
@@ -60,45 +67,59 @@ where
     ///
     /// Parameters:
     /// - `scope`: the scope graph in which to start name resolution
-    fn resolve(&self, scope: Scope) -> Self::EnvContainer {
+    fn resolve(&'rslv self, scope: Scope) -> Self::EnvContainer {
         let all_edges: Vec<EdgeOrData<LABEL>> = LABEL::iter()
             .map(EdgeOrData::Edge)
             .chain(iter::once(EdgeOrData::Data))
             .collect();
 
-        let context = ResolutionContext {
+        let context = Arc::new(ResolutionContext {
             all_edges,
             sg: self.scope_graph,
             data_wellformedness: &self.data_wellformedness,
             label_order: &self.label_order,
             data_equiv: &self.data_equivalence,
-        };
+        });
 
-        context.resolve_all(&self.path_wellformedness, &Path::new(scope))
+        // AZ: two observations made in the mean time
+        // - context is captured in closures, so there is no distinction between 'ctx and 'rslv
+        //   solution: capture context in an Rc?
+        // - making 'env: 'sg makes the code type-check
+        //   solution: do away with 'sg entirely?
+        context.resolve_all(self.path_wellformedness.clone(), Path::new(scope))
     }
 }
 
-struct ResolutionContext<'sg: 'query, 'query, LABEL, DATA, CMPL, DWF, LO, DEq> {
+struct ResolutionContext<'storage, 'sg: 'rslv, 'rslv, LABEL, DATA, CMPL, DWF, LO, DEq> {
     all_edges: Vec<EdgeOrData<LABEL>>,
-    sg: &'sg ScopeGraph<LABEL, DATA, CMPL>,
-    data_wellformedness: &'query DWF,
-    label_order: &'query LO,
-    data_equiv: &'query DEq,
+    sg: &'sg ScopeGraph<'storage, LABEL, DATA, CMPL>,
+    data_wellformedness: &'rslv DWF,
+    label_order: &'rslv LO,
+    data_equiv: &'rslv DEq,
 }
+
+type EnvC<'sg, 'rslv, CMPL, LABEL, DATA> = <<<CMPL as Completeness<LABEL, DATA>>::GetEdgesResult<
+    'rslv,
+> as ScopeContainer<LABEL>>::PathContainer as PathContainer<'sg, 'rslv, LABEL, DATA>>::EnvContainer;
 
 type EnvCache<LABEL, ENVC> = RefCell<HashMap<EdgeOrData<LABEL>, Rc<ENVC>>>;
 
-impl<'sg, 'query, LABEL, DATA, CMPL, DWF, LO, DEq, ENVC>
-    ResolutionContext<'sg, 'query, LABEL, DATA, CMPL, DWF, LO, DEq>
+impl<'storage, 'sg: 'rslv, 'rslv, LABEL, DATA, CMPL, DWF, LO, DEq>
+    ResolutionContext<'storage, 'sg, 'rslv, LABEL, DATA, CMPL, DWF, LO, DEq>
 where
     LABEL: Copy + Debug + Hash + Eq,
     DATA: Debug,
     ResolvedPath<'sg, LABEL, DATA>: Hash + Eq,
     CMPL: Completeness<LABEL, DATA>,
-    CMPL::GetEdgesResult: ScopeContainer<LABEL>,
-    <CMPL::GetEdgesResult as ScopeContainer<LABEL>>::PathContainer:
-        PathContainer<LABEL, DATA, EnvContainer<'sg> = ENVC>,
-    ENVC: EnvContainer<'sg, LABEL, DATA> + Debug,
+    CMPL::GetEdgesResult<'rslv>: ScopeContainer<LABEL>,
+    <CMPL::GetEdgesResult<'rslv> as ScopeContainer<LABEL>>::PathContainer:
+        PathContainer<'sg, 'rslv, LABEL, DATA>,
+    <<CMPL::GetEdgesResult<'rslv> as ScopeContainer<LABEL>>::PathContainer as PathContainer<
+        'sg,
+        'rslv,
+        LABEL,
+        DATA,
+    >>::EnvContainer: EnvContainer<'sg, 'rslv, LABEL, DATA> + Debug,
     DEq: DataEquiv<DATA>,
     DWF: DataWellformedness<DATA>,
     LO: LabelOrder<LABEL>,
@@ -109,10 +130,10 @@ where
     /// - the extension matches `path_wellformedness`
     /// - the other conditions in `self` are obeyed.
     fn resolve_all(
-        &self,
-        path_wellformedness: &impl for<'a> RegexMatcher<&'a LABEL>,
-        path: &Path<LABEL>,
-    ) -> ENVC {
+        self: &Arc<Self>,
+        path_wellformedness: impl for<'a> RegexMatcher<&'a LABEL> + 'rslv,
+        path: Path<LABEL>,
+    ) -> EnvC<'sg, 'rslv, CMPL, LABEL, DATA> {
         let edges: Vec<_> = self
             .all_edges
             .iter()
@@ -131,20 +152,20 @@ where
     }
 
     /// Computes a sub environment for `edges`, for which shadowing is internally applied.
-    fn resolve_edges(
-        &self,
-        path_wellformedness: &impl for<'a> RegexMatcher<&'a LABEL>,
+    fn resolve_edges<'env>(
+        self: &Arc<Self>,
+        path_wellformedness: impl for<'a> RegexMatcher<&'a LABEL> + 'rslv,
         edges: &[EdgeOrData<LABEL>],
-        path: &Path<LABEL>,
-        cache: &EnvCache<LABEL, ENVC>,
-    ) -> ENVC {
+        path: Path<LABEL>,
+        cache: &EnvCache<LABEL, EnvC<'sg, 'rslv, CMPL, LABEL, DATA>>,
+    ) -> EnvC<'sg, 'rslv, CMPL, LABEL, DATA> {
         // set of labels that are to be resolved last
         let max = self.max(edges);
         let tgt = path.target();
         log::info!("Resolving max-edges {:?} in {:?}", max, tgt);
 
         max.into_iter()
-            .map::<Rc<ENVC>, _>(|edge| {
+            .map::<Rc<EnvC<'sg, 'rslv, CMPL, LABEL, DATA>>, _>(|edge| {
                 if let Some(env) = cache.borrow().get(&edge) {
                     log::info!("Reuse {:?}-environment from cache", edge);
                     return env.clone();
@@ -157,17 +178,25 @@ where
                     edge,
                     tgt
                 );
-                let new_env = self.resolve_shadow(path_wellformedness, edge, &smaller, path, cache);
+                let new_env = self.resolve_shadow(
+                    path_wellformedness.clone(),
+                    edge,
+                    &smaller,
+                    path.clone(),
+                    cache,
+                );
                 cache.borrow_mut().insert(edge, new_env.clone());
                 new_env
             })
-            .fold(ENVC::empty(), |env1, env2| {
+            .fold(Self::empty_env_container(), |env1, env2| {
                 // env1 and env2 are Rc<ENVC> clones not owned by a cache
-                env1.flat_map(|agg_env| {
-                    env2.flat_map(|new_env| {
-                        let mut merged_env = agg_env.clone();
-                        merged_env.merge(new_env.clone());
-                        ENVC::from(merged_env)
+                env1.flat_map(move |agg_env| {
+                    let mut merged_env = agg_env.clone();
+                    env2.flat_map(move |new_env| {
+                        merged_env.merge(new_env);
+                        <EnvC<'sg, 'rslv, CMPL, LABEL, DATA> as From<Env<'sg, LABEL, DATA>>>::from(
+                            merged_env,
+                        )
                     })
                 })
             })
@@ -179,28 +208,35 @@ where
     /// - Insert the paths in the sub-environment in the base environment
     ///   iff it is not shadowed by some path in the base environment.
     fn resolve_shadow(
-        &self,
-        path_wellformedness: &impl for<'a> RegexMatcher<&'a LABEL>,
+        self: &Arc<Self>,
+        path_wellformedness: impl for<'a> RegexMatcher<&'a LABEL> + 'rslv,
         edge: EdgeOrData<LABEL>,     // current max label
         edges: &[EdgeOrData<LABEL>], // smaller set of `edge`
-        path: &Path<LABEL>,
-        cache: &EnvCache<LABEL, ENVC>,
-    ) -> Rc<ENVC> {
+        path: Path<LABEL>,
+        cache: &EnvCache<LABEL, EnvC<'sg, 'rslv, CMPL, LABEL, DATA>>,
+    ) -> Rc<EnvC<'sg, 'rslv, CMPL, LABEL, DATA>> {
         // base environment
-        let base_env: ENVC = self.resolve_edges(path_wellformedness, edges, path, cache);
+        let base_env: EnvC<'sg, 'rslv, CMPL, LABEL, DATA> =
+            self.resolve_edges(path_wellformedness.clone(), edges, path.clone(), cache);
+        let local_self = Arc::clone(self);
         // environment of current (max) label, which might be shadowed by the base environment
-        Rc::new(base_env.flat_map(|base_env| {
-            if !base_env.is_empty() && self.data_equiv.always_true() {
-                ENVC::from(base_env.clone())
+        Rc::new(base_env.flat_map(move |base_env| {
+            if !base_env.is_empty() && local_self.data_equiv.always_true() {
+                <EnvC<'sg, 'rslv, CMPL, LABEL, DATA> as From<Env<'sg, LABEL, DATA>>>::from(
+                    base_env.clone(),
+                )
             } else {
-                let sub_env = self.resolve_edge(path_wellformedness, edge, path);
-                sub_env.flat_map(|sub_env| {
+                let sub_env = local_self.resolve_edge(path_wellformedness.clone(), edge, path);
+                let local_self = Arc::clone(&local_self);
+                let base_env = base_env.clone();
+
+                sub_env.flat_map(move |sub_env| {
                     let filtered_env = sub_env
                         .iter()
                         .filter(|p1| {
                             if let Some(p2) = base_env
                                 .iter()
-                                .find(|p2| self.data_equiv.data_equiv(p1.data, p2.data))
+                                .find(|p2| local_self.data_equiv.data_equiv(p1.data, p2.data))
                             {
                                 log::info!(
                                     "Discarding {:?} in {:?}; shadowed by {:?} in {:?}",
@@ -215,30 +251,33 @@ where
                             }
                         })
                         .collect::<Vec<_>>();
-                    let mut new_env = base_env.clone();
+
+                    let mut new_env = base_env;
                     for path in filtered_env {
                         new_env.insert(path.clone())
                     }
-                    ENVC::from(new_env)
+                    <EnvC<'sg, 'rslv, CMPL, LABEL, DATA> as From<Env<'sg, LABEL, DATA>>>::from(
+                        new_env,
+                    )
                 })
             }
         }))
     }
 
     /// Compute environment for single edge
-    fn resolve_edge(
-        &self,
-        path_wellformedness: &impl for<'a> RegexMatcher<&'a LABEL>,
+    fn resolve_edge<'env>(
+        self: &Arc<Self>,
+        path_wellformedness: impl for<'a> RegexMatcher<&'a LABEL> + 'rslv,
         edge: EdgeOrData<LABEL>,
-        path: &Path<LABEL>,
-    ) -> ENVC {
+        path: Path<LABEL>,
+    ) -> EnvC<'sg, 'rslv, CMPL, LABEL, DATA> {
         match edge {
             EdgeOrData::Edge(label) => {
                 let mut new_path_wellformedness = path_wellformedness.clone();
                 new_path_wellformedness.step(&label);
-                self.resolve_label(&new_path_wellformedness, label, path)
+                self.resolve_label(new_path_wellformedness, label, path.clone())
             }
-            EdgeOrData::Data => self.resolve_data(path),
+            EdgeOrData::Data => self.resolve_data(path.clone()),
         }
     }
 
@@ -246,28 +285,31 @@ where
     ///
     /// Traverses all outgoing edges from `path.target()` with label `label`,
     /// and recursively queries from there.
-    fn resolve_label(
-        &self,
-        path_wellformedness: &impl for<'a> RegexMatcher<&'a LABEL>,
+    fn resolve_label<'env>(
+        self: &Arc<Self>,
+        path_wellformedness: impl for<'a> RegexMatcher<&'a LABEL> + 'rslv,
         label: LABEL,
-        path: &Path<LABEL>,
-    ) -> ENVC {
+        path: Path<LABEL>,
+    ) -> EnvC<'sg, 'rslv, CMPL, LABEL, DATA> {
         let source = path.target();
         let targets = self.sg.get_edges(source, label);
-        let path_set = targets.lift_step(label, path);
-        let env: ENVC = path_set.map_into_env::<_>(|p| self.resolve_all(path_wellformedness, &p));
+        let path_set = targets.lift_step(label, path.clone());
+        let local_ctx = Arc::clone(self);
+        let env: EnvC<'sg, 'rslv, CMPL, LABEL, DATA> = path_set.map_into_env::<_>(move |p| {
+            local_ctx.resolve_all(path_wellformedness.clone(), p.clone())
+        });
         env
     }
 
     /// Creates single-path environment if the data `path.target()` is matching, or an empty environment otherwise.
-    fn resolve_data(&self, path: &Path<LABEL>) -> ENVC {
+    fn resolve_data(&self, path: Path<LABEL>) -> EnvC<'sg, 'rslv, CMPL, LABEL, DATA> {
         let data = self.sg.get_data(path.target());
         if self.data_wellformedness.data_wf(data) {
             log::info!("{:?} matched: return singleton env.", data);
             Env::single(path.clone().resolve(data)).into()
         } else {
             log::info!("{:?} not matched: return empty env.", data);
-            ENVC::empty()
+            Self::empty_env_container()
         }
     }
 
@@ -298,6 +340,10 @@ where
         log::info!("smaller({:?}, {:?}) = {:?}", edge, edges, smaller);
         smaller
     }
+
+    fn empty_env_container() -> EnvC<'sg, 'rslv, CMPL, LABEL, DATA> {
+        <EnvC<'sg, 'rslv, CMPL, LABEL, DATA> as EnvContainer<'sg, 'rslv, LABEL, DATA>>::empty()
+    }
 }
 
 #[cfg(test)]
@@ -305,10 +351,11 @@ mod tests {
     use scopegraphs_macros::{label_order, Label};
 
     use scopegraphs::{
-        completeness::{Completeness, ExplicitClose, ImplicitClose, UncheckedCompleteness},
+        completeness::{ExplicitClose, FutureCompleteness, ImplicitClose, UncheckedCompleteness},
         label::query_regex,
         resolve::{DataWellformedness, Resolve, ResolvedPath},
-        Scope, ScopeGraph,
+        storage::Storage,
+        ScopeGraph,
     };
 
     #[derive(Label, Hash, PartialEq, Eq, Debug, Clone, Copy)]
@@ -354,18 +401,72 @@ mod tests {
     }
 
     #[test]
+    fn test_label_order_async() {
+        futures::executor::block_on(async {
+            let storage = Storage::new();
+            let mut scope_graph: ScopeGraph<Lbl, TData, FutureCompleteness<Lbl>> =
+                ScopeGraph::new(&storage, FutureCompleteness::default());
+
+            let s0 = scope_graph.add_scope_default_closed();
+            let s_with = scope_graph.add_scope_default_with([Lex, Imp]);
+            let s_rec = scope_graph.add_scope_default_with([Def]);
+            let s_let = scope_graph.add_scope_default_with([Lex, Def]);
+
+            scope_graph
+                .add_edge(s_with, Lex, s0)
+                .expect("edge closed unexpectedly");
+            scope_graph
+                .add_edge(s_with, Imp, s_rec)
+                .expect("edge closed unexpectedly");
+            scope_graph
+                .add_edge(s_let, Lex, s_with)
+                .expect("edge closed unexpectedly");
+
+            scope_graph
+                .add_decl(s_rec, Def, Data { name: "x", data: 1 })
+                .expect("edge closed unexpectedly");
+            scope_graph
+                .add_decl(s_let, Def, Data { name: "x", data: 2 })
+                .expect("edge closed unexpectedly");
+
+            scope_graph.close(s_with, &Lex);
+            scope_graph.close(s_with, &Imp);
+            scope_graph.close(s_rec, &Def);
+            scope_graph.close(s_let, &Lex);
+            scope_graph.close(s_let, &Def);
+
+            let env = scope_graph
+                .query()
+                .with_path_wellformedness(query_regex!(Lbl: Lex* Imp? Def))
+                .with_data_wellformedness(TData::matcher("x"))
+                .with_label_order(label_order!(Lbl: Def < Imp < Lex))
+                .resolve(s_let)
+                .await;
+
+            let env_vec = env.into_iter().collect::<Vec<_>>();
+            assert_eq!(1, env_vec.len());
+
+            let path: &ResolvedPath<Lbl, TData> = &env_vec[0];
+            assert!(matches!(path.data(), &Data { name: "x", data: 2 }));
+
+            // todo!("assert the correct edges are closed!")
+        });
+    }
+
+    #[test]
     fn test_match_data() {
-        let mut scope_graph: ScopeGraph<Lbl, TData, UncheckedCompleteness> =
-            unsafe { ScopeGraph::raw() };
+        let storage = Storage::new();
+        let scope_graph: ScopeGraph<Lbl, TData, UncheckedCompleteness> =
+            unsafe { ScopeGraph::raw(&storage) };
 
         let s0 = scope_graph.add_scope_default();
         scope_graph.add_decl(s0, Def, TData::from_default("x"));
 
-        let env = scope_graph
-            .query()
+        let env = scope_graph.query();
+        let query = env
             .with_path_wellformedness(query_regex!(Lbl: Def))
-            .with_data_wellformedness(TData::matcher("x"))
-            .resolve(s0);
+            .with_data_wellformedness(TData::matcher("x"));
+        let env = query.resolve(s0);
 
         let env_vec = env.into_iter().collect::<Vec<_>>();
         assert_eq!(1, env_vec.len());
@@ -376,8 +477,9 @@ mod tests {
 
     #[test]
     fn test_no_match_other_data() {
-        let mut scope_graph: ScopeGraph<Lbl, TData, UncheckedCompleteness> =
-            unsafe { ScopeGraph::raw() };
+        let storage = Storage::new();
+        let scope_graph: ScopeGraph<Lbl, TData, UncheckedCompleteness> =
+            unsafe { ScopeGraph::raw(&storage) };
 
         let s0 = scope_graph.add_scope_default();
         scope_graph.add_decl(s0, Def, TData::from_default("x"));
@@ -394,8 +496,9 @@ mod tests {
 
     #[test]
     fn test_regex_enforces_step() {
-        let mut scope_graph: ScopeGraph<Lbl, TData, UncheckedCompleteness> =
-            unsafe { ScopeGraph::raw() };
+        let storage = Storage::new();
+        let scope_graph: ScopeGraph<Lbl, TData, UncheckedCompleteness> =
+            unsafe { ScopeGraph::raw(&storage) };
 
         let s0 = scope_graph.add_scope_default();
         let s1 = scope_graph.add_scope_default();
@@ -418,8 +521,9 @@ mod tests {
 
     #[test]
     fn test_regex_filter() {
-        let mut scope_graph: ScopeGraph<Lbl, TData, UncheckedCompleteness> =
-            unsafe { ScopeGraph::raw() };
+        let storage = Storage::new();
+        let scope_graph: ScopeGraph<Lbl, TData, UncheckedCompleteness> =
+            unsafe { ScopeGraph::raw(&storage) };
 
         let s0 = scope_graph.add_scope_default();
         let s1 = scope_graph.add_scope_default();
@@ -438,8 +542,9 @@ mod tests {
 
     #[test]
     fn test_shadow_applied() {
-        let mut scope_graph: ScopeGraph<Lbl, TData, UncheckedCompleteness> =
-            unsafe { ScopeGraph::raw() };
+        let storage = Storage::new();
+        let scope_graph: ScopeGraph<Lbl, TData, UncheckedCompleteness> =
+            unsafe { ScopeGraph::raw(&storage) };
 
         let s0 = scope_graph.add_scope_default();
         let s1 = scope_graph.add_scope_default();
@@ -465,8 +570,9 @@ mod tests {
 
     #[test]
     fn test_label_order_complex_raw() {
-        let mut scope_graph: ScopeGraph<Lbl, TData, UncheckedCompleteness> =
-            unsafe { ScopeGraph::raw() };
+        let storage = Storage::new();
+        let scope_graph: ScopeGraph<Lbl, TData, UncheckedCompleteness> =
+            unsafe { ScopeGraph::raw(&storage) };
 
         let s0 = scope_graph.add_scope_default();
         let s_with = scope_graph.add_scope_default();
@@ -480,13 +586,25 @@ mod tests {
         scope_graph.add_decl(s_rec, Def, Data { name: "x", data: 1 });
         scope_graph.add_decl(s_let, Def, Data { name: "x", data: 2 });
 
-        resolve_complex_unchecked(&mut scope_graph, s_let)
+        let env = scope_graph
+            .query()
+            .with_path_wellformedness(query_regex!(Lbl: Lex* Imp? Def))
+            .with_data_wellformedness(TData::matcher("x"))
+            .with_label_order(label_order!(Lbl: Def < Imp < Lex))
+            .resolve(s_let);
+
+        let env_vec = env.into_iter().collect::<Vec<_>>();
+        assert_eq!(1, env_vec.len());
+
+        let path: &ResolvedPath<Lbl, TData> = &env_vec[0];
+        assert!(matches!(path.data(), &Data { name: "x", data: 2 }));
     }
 
     #[test]
     fn test_label_order_complex_implicit_close() {
-        let mut scope_graph: ScopeGraph<Lbl, TData, ImplicitClose<Lbl>> =
-            ScopeGraph::new(ImplicitClose::default());
+        let storage = Storage::new();
+        let scope_graph: ScopeGraph<Lbl, TData, ImplicitClose<Lbl>> =
+            ScopeGraph::new(&storage, ImplicitClose::default());
 
         let s0 = scope_graph.add_scope_default();
         let s_with = scope_graph.add_scope_default();
@@ -510,15 +628,27 @@ mod tests {
             .add_decl(s_let, Def, Data { name: "x", data: 2 })
             .expect("edge closed unexpectedly");
 
-        resolve_complex_unchecked(&mut scope_graph, s_let);
+        let env = scope_graph
+            .query()
+            .with_path_wellformedness(query_regex!(Lbl: Lex* Imp? Def))
+            .with_data_wellformedness(TData::matcher("x"))
+            .with_label_order(label_order!(Lbl: Def < Imp < Lex))
+            .resolve(s_let);
+
+        let env_vec = env.into_iter().collect::<Vec<_>>();
+        assert_eq!(1, env_vec.len());
+
+        let path: &ResolvedPath<Lbl, TData> = &env_vec[0];
+        assert!(matches!(path.data(), &Data { name: "x", data: 2 }));
 
         // todo!("assert the correct edges are closed!")
     }
 
     #[test]
     fn test_label_order_complex_explicit_close() {
+        let storage = Storage::new();
         let mut scope_graph: ScopeGraph<Lbl, TData, ExplicitClose<Lbl>> =
-            ScopeGraph::new(ExplicitClose::default());
+            ScopeGraph::new(&storage, ExplicitClose::default());
 
         let s0 = scope_graph.add_scope_default_closed();
         let s_with = scope_graph.add_scope_default_with([Lex, Imp]);
@@ -567,8 +697,9 @@ mod tests {
 
     #[test]
     fn test_caching() {
+        let storage = Storage::new();
         let mut scope_graph: ScopeGraph<Lbl, TData, ImplicitClose<Lbl>> =
-            ScopeGraph::new(ImplicitClose::default());
+            ScopeGraph::new(&storage, ImplicitClose::default());
 
         let s0 = scope_graph.add_scope_default_with([Def]);
         scope_graph
@@ -603,23 +734,5 @@ mod tests {
                 data: 42
             }
         ));
-    }
-
-    fn resolve_complex_unchecked<CMPL>(scope_graph: &mut ScopeGraph<Lbl, TData, CMPL>, s_let: Scope)
-    where
-        CMPL: for<'a> Completeness<Lbl, TData<'a>, GetEdgesResult = Vec<Scope>>,
-    {
-        let env = scope_graph
-            .query()
-            .with_path_wellformedness(query_regex!(Lbl: Lex* Imp? Def))
-            .with_data_wellformedness(TData::matcher("x"))
-            .with_label_order(label_order!(Lbl: Def < Imp < Lex))
-            .resolve(s_let);
-
-        let env_vec = env.into_iter().collect::<Vec<_>>();
-        assert_eq!(1, env_vec.len());
-
-        let path: &ResolvedPath<Lbl, TData> = &env_vec[0];
-        assert!(matches!(path.data(), &Data { name: "x", data: 2 }));
     }
 }
