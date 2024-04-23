@@ -1,4 +1,4 @@
-/// Represents types that can be used as labels on [scopegraph edges](::scopegraphs::concepts::edges).
+/// Represents types that can be used as labels on [scopegraph edges](crate::concepts::edges).
 pub trait Label {
     fn iter() -> impl Iterator<Item = Self>
     where
