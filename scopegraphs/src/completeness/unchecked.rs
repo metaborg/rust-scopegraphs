@@ -1,4 +1,6 @@
-use crate::{completeness::private::Sealed, completeness::Completeness, InnerScopeGraph, Scope};
+use crate::completeness::private::Sealed;
+use crate::completeness::Completeness;
+use crate::{InnerScopeGraph, Scope};
 use std::hash::Hash;
 
 /// No-Op implementation of [`Completeness`].

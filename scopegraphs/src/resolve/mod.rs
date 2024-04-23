@@ -5,9 +5,8 @@ use std::hash::Hash;
 use std::marker::PhantomData;
 use std::rc::Rc;
 
-use super::{Scope, ScopeGraph};
-
 mod params;
+use crate::{Scope, ScopeGraph};
 pub use params::*;
 use scopegraphs_regular_expressions::RegexMatcher;
 

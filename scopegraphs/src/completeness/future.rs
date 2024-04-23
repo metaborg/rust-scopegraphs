@@ -78,7 +78,7 @@ impl<LABEL: Hash + Eq + Label + Copy, DATA> Completeness<LABEL, DATA>
 }
 
 impl<LABEL: Hash + Eq + Copy> FutureCompleteness<LABEL> {
-    pub(super) fn close(&self, scope: Scope, label: &LABEL) {
+    pub fn close(&self, scope: Scope, label: &LABEL) {
         self.explicit_close.close(scope, label);
         for waker in self
             .wakers

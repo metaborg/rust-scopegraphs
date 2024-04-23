@@ -2,7 +2,7 @@ use bumpalo::Bump;
 use std::fmt::{Debug, Formatter};
 
 #[derive(Default)]
-pub struct Storage(pub(crate) Bump);
+pub struct Storage(pub Bump);
 
 impl Debug for Storage {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {

@@ -1,9 +1,10 @@
-use crate::{completeness::Completeness, Scope, ScopeGraph};
+use crate::completeness::Completeness;
+use crate::{Scope, ScopeGraph};
 use std::cell::RefCell;
 use std::{collections::HashSet, hash::Hash};
 
 #[derive(Debug)]
-pub(super) struct CriticalEdgeSet<LABEL> {
+pub struct CriticalEdgeSet<LABEL> {
     open_edges: RefCell<Vec<HashSet<LABEL>>>,
 }
 
@@ -16,7 +17,7 @@ impl<LABEL> Default for CriticalEdgeSet<LABEL> {
 }
 
 impl<LABEL> CriticalEdgeSet<LABEL> {
-    pub(super) fn init_scope(&self, edges: HashSet<LABEL>) {
+    pub fn init_scope(&self, edges: HashSet<LABEL>) {
         self.open_edges.borrow_mut().push(edges)
     }
 }
@@ -26,7 +27,7 @@ impl<LABEL: Hash + Eq> CriticalEdgeSet<LABEL> {
         self.open_edges.borrow()[scope.0].contains(lbl)
     }
 
-    pub(super) fn close(&self, scope: Scope, lbl: &LABEL) -> bool {
+    pub fn close(&self, scope: Scope, lbl: &LABEL) -> bool {
         self.open_edges.borrow_mut()[scope.0].remove(lbl)
     }
 }
@@ -54,7 +55,7 @@ pub struct Delay<LABEL> {
     pub label: LABEL,
 }
 
-pub(crate) type EdgesOrDelay<EDGES, LABEL> = Result<EDGES, Delay<LABEL>>;
+pub type EdgesOrDelay<EDGES, LABEL> = Result<EDGES, Delay<LABEL>>;
 
 impl<'sg, LABEL: Hash + Eq, DATA, CMPL> ScopeGraph<'sg, LABEL, DATA, CMPL>
 where

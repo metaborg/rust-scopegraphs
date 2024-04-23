@@ -10,7 +10,7 @@ use crate::storage::Storage;
 
 /// Representation of scopes (nodes in the scope graph).
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Scope(pub(crate) usize);
+pub struct Scope(pub usize);
 
 impl Debug for Scope {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
@@ -23,10 +23,10 @@ impl Debug for Scope {
 
 #[derive(Debug)]
 pub struct InnerScopeGraph<'sg, LABEL, DATA> {
-    pub(crate) storage: &'sg Storage,
+    pub storage: &'sg Storage,
     #[allow(clippy::type_complexity)]
-    pub(crate) edges: RefCell<Vec<&'sg RefCell<HashMap<LABEL, HashSet<Scope>>>>>, // FIXME: BTreeMap? Vectors? Whatever?
-    pub(crate) data: RefCell<Vec<&'sg DATA>>,
+    pub edges: RefCell<Vec<&'sg RefCell<HashMap<LABEL, HashSet<Scope>>>>>, // FIXME: BTreeMap? Vectors? Whatever?
+    pub data: RefCell<Vec<&'sg DATA>>,
 }
 
 impl<'sg, LABEL, DATA> InnerScopeGraph<'sg, LABEL, DATA> {
@@ -40,7 +40,7 @@ impl<'sg, LABEL, DATA> InnerScopeGraph<'sg, LABEL, DATA> {
 
     /// Adds a new scope to the graph, with `data` as its associated data.
     /// After this operation, all future calls to [`InnerScopeGraph::get_data`] on this scope will return the associated data.
-    pub(super) fn add_scope(&self, data: DATA) -> Scope {
+    pub fn add_scope(&self, data: DATA) -> Scope {
         let id = self.data.borrow().len();
 
         self.data.borrow_mut().push(self.storage.0.alloc(data));
@@ -64,7 +64,7 @@ impl<'sg, LABEL, DATA> InnerScopeGraph<'sg, LABEL, DATA> {
 impl<'sg, LABEL: Hash + Eq, DATA> InnerScopeGraph<'sg, LABEL, DATA> {
     /// Adds a new edge from `src`, to `dst`, with label `lbl` to the scope graph.
     /// After this operation, all future calls to [`InnerScopeGraph::get_edges`] on the source will contain the destination.
-    pub(crate) fn add_edge(&self, src: Scope, lbl: LABEL, dst: Scope) {
+    pub fn add_edge(&self, src: Scope, lbl: LABEL, dst: Scope) {
         // panics if src.0 is out of bounds
         // the methods that update `ScopeGraphs` retain the invariant that each scope has an appropriate entry in this vector
         // however, panics can still happen when a scope from a different scope graph is used
@@ -76,7 +76,7 @@ impl<'sg, LABEL: Hash + Eq, DATA> InnerScopeGraph<'sg, LABEL, DATA> {
     }
 
     /// Returns the targets of the outgoing edges of `src` with label `lbl`.
-    pub(crate) fn get_edges(&self, scope: Scope, lbl: LABEL) -> Vec<Scope> {
+    pub fn get_edges(&self, scope: Scope, lbl: LABEL) -> Vec<Scope> {
         // panics if scope.0 is out of bounds
         // the methods that update `ScopeGraphs` retain the invariant that each scope has an appropriate entry in this vector
         // however, panics can still happen when a scope from a different scope graph is used
@@ -105,8 +105,8 @@ impl<'sg, LABEL: Hash + Eq, DATA> InnerScopeGraph<'sg, LABEL, DATA> {
 /// Finally, although not made explicit, [`LABEL`] should be a finite, iterable set.
 #[derive(Debug)]
 pub struct ScopeGraph<'storage, LABEL, DATA, CMPL> {
-    pub(super) inner_scope_graph: InnerScopeGraph<'storage, LABEL, DATA>,
-    pub(super) completeness: CMPL,
+    pub inner_scope_graph: InnerScopeGraph<'storage, LABEL, DATA>,
+    pub completeness: CMPL,
 }
 
 impl<'storage, LABEL, DATA, CMPL> ScopeGraph<'storage, LABEL, DATA, CMPL> {

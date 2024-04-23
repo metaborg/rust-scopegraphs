@@ -12,8 +12,6 @@
 //! [`ExplicitClose`] requires some manual bookkeeping, but allows more flexible handling of
 //! queries. This is the most suitable choice for type checkers that need to do dynamic scheduling.
 
-use crate::{InnerScopeGraph, Scope};
-
 mod future;
 pub use future::*;
 
@@ -30,6 +28,7 @@ mod private {
     pub trait Sealed {}
 }
 
+use crate::{InnerScopeGraph, Scope};
 use private::Sealed;
 
 /*** Completeness trait ***/

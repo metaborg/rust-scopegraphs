@@ -37,7 +37,24 @@
 //! * API Docs (you're there!)
 #![cfg_attr(any(RUSTC_IS_NIGHTLY, docsrs), feature(doc_auto_cfg, doc_cfg))]
 
-pub use scopegraphs_lib::*;
+pub mod completeness;
+pub mod containers;
+pub mod future_wrapper;
+pub mod label;
+pub mod resolve;
+mod scopegraph;
+pub mod storage;
+
+pub use label::Label;
+pub use scopegraph::*;
+pub use scopegraphs_macros;
+
+#[doc(hidden)]
+pub use scopegraphs_macros::*;
+
+#[cfg(feature = "dot")]
+pub mod render;
+
 pub use scopegraphs_macros::*;
 pub use scopegraphs_regular_expressions::*;
 
@@ -58,9 +75,9 @@ mod docs_support {
             mod __index {
                 /// Documentation Index:
                 pub mod _________________________________________ {
-                    $(
-                        pub use super::super::docs::$name;
-                    )*
+                    // $(
+                    //     pub use super::super::docs::$name;
+                    // )*
                 }
             }
 

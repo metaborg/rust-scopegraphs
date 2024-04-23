@@ -12,14 +12,12 @@ use std::iter;
 use std::rc::Rc;
 use std::sync::Arc;
 
+use crate::completeness::Completeness;
 use crate::containers::{EnvContainer, PathContainer, ScopeContainer};
-use crate::resolve::{Query, Resolve};
-use crate::{
-    label::Label,
-    resolve::{DataEquiv, DataWellformedness, EdgeOrData, Env, LabelOrder, Path, ResolvedPath},
-    ScopeGraph,
-    {completeness::Completeness, Scope},
+use crate::resolve::{
+    DataEquiv, DataWellformedness, EdgeOrData, Env, LabelOrder, Path, Query, Resolve, ResolvedPath,
 };
+use crate::{Label, Scope, ScopeGraph};
 use scopegraphs_regular_expressions::RegexMatcher;
 
 impl<'sg: 'rslv, 'storage, 'rslv, LABEL, DATA, CMPL, PWF, DWF, LO, DEq> Resolve<'sg, 'rslv>
@@ -348,14 +346,14 @@ where
 
 #[cfg(test)]
 mod tests {
-    use scopegraphs_macros::{label_order, Label};
+    use scopegraphs_macros::label_order;
 
-    use scopegraphs::{
+    use crate::{
         completeness::{ExplicitClose, FutureCompleteness, ImplicitClose, UncheckedCompleteness},
         label::query_regex,
         resolve::{DataWellformedness, Resolve, ResolvedPath},
         storage::Storage,
-        ScopeGraph,
+        Label, ScopeGraph,
     };
 
     #[derive(Label, Hash, PartialEq, Eq, Debug, Clone, Copy)]
@@ -365,6 +363,10 @@ mod tests {
         Def,
     }
     use Lbl::*;
+
+    pub mod scopegraphs {
+        pub use crate::*;
+    }
 
     #[derive(Hash, PartialEq, Eq, Debug, Default)]
     enum TData<'a> {

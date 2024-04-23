@@ -17,8 +17,6 @@ default = []
 dot = ["dep:dot"]
 
 [dependencies]
-log = "0.4.20"
-scopegraphs-prust-lib = { version = "0.1.0" }
 syn = { version = "2.0.29", features = ["full", "extra-traits"] }
 quote = { version = "1.0.33", optional = true }
 scopegraphs-regular-expressions = { path = "../scopegraphs-regular-expressions", version = "0.1.0" }
@@ -29,5 +27,3 @@ dot = { version = "0.1.4", optional = true }
 
 [dev-dependencies]
 scopegraphs = { path = "../scopegraphs" }
-env_logger = "0.10.1"
-ctor = "0.2.5"

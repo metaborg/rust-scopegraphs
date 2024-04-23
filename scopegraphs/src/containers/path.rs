@@ -1,7 +1,5 @@
-use crate::{
-    future_wrapper::FutureWrapper,
-    resolve::{Env, Path, ResolvedPath},
-};
+use crate::future_wrapper::FutureWrapper;
+use crate::resolve::{Env, Path, ResolvedPath};
 use futures::future::join_all;
 use std::hash::Hash;
 
