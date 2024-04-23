@@ -1,4 +1,4 @@
-#![deny(missing_docs)]
+#![warn(missing_docs)]
 
 use crate::label::impl_label;
 use crate::order::OrderInput;

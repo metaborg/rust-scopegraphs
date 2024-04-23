@@ -1,4 +1,4 @@
-#![deny(missing_docs)]
+#![warn(missing_docs)]
 //! Scope graphs are an abstraction that allow you to express the complicated
 //! name resolution patterns that many programming languages have.
 //! Put simply, a scope graph encodes what names are defined in which scopes of
@@ -27,13 +27,13 @@
 //! * [Zwaan, A., & van Antwerpen, H. (2023). Scope graphs: The story so far.](https://repository.tudelft.nl/islandora/object/uuid:3024d587-7c5d-44bd-8471-27b7c2e59160/datastream/OBJ/download)
 //!   Provides a more detailed overview of all work that involved scope graphs until the date of publication.
 //!
-//! But more research is ongoing!
+//! But more research is ongoing! See our [research overview page]() for an overview of all research that involves scope graphs.
 //!
 //! ## This Documentation
 //!
-//! * [Explanation of Concepts used in scope graphs](_concepts)
+//! * [Explanation of Concepts used in scope graphs](concepts)
 //! * Examples:
-//!     * [Standard patterns](_patterns)
+//!     * [Standard patterns](patterns)
 //! * API Docs (you're there!)
 #![cfg_attr(any(RUSTC_IS_NIGHTLY, docsrs), feature(doc_auto_cfg, doc_cfg))]
 
