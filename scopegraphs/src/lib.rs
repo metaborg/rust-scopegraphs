@@ -40,7 +40,81 @@ pub use scopegraphs_lib::*;
 pub use scopegraphs_macros::*;
 pub use scopegraphs_regular_expressions::*;
 
-#[cfg(feature = "doc")]
-pub mod _concepts;
-#[cfg(feature = "doc")]
-pub mod _patterns;
+#[doc(hidden)]
+mod docs_support {
+    #[doc(hidden)]
+    #[macro_export]
+    macro_rules! docs {
+        ($($(#[$meta:meta])* pub mod $name: ident);* $(;)?) => {
+            #[cfg(feature = "doc")]
+            mod docs {
+                $(
+                    $(#[$meta])*
+                    pub mod $name;
+                )*
+            }
+            #[doc(hidden)]
+            mod __index {
+                /// Documentation Index:
+                pub mod _________________________________________ {
+                    $(
+                        pub use super::super::docs::$name;
+                    )*
+                }
+            }
+
+
+            $(
+                #[cfg(feature = "doc")]
+                $(#[$meta])*
+                pub mod $name {
+                    pub use super::docs::$name::*;
+
+                    pub use super::__index::*;
+
+                    pub use super::docs::*;
+                }
+            )*
+        };
+    }
+}
+
+#[doc(hidden)]
+mod __hidden {
+    pub mod ____________API_DOCS_BELOW___________ {}
+}
+#[doc(hidden)]
+mod __hidden2 {
+    pub mod _________DOCUMENTATION_BELOW________ {}
+}
+
+pub use __hidden::*;
+pub use __hidden2::_________DOCUMENTATION_BELOW________;
+
+docs! {
+    /// # Concepts of scope graphs
+    ///
+    /// To use a scope graph,
+    /// you need to understand a few basic concepts.
+    /// First of all, the components that comprise a scope graph:
+    ///
+    /// * [A scope](scope)
+    /// * [A scope's data](scope_data)
+    /// * [Labelled edges between scopes](edges)
+    ///
+    /// Once you know what a scope graph is,
+    /// we can start talking about running queries over them.
+    /// For a query to return the desired result, we may need to
+    /// specify the following properties:
+    ///
+    /// * [Regular Expression]()
+    /// * [Completeness]()
+    /// * [Data Well-Formedness]()
+    /// * [Data Equivalence]()
+    /// * [Label Ordering]()
+    ///
+    pub mod concepts;
+
+    /// # Common patterns in scope graphs
+    pub mod patterns;
+}
