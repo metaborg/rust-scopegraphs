@@ -1,4 +1,4 @@
-#![rustfmt::skip]
+#![cfg_attr(rustfmt, rustfmt_skip)]
 //! # Concepts of scope graphs
 
 /// What do we mean by a scope?

@@ -32,5 +32,5 @@ features = ["doc"]
 
 [package.metadata.docs.rs]
 features = ["doc"]
-rustdoc-args = ["--cfg", "docsrs", "--generate-link-to-definition"]
+rustdoc-args = ["--cfg", "docsrs", "--generate-link-to-definition", "-Z", "unstable-options", "--sort-modules-by-appearance"]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
