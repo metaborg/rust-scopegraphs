@@ -5,13 +5,33 @@ use std::fmt::Debug;
 #[cfg(feature = "pretty-print")]
 use std::fmt::Display;
 use std::fmt::Formatter;
+use std::hash::{Hash, Hasher};
 use std::ops::Deref;
 use std::rc::Rc;
 use syn::Path;
 
-#[derive(Hash, Debug, Clone, PartialEq, Eq)]
 pub struct Symbol {
     pub(super) name: Path,
+}
+
+impl Eq for Symbol {}
+
+impl PartialEq for Symbol {
+    fn eq(&self, other: &Self) -> bool {
+        self.to_string() == other.to_string()
+    }
+}
+
+impl Debug for Symbol {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        Display::fmt(self, f)
+    }
+}
+
+impl Hash for Symbol {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.to_string().hash(state)
+    }
 }
 
 #[cfg(feature = "pretty-print")]
