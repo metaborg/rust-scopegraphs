@@ -1,5 +1,6 @@
 use crate::future_wrapper::FutureWrapper;
-use crate::{resolve::Path, Scope};
+use crate::resolve::Path;
+use crate::Scope;
 
 /// Interface for scope containers that support the operations required for query resolution.
 pub trait ScopeContainer<LABEL> {

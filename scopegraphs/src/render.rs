@@ -26,10 +26,14 @@ pub trait RenderScopeData {
 impl<LABEL: Clone + Debug, DATA: RenderScopeData + Clone, CMPL: Completeness<LABEL, DATA>>
     ScopeGraph<'_, LABEL, DATA, CMPL>
 {
+    /// Visualize the entire scope graph as a graph, by emitting a graphviz dot file.
+    ///
+    /// Note: you can also visualize a [single regular expression this way](crate::Automaton::render)
     pub fn render<W: Write>(&self, output: &mut W, name: &str) -> io::Result<()> {
         dot::render(&(self, name), output)
     }
 
+    /// [`render`](ScopeGraph::render) directly to a file.
     pub fn render_to(&self, path: impl AsRef<Path>) -> io::Result<()> {
         let path = path.as_ref();
         let mut w = File::create(path)?;

@@ -3,8 +3,8 @@ use std::io;
 use std::io::Write;
 
 impl Automaton {
-    /// Create a graphviz dot file from a compiled regex.
-    pub fn output_dot(&self, w: &mut impl Write) -> io::Result<()> {
+    /// Visualize the automaton as a graph, by emitting a graphviz dot file.
+    pub fn render(&self, w: &mut impl Write) -> io::Result<()> {
         writeln!(w, "digraph {{")?;
 
         for (src, state) in self.states.iter().enumerate() {

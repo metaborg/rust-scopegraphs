@@ -1,4 +1,6 @@
-use crate::{completeness::private::Sealed, completeness::Completeness, InnerScopeGraph, Scope};
+use crate::completeness::private::Sealed;
+use crate::completeness::Completeness;
+use crate::scopegraph::{InnerScopeGraph, Scope};
 use std::hash::Hash;
 
 /// No-Op implementation of [`Completeness`].
@@ -15,7 +17,7 @@ impl UncheckedCompleteness {
     /// Marked as `unsafe`, as it does adhere to its contract (guaranteeing stability).
     ///
     /// Unless you are sure you really need this, consider alternatives
-    /// such as [`ImplicitClose`] or [`ExplicitClose`].
+    /// such as [`ImplicitClose`](crate::completeness::ImplicitClose) or [`ExplicitClose`](crate::completeness::ExplicitClose).
     pub unsafe fn new() -> Self {
         Self {}
     }

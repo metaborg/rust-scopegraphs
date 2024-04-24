@@ -1,4 +1,5 @@
-use crate::{Automaton, MatchState};
+use crate::compile::MatchState;
+use crate::Automaton;
 use proc_macro2::{Ident, TokenStream};
 use quote::{quote, TokenStreamExt};
 use syn::Type;

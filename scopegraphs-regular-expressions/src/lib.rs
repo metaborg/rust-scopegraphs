@@ -1,3 +1,13 @@
+//! # Scope Graphs Regular Expressions
+//!
+//! To query a scope graph,
+//! you have to specify what paths are valid for the query to take.
+//! You do so using a regular expression over the labels on the edges of the scope graph.
+//!
+//! See <https://docs.rs/scopegraphs> for all documentation
+#![warn(missing_docs)]
+#![cfg_attr(not(docsrs), allow(rustdoc::broken_intra_doc_links))]
+
 use proc_macro2::{LexError, TokenStream};
 use thiserror::Error;
 
@@ -13,12 +23,14 @@ mod emit;
 #[cfg(feature = "dot")]
 mod dot;
 
-pub use compile::{Automaton, MatchState};
+pub use compile::Automaton;
+#[cfg(feature = "dynamic")]
+pub use dynamic::DynamicMatcher;
 pub use regex::Regex;
 
 /// A type that can match a regex. Can be created at compile time
 /// through the [`compile_regex`](scopegraphs::compile_regex) macro,
-/// or at runtime with the [`dynamic`] feature through [`Automaton::matcher`].
+/// or at runtime with the `dynamic` feature through [`Automaton::matcher`].
 pub trait RegexMatcher<A>: Clone {
     /// Takes a transition in the state machine, accepting a single symbol.
     ///
@@ -57,28 +69,65 @@ pub trait RegexMatcher<A>: Clone {
         !this.is_empty()
     }
 
+    /// Returns whether this state is a final state.
+    ///
+    /// A Final state is a state without outgoing edges
     fn is_final(&self) -> bool;
+
+    /// Returns whether the current state would accept the regular expression.
     fn is_accepting(&self) -> bool;
+
+    /// Returns whether the regular expression is stuck:
+    /// there are no more outgoing edges and it's not currently accepting.
     fn is_empty(&self) -> bool {
         self.is_final() && !self.is_accepting()
     }
 }
 
+/// An error that can ocur while parsing a regular expression.
 #[derive(Error, Debug)]
 pub enum ParseError {
+    /// You used tokens that aren't valid Rust tokens
+    ///
+    /// (scope graph regular expressions need to both be valid Rust tokens,
+    /// as well as having a valid regular expression syntax)
     #[error("lex error: {0}")]
     Lex(#[from] LexError),
+
+    /// Incorrect syntax for regular expressions.
+    ///
+    /// For correct syntax, see [`parse_regex`]
     #[error("parse error: {0}")]
     Parse(#[from] syn::Error),
 }
 
 /// parse a string to a regular expression
+///
+/// the syntax of a regular expression is:
+/// ```bnf
+/// E -> 0
+/// E -> e
+/// E -> <ident>
+/// E -> ~ E
+/// E -> E *
+/// E -> E +
+/// E -> E ?
+/// E -> E E
+/// E -> E | E
+/// E -> E & E
+/// ```
+///
+/// The `<ident>` needs to be a valid rust identifier
 pub fn parse_regex(input: impl AsRef<str>) -> Result<Regex, ParseError> {
     let stream: TokenStream = input.as_ref().parse()?;
     Ok(parse_regex_token_stream(stream)?)
 }
 
 /// parse a rust [`TokenStream`](TokenStream) to a regular expression
+///
+/// // TODO: figure out to add a link to scopegraphs-macros
+/// Implementation detail for [`scopegraphs-macros`]()
+#[doc(hidden)]
 pub fn parse_regex_token_stream(input: TokenStream) -> syn::Result<Regex> {
     syn::parse2(input)
 }

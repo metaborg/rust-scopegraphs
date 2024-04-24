@@ -1,18 +1,18 @@
-use crate::{
-    completeness::private::Sealed,
-    completeness::{Completeness, CriticalEdgeBasedCompleteness, CriticalEdgeSet, EdgeClosedError},
-    label::Label,
-    InnerScopeGraph, Scope,
+use crate::completeness::private::Sealed;
+use crate::completeness::{
+    Completeness, CriticalEdgeBasedCompleteness, CriticalEdgeSet, EdgeClosedError,
 };
+use crate::scopegraph::{InnerScopeGraph, Scope};
+use crate::Label;
 use std::collections::HashSet;
 use std::hash::Hash;
 
 /// Critical-edge based [`Completeness`] implementation.
 ///
-/// Unlike [`ExplicitClose`], this implementation will implicitly close edges once traversed.
+/// Unlike [`ExplicitClose`](crate::completeness::ExplicitClose), this implementation will implicitly close edges once traversed.
 /// This does not require special attention from the type checker writer.
 ///
-/// Returns [`EdgeClosedError`] when an edge is added to a scope in which the label is already
+/// Returns [`EdgeClosedError`](EdgeClosedError) when an edge is added to a scope in which the label is already
 /// closed (because `get_edges(s, l, ...)` was called earlier.
 ///
 /// When edges are retrieved (e.g. during query resolution) the `(src, label)` edge is closed.

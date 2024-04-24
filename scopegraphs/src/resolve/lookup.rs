@@ -12,14 +12,13 @@ use std::iter;
 use std::rc::Rc;
 use std::sync::Arc;
 
+use crate::completeness::Completeness;
 use crate::containers::{EnvContainer, PathContainer, ScopeContainer};
-use crate::resolve::{Query, Resolve};
-use crate::{
-    label::Label,
-    resolve::{DataEquiv, DataWellformedness, EdgeOrData, Env, LabelOrder, Path, ResolvedPath},
-    ScopeGraph,
-    {completeness::Completeness, Scope},
+use crate::resolve::{
+    DataEquivalence, DataWellformedness, EdgeOrData, Env, LabelOrder, Path, Query, Resolve,
+    ResolvedPath,
 };
+use crate::{Label, Scope, ScopeGraph};
 use scopegraphs_regular_expressions::RegexMatcher;
 
 impl<'sg: 'rslv, 'storage, 'rslv, LABEL, DATA, CMPL, PWF, DWF, LO, DEq> Resolve<'sg, 'rslv>
@@ -41,7 +40,7 @@ where
     PWF: for<'a> RegexMatcher<&'a LABEL> + 'rslv,
     DWF: DataWellformedness<DATA> + 'rslv,
     LO: LabelOrder<LABEL> + 'rslv,
-    DEq: DataEquiv<DATA> + 'rslv,
+    DEq: DataEquivalence<DATA> + 'rslv,
     ResolvedPath<'sg, LABEL, DATA>: Hash + Eq,
     Path<LABEL>: Clone,
 {
@@ -120,7 +119,7 @@ where
         LABEL,
         DATA,
     >>::EnvContainer: EnvContainer<'sg, 'rslv, LABEL, DATA> + Debug,
-    DEq: DataEquiv<DATA>,
+    DEq: DataEquivalence<DATA>,
     DWF: DataWellformedness<DATA>,
     LO: LabelOrder<LABEL>,
     Path<LABEL>: Clone,
@@ -221,7 +220,7 @@ where
         let local_self = Arc::clone(self);
         // environment of current (max) label, which might be shadowed by the base environment
         Rc::new(base_env.flat_map(move |base_env| {
-            if !base_env.is_empty() && local_self.data_equiv.always_true() {
+            if !base_env.is_empty() && local_self.data_equiv.always_equivalent() {
                 <EnvC<'sg, 'rslv, CMPL, LABEL, DATA> as From<Env<'sg, LABEL, DATA>>>::from(
                     base_env.clone(),
                 )
@@ -348,14 +347,14 @@ where
 
 #[cfg(test)]
 mod tests {
-    use scopegraphs_macros::{label_order, Label};
+    use scopegraphs_macros::label_order;
 
-    use scopegraphs::{
+    use crate::{
         completeness::{ExplicitClose, FutureCompleteness, ImplicitClose, UncheckedCompleteness},
-        label::query_regex,
+        query_regex,
         resolve::{DataWellformedness, Resolve, ResolvedPath},
         storage::Storage,
-        ScopeGraph,
+        Label, ScopeGraph,
     };
 
     #[derive(Label, Hash, PartialEq, Eq, Debug, Clone, Copy)]
@@ -365,6 +364,10 @@ mod tests {
         Def,
     }
     use Lbl::*;
+
+    pub mod scopegraphs {
+        pub use crate::*;
+    }
 
     #[derive(Hash, PartialEq, Eq, Debug, Default)]
     enum TData<'a> {

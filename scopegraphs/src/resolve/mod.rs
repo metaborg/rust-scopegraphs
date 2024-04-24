@@ -1,3 +1,5 @@
+//! This module contains code to query scope graphs.
+
 use scopegraphs_prust_lib::hashmap::HashSet as TrieSet;
 use std::collections::HashSet;
 use std::fmt::{Debug, Formatter};
@@ -5,9 +7,8 @@ use std::hash::Hash;
 use std::marker::PhantomData;
 use std::rc::Rc;
 
-use super::{Scope, ScopeGraph};
-
 mod params;
+use crate::{Scope, ScopeGraph};
 pub use params::*;
 use scopegraphs_regular_expressions::RegexMatcher;
 
@@ -17,6 +18,9 @@ pub mod lookup;
 ///
 /// Used to implement label orders. The `Data` label is there to support expressing preference
 /// between traversing an edge or resolving to the current node.
+// TODO: document this well, also with a `concepts` page about $ and labels
+//       @Aron could you do this?
+#[allow(missing_docs)]
 #[derive(Hash, PartialEq, Eq)]
 pub enum EdgeOrData<LABEL> {
     Data,
@@ -128,10 +132,12 @@ impl<'sg, LABEL: Clone, DATA> Clone for ResolvedPath<'sg, LABEL, DATA> {
 }
 
 impl<'sg, LABEL, DATA> ResolvedPath<'sg, LABEL, DATA> {
+    /// Get the full path of scopes leading to this target scope
     pub fn path(&self) -> &Path<LABEL> {
         &self.path
     }
 
+    /// Get the data on this target scope.
     pub fn data(&self) -> &DATA {
         self.data
     }
@@ -271,15 +277,29 @@ impl<'sg, LABEL: 'sg + Clone, DATA> Clone for Env<'sg, LABEL, DATA> {
     }
 }
 
+/// A trait that represents a specific name resolution algorithm.
+///
+/// Currently has one implementor: [`Query`].
 pub trait Resolve<'sg, 'rslv> {
+    /// The type of result that this query gives.
+    /// This depends on the [completeness strategy](crate::completeness::Completeness) used.
+    ///
+    /// * Using [`ImplicitClose`](crate::completeness::ImplicitClose) this is a simply a `Vec<Scope>`.
+    /// Querying using this completeness strategy cannot fail.
+    /// * Using [`ExplicitClose`](crate::completeness::ExplicitClose) this is a [`EdgesOrDelay<Scope, LABEL>`](crate::completeness::EdgesOrDelay).
+    /// Querying can fail, because a scope this query traverses wasn't closed yet.
+    /// Using [`FutureCompleteness`](crate::completeness::FutureCompleteness), this is a [`Future`](std::future::Future).
+    /// Querying can pend, because a scope this query traverses wasn't closed yet.
     type EnvContainer
     where
         'sg: 'rslv,
         Self: 'rslv;
 
+    /// actually run this query
     fn resolve(&'rslv self, scope: Scope) -> Self::EnvContainer;
 }
 
+/// A query over a scope graph. Read more [here](crate::concepts)
 pub struct Query<'storage, 'sg, 'rslv, LABEL, DATA, CMPL, PWF, DWF, LO, DEq> {
     _phantom: PhantomData<&'rslv ()>,
     scope_graph: &'sg ScopeGraph<'storage, LABEL, DATA, CMPL>,
@@ -292,6 +312,30 @@ pub struct Query<'storage, 'sg, 'rslv, LABEL, DATA, CMPL, PWF, DWF, LO, DEq> {
 impl<'sg, 'storage, 'rslv, LABEL, DATA, CMPL, PWF, DWF, LO, DEq>
     Query<'sg, 'storage, 'rslv, LABEL, DATA, CMPL, PWF, DWF, LO, DEq>
 {
+    /// Add a [path well-formedness](crate::concepts::path_wellformedness) to this query.
+    ///
+    /// A path well-formedness can be specified using a regular expression.
+    /// Often you want to use [`query_regex!`](crate::query_regex) here.
+    ///
+    /// ```rust
+    /// # use scopegraphs::{query_regex, ScopeGraph, Storage};
+    /// # use scopegraphs::completeness::UncheckedCompleteness;
+    /// # use scopegraphs::Label;
+    /// # let storage = Storage::new();
+    /// # let scopegraph = ScopeGraph::<Lbl, (), _>::new(&storage, unsafe{UncheckedCompleteness::new()});
+    ///
+    /// #[derive(Label)]
+    /// pub enum Lbl {
+    ///     Lexical,
+    ///     Definition
+    /// }
+    /// use Lbl::*;
+    ///
+    /// scopegraph.query()
+    ///     .with_path_wellformedness(query_regex!(Lbl: Lexical* Definition));
+    ///     
+    /// ```
+    ///
     pub fn with_path_wellformedness<NPWF>(
         self,
         new_path_wellformedness: NPWF,
@@ -309,6 +353,54 @@ impl<'sg, 'storage, 'rslv, LABEL, DATA, CMPL, PWF, DWF, LO, DEq>
         }
     }
 
+    /// Add a [data well-formedness](crate::concepts::data_wellformedness) to this query.
+    /// A data well-formedness must implement [`DataWellformedness`].
+    ///
+    /// Defaults to [`DefaultDataWellformedness`], considering all data to be well-formed.
+    ///
+    /// With a data well-formedness you can specify what data a scope must have to be a valid
+    /// target for this query.
+    ///
+    /// ```rust
+    /// # use scopegraphs::{query_regex, ScopeGraph, Storage};
+    /// # use scopegraphs::completeness::UncheckedCompleteness;
+    /// # use scopegraphs::Label;
+    /// # let storage = Storage::new();
+    /// # let scopegraph = ScopeGraph::<(), MyData, _>::new(&storage, unsafe{UncheckedCompleteness::new()});
+    /// use scopegraphs::resolve::DataWellformedness;
+    ///
+    /// struct MyData {
+    ///     is_good: bool
+    /// }
+    /// struct MyDataWellformedness;
+    /// impl DataWellformedness<MyData> for MyDataWellformedness {
+    ///     fn data_wf(&self, data: &MyData) -> bool {
+    ///         data.is_good
+    ///     }
+    /// }
+    ///
+    /// scopegraph.query()
+    ///     .with_data_wellformedness(MyDataWellformedness);
+    ///
+    /// ```
+    ///
+    /// A data-wellformedness can be a lambda that takes a reference to `DATA` and returns a boolean.
+    ///
+    /// ```rust
+    /// # use scopegraphs::{query_regex, ScopeGraph, Storage};
+    /// # use scopegraphs::completeness::UncheckedCompleteness;
+    /// # use scopegraphs::Label;
+    /// # let storage = Storage::new();
+    /// # let scopegraph = ScopeGraph::<(), MyData, _>::new(&storage, unsafe{UncheckedCompleteness::new()});
+    /// use scopegraphs::resolve::DataWellformedness;
+    ///
+    /// struct MyData {
+    ///     is_good: bool
+    /// }
+    /// scopegraph.query()
+    ///     .with_data_wellformedness(|data: &MyData| data.is_good);
+    ///
+    /// ```
     pub fn with_data_wellformedness<NDWF>(
         self,
         new_data_wellformedness: NDWF,
@@ -326,6 +418,33 @@ impl<'sg, 'storage, 'rslv, LABEL, DATA, CMPL, PWF, DWF, LO, DEq>
         }
     }
 
+    /// Add a [label order](crate::concepts::label_ordering) to this query.
+    /// A label order must implement [`LabelOrder`].
+    ///
+    /// Defaults to [`DefaultLabelOrder`], considering all labels of equal importance.
+    ///
+    /// With a label order, you can specify which labels are "more important" in a query.
+    /// Specify label orders using the [`label_order!`](crate::label_order) macro.
+    /// TODO: lower is better? from Lace.
+    ///
+    /// ```rust
+    /// # use scopegraphs::{query_regex, ScopeGraph, Storage};
+    /// # use scopegraphs::completeness::UncheckedCompleteness;
+    /// # use scopegraphs::Label;
+    /// # let storage = Storage::new();
+    /// # let scopegraph = ScopeGraph::<Lbl, (), _>::new(&storage, unsafe{UncheckedCompleteness::new()});
+    /// use scopegraphs_macros::label_order;
+    ///
+    /// #[derive(Label, Copy, Clone)]
+    /// pub enum Lbl {
+    ///     Lexical,
+    ///     Definition
+    /// }
+    /// use Lbl::*;
+    ///
+    /// scopegraph.query()
+    ///     .with_label_order(label_order!(Lbl: Lexical < Definition));
+    /// ```
     pub fn with_label_order<NLO>(
         self,
         new_label_order: NLO,
@@ -343,12 +462,16 @@ impl<'sg, 'storage, 'rslv, LABEL, DATA, CMPL, PWF, DWF, LO, DEq>
         }
     }
 
+    /// Add a [data equivalence](crate::concepts::data_equivalence) to this query.
+    /// A data equivalence must implement [`DataEquivalence`].
+    ///
+    /// TODO: example (@aron?)
     pub fn with_data_equivalence<NDEq>(
         self,
         new_data_equivalence: NDEq,
     ) -> Query<'sg, 'storage, 'rslv, LABEL, DATA, CMPL, PWF, DWF, LO, NDEq>
     where
-        NDEq: DataEquiv<DATA> + 'rslv,
+        NDEq: DataEquivalence<DATA> + 'rslv,
     {
         Query {
             _phantom: PhantomData,
@@ -362,6 +485,7 @@ impl<'sg, 'storage, 'rslv, LABEL, DATA, CMPL, PWF, DWF, LO, DEq>
 }
 
 impl<'storage, LABEL, DATA, CMPL> ScopeGraph<'storage, LABEL, DATA, CMPL> {
+    /// Build a query over the scope graph.
     pub fn query<'sg>(
         &'sg self,
     ) -> Query<
@@ -374,7 +498,7 @@ impl<'storage, LABEL, DATA, CMPL> ScopeGraph<'storage, LABEL, DATA, CMPL> {
         (),
         DefaultDataWellformedness,
         DefaultLabelOrder,
-        DefaultDataEquiv,
+        DefaultDataEquivalence,
     >
     where
         'storage: 'sg,
@@ -385,7 +509,7 @@ impl<'storage, LABEL, DATA, CMPL> ScopeGraph<'storage, LABEL, DATA, CMPL> {
             path_wellformedness: (),
             data_wellformedness: DefaultDataWellformedness::default(),
             label_order: DefaultLabelOrder::default(),
-            data_equivalence: DefaultDataEquiv::default(),
+            data_equivalence: DefaultDataEquivalence::default(),
         }
     }
 }

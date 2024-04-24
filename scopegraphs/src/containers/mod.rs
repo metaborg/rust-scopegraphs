@@ -1,6 +1,6 @@
 //! This module contains some generic containers for data used by the resolution algorithm.
 //! Using these interfaces, the resolution algorithms can deal with custom behavior introduced
-//! by [`Completeness`] implementations.
+//! by [`Completeness`](crate::completeness::Completeness) implementations.
 
 mod scope;
 pub use scope::*;
