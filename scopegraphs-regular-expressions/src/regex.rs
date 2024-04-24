@@ -178,7 +178,7 @@ impl Regex {
     /// # use scopegraphs_regular_expressions::Regex;
     /// assert!(Regex::EmptyString.is_nullable())
     /// ```
-    pub(crate) fn is_nullable(&self) -> bool {
+    pub fn is_nullable(&self) -> bool {
         match self {
             Regex::EmptySet => false,
             Regex::EmptyString => true,
