@@ -32,6 +32,8 @@ impl MatchState {
 /// * An implementation of [`RegexMatcher`](crate::RegexMatcher) generated using [emit](Automaton::emit).
 /// This function can be called at compile time (through the `compile_regex!` macro) and it
 /// emits the Rust code that can match the regular expression.
+///
+/// You can create an automaton using [`Regex::compile`]
 #[derive(Clone)]
 pub struct Automaton {
     pub(crate) states: Vec<MatchState>,

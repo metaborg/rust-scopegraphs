@@ -30,7 +30,9 @@ impl From<&str> for Symbol {
     }
 }
 
-/// A regular expression over a scope graph
+/// A regular expression that can specify a path through a scope graph.
+///
+/// Can be created using [`parse_regex`](crate::parse_regex)
 #[derive(Hash, Clone, PartialEq, Eq)]
 pub enum Regex {
     /// `e`
@@ -77,7 +79,7 @@ impl Regex {
     ///
     /// This is called the Brzozowski derivative
     /// Janusz A. Brzozowski (1964). "Derivatives of Regular Expressions". J ACM. 11 (4): 481–494. doi:10.1145/321239.321249
-    pub fn derive(&self, symbol: Option<&Rc<Symbol>>) -> Rc<Regex> {
+    pub(crate) fn derive(&self, symbol: Option<&Rc<Symbol>>) -> Rc<Regex> {
         match self {
             // a: 0 => 0
             Regex::EmptySet => Regex::EmptySet.into(),
@@ -118,7 +120,7 @@ impl Regex {
     /// Normalizes a regex to a standard form.
     ///
     /// For example, `a e` is equivalent to `a`, and this transformation is made here.
-    pub fn normalize(self: &Rc<Self>, ab: &AlphabetOrder) -> Rc<Regex> {
+    pub(crate) fn normalize(self: &Rc<Self>, ab: &AlphabetOrder) -> Rc<Regex> {
         match self.deref() {
             Regex::EmptyString => self.clone(),
             Regex::EmptySet => self.clone(),
@@ -176,7 +178,7 @@ impl Regex {
     /// # use scopegraphs_regular_expressions::Regex;
     /// assert!(Regex::EmptyString.is_nullable())
     /// ```
-    pub fn is_nullable(&self) -> bool {
+    pub(crate) fn is_nullable(&self) -> bool {
         match self {
             Regex::EmptySet => false,
             Regex::EmptyString => true,
@@ -192,7 +194,7 @@ impl Regex {
     /// Searches for the alphabet used in this regular expression.
     ///
     /// Uses depth-first search to traverse the regex to get the alphabet in use.
-    pub fn alphabet(&self) -> HashSet<Rc<Symbol>> {
+    pub(crate) fn alphabet(&self) -> HashSet<Rc<Symbol>> {
         let mut alphabet = HashSet::new();
         self.search_alphabet(&mut alphabet);
         alphabet
