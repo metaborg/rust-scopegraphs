@@ -35,7 +35,7 @@
 //! * Examples:
 //!     * [Standard patterns](patterns)
 //! * API Docs (you're there!)
-#![cfg_attr(any(RUSTC_IS_NIGHTLY, docsrs), feature(doc_auto_cfg, doc_cfg))]
+#![cfg_attr(docsrs, feature(doc_auto_cfg, doc_cfg))]
 
 #[cfg(feature = "documentation")]
 pub mod concepts;
