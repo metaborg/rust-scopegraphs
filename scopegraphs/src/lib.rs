@@ -1,5 +1,11 @@
 #![warn(missing_docs)]
 #![doc = include_str!("../README.md")]
+//! ## This Documentation
+//!
+//! * [Explanation of Concepts used in scope graphs](concepts)
+//! * Examples:
+//!     * [Standard patterns](patterns)
+//! * [API Docs](https://docs.rs/scopegraphs)
 #![cfg_attr(docsrs, feature(doc_auto_cfg, doc_cfg))]
 #![cfg_attr(not(docsrs), allow(rustdoc::broken_intra_doc_links))]
 #![allow(unknown_lints)]

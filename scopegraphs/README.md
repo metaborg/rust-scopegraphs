@@ -1,3 +1,7 @@
+![Crates.io MSRV](https://img.shields.io/crates/msrv/scopegraphs?style=for-the-badge)
+![docs.rs](https://img.shields.io/docsrs/scopegraphs?style=for-the-badge)
+![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/metaborg/rust-scopegraphs/rust.yml?style=for-the-badge)
+
 Scope graphs are an abstraction that allow you to express the complicated
 name resolution patterns that many programming languages have.
 Put simply, a scope graph encodes what names are defined in which scopes of
@@ -28,10 +32,3 @@ That is on purpose: The documentation of this library are meant to be the more i
 
 But more research is ongoing! See our [research overview page]() for an overview of all research that involves scope
 graphs.
-
-## This Documentation
-
-* [Explanation of Concepts used in scope graphs](concepts)
-* Examples:
-    * [Standard patterns](patterns)
-* [API Docs](https://docs.rs/scopegraphs)
