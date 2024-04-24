@@ -18,7 +18,7 @@
 //! * A [Label Ordering](label_ordering), dictating ...
 //! * A [Data Equivalence](data_equivalence), dictating ... 
 //!
-//! To resolve queries over a scope graph, that scope graph should have a notion pf [Completeness](completeness)
+//! To resolve queries over a scope graph, that scope graph should have a notion of [Completeness](completeness)
 //!
 #![cfg_attr(rustfmt, rustfmt_skip)]
 

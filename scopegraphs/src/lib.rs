@@ -1,5 +1,5 @@
 #![warn(missing_docs)]
-#![doc = include_str!("../../README.md")]
+#![doc = include_str!("../README.md")]
 #![cfg_attr(docsrs, feature(doc_auto_cfg, doc_cfg))]
 #![cfg_attr(not(docsrs), allow(rustdoc::broken_intra_doc_links))]
 #![allow(unknown_lints)]
