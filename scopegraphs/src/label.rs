@@ -1,4 +1,6 @@
 /// Represents types that can be used as labels on [`scopegraph edges`](crate::concepts::edges).
+///
+/// Can be derived.
 pub trait Label {
     /// Iterate over all possible labels that this label type could be.
     fn iter() -> impl Iterator<Item = Self>
