@@ -8,8 +8,7 @@ pub trait PathContainer<'sg, 'rslv, LABEL: 'sg, DATA: 'sg>: 'rslv {
     /// Type returned by resolving a path to its sub-environment.
     type EnvContainer;
 
-    /// Computes sub-environments for each path in the container,
-    /// and composes them using the [`crate::containers::EnvContainer::lift_merge`] method.
+    /// Computes sub-environments for each path in the container.
     fn map_into_env<F: 'rslv + FnMut(Path<LABEL>) -> Self::EnvContainer>(
         self,
         f: F,

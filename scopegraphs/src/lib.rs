@@ -36,6 +36,7 @@
 //!     * [Standard patterns](patterns)
 //! * API Docs (you're there!)
 #![cfg_attr(docsrs, feature(doc_auto_cfg, doc_cfg))]
+#![cfg_attr(not(docsrs), allow(rustdoc::broken_intra_doc_links))]
 
 #[cfg(feature = "documentation")]
 pub mod concepts;
@@ -53,7 +54,7 @@ mod render;
 pub use scopegraphs_regular_expressions::*;
 
 pub mod completeness;
-mod containers;
+pub mod containers;
 mod future_wrapper;
 
 pub mod resolve;

@@ -9,7 +9,7 @@ use std::{collections::HashSet, hash::Hash};
 
 /// Critical-edge based [`Completeness`] implementation.
 ///
-/// Unlike [`ImplicitClose`], this implementation shifts responsibility of closing edges to the
+/// Unlike [`ImplicitClose`](super::ImplicitClose), this implementation shifts responsibility of closing edges to the
 /// _type checker writer_. I.e., they have to insert `sg.close(scope, label)` statements at the
 /// appropriate positions in the code.
 ///

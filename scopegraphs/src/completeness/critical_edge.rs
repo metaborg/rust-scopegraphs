@@ -37,7 +37,7 @@ impl<LABEL: Hash + Eq> CriticalEdgeSet<LABEL> {
 ///
 /// Provides utility function to create scopes with particular open edges.
 ///
-/// Should not be called externally, but only from utility function on [`super::ScopeGraph`].
+/// Should not be called externally, but only from utility function on [`crate::ScopeGraph`].
 pub trait CriticalEdgeBasedCompleteness<LABEL, DATA>: Completeness<LABEL, DATA> {
     /// Initializes a new scope with a certain set of edges that are still considered "open".
     fn init_scope_with(&self, open_edges: HashSet<LABEL>);

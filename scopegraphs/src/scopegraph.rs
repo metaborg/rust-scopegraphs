@@ -95,14 +95,14 @@ impl<'sg, LABEL: Hash + Eq, DATA> InnerScopeGraph<'sg, LABEL, DATA> {
 /// As a data structure, scope graphs are simple graphs with labeled nodes and labeled, directed edges.
 ///
 /// This trait has three type parameters:
-/// - [`LABEL`]: the type of the edge labels.
-/// - [`DATA`]: the type of the scope/node labels.
-/// - [`CMPL`]: metadata that guarantees query stability (i.e., query results remain valid in the future).
+/// - `LABEL`: the type of the edge labels.
+/// - `DATA`: the type of the scope/node labels.
+/// - `CMPL`: metadata that guarantees query stability (i.e., query results remain valid in the future).
 ///
 /// The data structure has been designed for typical scope graph usage scenario's.
 /// For example, there is no support for _removing_ scopes or edges, as this usually does not happen in scope graphs.
 /// In addition, there is no data type for edges, as edges should only be traversed, but never leak outside the scope graph structure.
-/// Finally, although not made explicit, [`LABEL`] should be a finite, iterable set.
+/// Finally, although not made explicit, `LABEL` should be a finite, iterable set.
 #[derive(Debug)]
 pub struct ScopeGraph<'storage, LABEL, DATA, CMPL> {
     pub(crate) inner_scope_graph: InnerScopeGraph<'storage, LABEL, DATA>,

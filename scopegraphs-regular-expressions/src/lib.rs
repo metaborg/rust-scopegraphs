@@ -6,6 +6,7 @@
 //!
 //! See <https://docs.rs/scopegraphs> for all documentation
 #![warn(missing_docs)]
+#![cfg_attr(not(docsrs), allow(rustdoc::broken_intra_doc_links))]
 
 use proc_macro2::{LexError, TokenStream};
 use thiserror::Error;
@@ -23,11 +24,13 @@ mod emit;
 mod dot;
 
 pub use compile::Automaton;
+#[cfg(feature = "dynamic")]
+pub use dynamic::DynamicMatcher;
 pub use regex::Regex;
 
 /// A type that can match a regex. Can be created at compile time
 /// through the [`compile_regex`](scopegraphs::compile_regex) macro,
-/// or at runtime with the [`dynamic`] feature through [`Automaton::matcher`].
+/// or at runtime with the `dynamic` feature through [`Automaton::matcher`].
 pub trait RegexMatcher<A>: Clone {
     /// Takes a transition in the state machine, accepting a single symbol.
     ///

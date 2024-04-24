@@ -6,6 +6,7 @@
 use crate::compile::{MatchState, StateID};
 use crate::{Automaton, RegexMatcher};
 
+/// Matched regular expressions that are compiled at runtime.
 #[derive(Clone)]
 pub struct DynamicMatcher<'a> {
     compiled_regex: &'a Automaton,
@@ -18,7 +19,7 @@ impl Automaton {
     /// A matcher holds, in addition to the state machine,
     /// also information about which state the machine is currently in.
     /// This current state can then be updated by taking transitions using
-    /// [`step`](DynamicMatcher::step).
+    /// [`step`](RegexMatcher::step).
     pub fn matcher(&self) -> DynamicMatcher {
         DynamicMatcher {
             compiled_regex: self,
