@@ -1,2 +1,2 @@
 [build]
-rustdocflags = ["--cfg", "docsrs", "-Z", "unstable-options", "--sort-modules-by-appearance"]
+rustdocflags = ["--cfg", "docsrs"]

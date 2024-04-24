@@ -105,11 +105,15 @@ impl<'sg, LABEL: Hash + Eq, DATA> InnerScopeGraph<'sg, LABEL, DATA> {
 /// Finally, although not made explicit, [`LABEL`] should be a finite, iterable set.
 #[derive(Debug)]
 pub struct ScopeGraph<'storage, LABEL, DATA, CMPL> {
-    pub inner_scope_graph: InnerScopeGraph<'storage, LABEL, DATA>,
-    pub completeness: CMPL,
+    pub(crate) inner_scope_graph: InnerScopeGraph<'storage, LABEL, DATA>,
+    pub(crate) completeness: CMPL,
 }
 
 impl<'storage, LABEL, DATA, CMPL> ScopeGraph<'storage, LABEL, DATA, CMPL> {
+    /// Creates a new, empty, scope graph.
+    ///
+    /// You must supply a [`Storage`] object, in which the scope graph can allocate memory,
+    /// and a [`Completeness`] strategy, that defines how the scope graph should deal with query stability.
     pub fn new(storage: &'storage Storage, completeness: CMPL) -> Self {
         ScopeGraph {
             inner_scope_graph: InnerScopeGraph::new(storage),

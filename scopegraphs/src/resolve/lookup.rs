@@ -15,7 +15,8 @@ use std::sync::Arc;
 use crate::completeness::Completeness;
 use crate::containers::{EnvContainer, PathContainer, ScopeContainer};
 use crate::resolve::{
-    DataEquiv, DataWellformedness, EdgeOrData, Env, LabelOrder, Path, Query, Resolve, ResolvedPath,
+    DataEquivalence, DataWellformedness, EdgeOrData, Env, LabelOrder, Path, Query, Resolve,
+    ResolvedPath,
 };
 use crate::{Label, Scope, ScopeGraph};
 use scopegraphs_regular_expressions::RegexMatcher;
@@ -39,7 +40,7 @@ where
     PWF: for<'a> RegexMatcher<&'a LABEL> + 'rslv,
     DWF: DataWellformedness<DATA> + 'rslv,
     LO: LabelOrder<LABEL> + 'rslv,
-    DEq: DataEquiv<DATA> + 'rslv,
+    DEq: DataEquivalence<DATA> + 'rslv,
     ResolvedPath<'sg, LABEL, DATA>: Hash + Eq,
     Path<LABEL>: Clone,
 {
@@ -118,7 +119,7 @@ where
         LABEL,
         DATA,
     >>::EnvContainer: EnvContainer<'sg, 'rslv, LABEL, DATA> + Debug,
-    DEq: DataEquiv<DATA>,
+    DEq: DataEquivalence<DATA>,
     DWF: DataWellformedness<DATA>,
     LO: LabelOrder<LABEL>,
     Path<LABEL>: Clone,
@@ -219,7 +220,7 @@ where
         let local_self = Arc::clone(self);
         // environment of current (max) label, which might be shadowed by the base environment
         Rc::new(base_env.flat_map(move |base_env| {
-            if !base_env.is_empty() && local_self.data_equiv.always_true() {
+            if !base_env.is_empty() && local_self.data_equiv.always_equivalent() {
                 <EnvC<'sg, 'rslv, CMPL, LABEL, DATA> as From<Env<'sg, LABEL, DATA>>>::from(
                     base_env.clone(),
                 )
@@ -350,7 +351,7 @@ mod tests {
 
     use crate::{
         completeness::{ExplicitClose, FutureCompleteness, ImplicitClose, UncheckedCompleteness},
-        label::query_regex,
+        query_regex,
         resolve::{DataWellformedness, Resolve, ResolvedPath},
         storage::Storage,
         Label, ScopeGraph,

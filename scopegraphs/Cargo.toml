@@ -34,12 +34,12 @@ ctor = "0.2.5"
 default = ["dot", "dynamic-regex"]
 dot = ["scopegraphs-regular-expressions/dot", "scopegraphs-macros/dot", "dep:dot"]
 dynamic-regex = ["scopegraphs-regular-expressions/dynamic"]
-doc = []
+documentation = []
 
 [package.metadata.playground]
-features = ["doc"]
+features = ["documentation"]
 
 [package.metadata.docs.rs]
-features = ["doc"]
-rustdoc-args = ["--cfg", "docsrs", "--generate-link-to-definition", "-Z", "unstable-options", "--sort-modules-by-appearance"]
+features = ["documentation"]
+rustdoc-args = ["--cfg", "docsrs", "--generate-link-to-definition"]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]

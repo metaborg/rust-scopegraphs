@@ -81,7 +81,7 @@ impl RegexInput {
             let mut f = File::create(&path)
                 .unwrap_or_else(|e| panic!("can't open dot file for graphing at {path}: {e}"));
             compiled
-                .output_dot(&mut f)
+                .render(&mut f)
                 .unwrap_or_else(|e| panic!("failed while graphing at {path}: {e}"));
         }
 

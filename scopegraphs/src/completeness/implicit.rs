@@ -2,7 +2,8 @@ use crate::completeness::private::Sealed;
 use crate::completeness::{
     Completeness, CriticalEdgeBasedCompleteness, CriticalEdgeSet, EdgeClosedError,
 };
-use crate::{InnerScopeGraph, Label, Scope};
+use crate::scopegraph::{InnerScopeGraph, Scope};
+use crate::Label;
 use std::collections::HashSet;
 use std::hash::Hash;
 

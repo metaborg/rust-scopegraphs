@@ -3,8 +3,8 @@
 //! [`compile_regex`](scopegraphs::compile_regex) macro, but has the advantage that the regular
 //! expression that is used does not need to be known at compile time.
 
-use crate::compile::StateID;
-use crate::{Automaton, MatchState, RegexMatcher};
+use crate::compile::{MatchState, StateID};
+use crate::{Automaton, RegexMatcher};
 
 #[derive(Clone)]
 pub struct DynamicMatcher<'a> {
@@ -13,6 +13,12 @@ pub struct DynamicMatcher<'a> {
 }
 
 impl Automaton {
+    /// Instantiate a (dynamic) matcher of this automaton.
+    ///
+    /// A matcher holds, in addition to the state machine,
+    /// also information about which state the machine is currently in.
+    /// This current state can then be updated by taking transitions using
+    /// [`step`](DynamicMatcher::step).
     pub fn matcher(&self) -> DynamicMatcher {
         DynamicMatcher {
             compiled_regex: self,

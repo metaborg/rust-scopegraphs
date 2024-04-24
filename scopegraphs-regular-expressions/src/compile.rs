@@ -8,7 +8,7 @@ use std::rc::Rc;
 pub type StateID = usize;
 
 #[derive(Clone)]
-pub struct MatchState {
+pub(crate) struct MatchState {
     pub is_final: bool,
     nullable: bool,
     pub transition_table: HashMap<Rc<Symbol>, StateID>,
@@ -24,11 +24,18 @@ impl MatchState {
     }
 }
 
+/// A regex automaton is a compiled regular expression.
+///
+/// It represents the state machine corresponding to the [`Regex`].
+/// This struct can either be turned into a
+/// * [`DynamicMatcher`](crate::dynamic::DynamicMatcher) to match on a regex that was compiled at runtime.
+/// * An implementation of [`RegexMatcher`](crate::RegexMatcher) generated using [emit](Automaton::emit).
+/// This function can be called at compile time (through the `compile_regex!` macro) and it
+/// emits the Rust code that can match the regular expression.
 #[derive(Clone)]
 pub struct Automaton {
-    pub regex: Rc<Regex>,
-    pub states: Vec<MatchState>,
-    pub initial: StateID,
+    pub(crate) states: Vec<MatchState>,
+    pub(crate) initial: StateID,
 }
 
 pub struct AlphabetOrder {
@@ -212,7 +219,6 @@ impl RegexCompiler {
 
         let compiled = Automaton {
             initial: *state_ids.get(&self.regex).unwrap(),
-            regex: self.regex,
             states: match_states.into_iter().map(|i| i.1).collect(),
         };
 
@@ -221,6 +227,11 @@ impl RegexCompiler {
 }
 
 impl Regex {
+    /// Turn a [`Regex`] into an [`Automaton`].
+    ///
+    /// A `Regex` represents only the syntax of a regular expression,
+    /// while a compiled regex, an `Automaton` is more like a state machine.
+    /// It can directly be used to actually match on the regular expression.
     pub fn compile(self) -> Automaton {
         let compiler = RegexCompiler::new(self);
         compiler.compile()

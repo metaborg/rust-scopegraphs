@@ -3,7 +3,8 @@ use crate::completeness::{
     Completeness, CriticalEdgeBasedCompleteness, CriticalEdgeSet, Delay, EdgeClosedError,
     EdgesOrDelay, FutureCompleteness,
 };
-use crate::{InnerScopeGraph, Label, Scope, ScopeGraph};
+use crate::scopegraph::{InnerScopeGraph, Scope, ScopeGraph};
+use crate::Label;
 use std::{collections::HashSet, hash::Hash};
 
 /// Critical-edge based [`Completeness`] implementation.
@@ -101,19 +102,22 @@ impl<LABEL: Hash + Eq + Label, DATA> CriticalEdgeBasedCompleteness<LABEL, DATA>
 }
 
 impl<LABEL: Hash + Eq> ExplicitClose<LABEL> {
+    /// Close a scope for a certain label
+    /// // TODO: link to "closing" in concepts
     pub fn close(&self, scope: Scope, label: &LABEL) {
         self.critical_edges.close(scope, label);
     }
 }
 
 impl<'sg, LABEL: Hash + Eq, DATA> ScopeGraph<'sg, LABEL, DATA, ExplicitClose<LABEL>> {
+    // TODO: fix this sentence
     /// Closes an edge, (i.e., prohibit future new
     ///
     /// For example, the following program will return an error.
     /// ```
     /// # use scopegraphs::completeness::ExplicitClose;
-    /// # use scopegraphs_macros::Label;
-    /// # use scopegraphs::storage::Storage;
+    /// # use scopegraphs::Label;
+    /// # use scopegraphs::Storage;
     /// # use scopegraphs::ScopeGraph;
     ///
     /// # #[derive(Eq, Hash, PartialEq, Label)] enum Lbl { Def }
@@ -133,9 +137,9 @@ impl<'sg, LABEL: Hash + Eq, DATA> ScopeGraph<'sg, LABEL, DATA, ExplicitClose<LAB
     ///
     /// # use scopegraphs::completeness::ExplicitClose;
     /// # use scopegraphs::ScopeGraph;
-    /// # use scopegraphs::resolve::{DefaultDataEquiv, DefaultLabelOrder, EdgeOrData, Resolve};
+    /// # use scopegraphs::resolve::{DefaultDataEquivalence, DefaultLabelOrder, EdgeOrData, Resolve};
     /// # use scopegraphs_macros::{compile_regex, Label};
-    /// # use scopegraphs::storage::Storage;
+    /// # use scopegraphs::Storage;
     /// #
     /// # #[derive(Eq, Hash, PartialEq, Label, Debug, Copy, Clone)]
     /// # enum Lbl { Def }
@@ -164,9 +168,9 @@ impl<'sg, LABEL: Hash + Eq, DATA> ScopeGraph<'sg, LABEL, DATA, ExplicitClose<LAB
     ///
     /// # use scopegraphs::completeness::ExplicitClose;
     /// # use scopegraphs::ScopeGraph;
-    /// # use scopegraphs::resolve::{DefaultDataEquiv, DefaultLabelOrder, EdgeOrData, Resolve};
+    /// # use scopegraphs::resolve::{DefaultDataEquivalence, DefaultLabelOrder, EdgeOrData, Resolve};
     /// # use scopegraphs_macros::{compile_regex, Label};
-    /// # use scopegraphs::storage::Storage;
+    /// # use scopegraphs::Storage;
     /// #
     /// # #[derive(Eq, Hash, PartialEq, Label, Debug, Copy, Clone)]
     /// # enum Lbl { Def }
@@ -196,15 +200,16 @@ impl<'sg, LABEL: Hash + Eq, DATA> ScopeGraph<'sg, LABEL, DATA, ExplicitClose<LAB
 }
 
 impl<'sg, LABEL: Hash + Eq + Copy, DATA> ScopeGraph<'sg, LABEL, DATA, FutureCompleteness<LABEL>> {
-    /// TODO: update this example to use futures
+    // TODO: update this example to use futures
+    // TODO: fix this sentence
     /// Closes an edge, (i.e., prohibit future new
     ///
     /// For example, the following program will return an error.
     /// ```
     /// # use scopegraphs::completeness::ExplicitClose;
-    /// # use scopegraphs::{ScopeGraph, storage};
+    /// # use scopegraphs::ScopeGraph;
     /// # use scopegraphs_macros::Label;
-    /// # use scopegraphs::storage::Storage;
+    /// # use scopegraphs::Storage;
     /// # #[derive(Eq, Hash, PartialEq, Label)] enum Lbl { Def }
     /// # use Lbl::*;
     /// let storage = Storage::new();
@@ -222,9 +227,9 @@ impl<'sg, LABEL: Hash + Eq + Copy, DATA> ScopeGraph<'sg, LABEL, DATA, FutureComp
     ///
     /// # use scopegraphs::completeness::ExplicitClose;
     /// # use scopegraphs::ScopeGraph;
-    /// # use scopegraphs::resolve::{DefaultDataEquiv, DefaultLabelOrder, EdgeOrData, Resolve};
+    /// # use scopegraphs::resolve::{DefaultDataEquivalence, DefaultLabelOrder, EdgeOrData, Resolve};
     /// # use scopegraphs_macros::{compile_regex, Label};
-    /// # use scopegraphs::storage::Storage;
+    /// # use scopegraphs::Storage;
     /// #
     /// # #[derive(Eq, Hash, PartialEq, Label, Debug, Copy, Clone)]
     /// # enum Lbl { Def }
@@ -253,9 +258,9 @@ impl<'sg, LABEL: Hash + Eq + Copy, DATA> ScopeGraph<'sg, LABEL, DATA, FutureComp
     ///
     /// # use scopegraphs::completeness::ExplicitClose;
     /// # use scopegraphs::ScopeGraph;
-    /// # use scopegraphs::resolve::{DefaultDataEquiv, DefaultLabelOrder, EdgeOrData, Resolve};
+    /// # use scopegraphs::resolve::{DefaultDataEquivalence, DefaultLabelOrder, EdgeOrData, Resolve};
     /// # use scopegraphs_macros::{compile_regex, Label};
-    /// # use scopegraphs::storage::Storage;
+    /// # use scopegraphs::Storage;
     /// #
     /// # #[derive(Eq, Hash, PartialEq, Label, Debug, Copy, Clone)]
     /// # enum Lbl { Def }

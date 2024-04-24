@@ -20,7 +20,7 @@ mod emit;
 #[cfg(feature = "dot")]
 mod dot;
 
-pub use compile::{Automaton, MatchState};
+pub use compile::Automaton;
 pub use regex::Regex;
 
 /// A type that can match a regex. Can be created at compile time

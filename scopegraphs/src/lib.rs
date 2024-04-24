@@ -37,102 +37,135 @@
 //! * API Docs (you're there!)
 #![cfg_attr(any(RUSTC_IS_NIGHTLY, docsrs), feature(doc_auto_cfg, doc_cfg))]
 
-pub mod completeness;
-pub mod containers;
-pub mod future_wrapper;
-pub mod label;
-pub mod resolve;
-mod scopegraph;
-pub mod storage;
+#[cfg(feature = "documentation")]
+pub mod concepts;
 
+#[cfg(feature = "documentation")]
+pub mod patterns;
+
+#[macro_use]
+mod label;
 pub use label::Label;
-pub use scopegraph::*;
-pub use scopegraphs_macros;
-
-#[doc(hidden)]
-pub use scopegraphs_macros::*;
 
 #[cfg(feature = "dot")]
-pub mod render;
+mod render;
 
-pub use scopegraphs_macros::*;
 pub use scopegraphs_regular_expressions::*;
 
-#[doc(hidden)]
-mod docs_support {
-    #[doc(hidden)]
-    #[macro_export]
-    macro_rules! docs {
-        ($($(#[$meta:meta])* pub mod $name: ident);* $(;)?) => {
-            #[cfg(feature = "doc")]
-            mod docs {
-                $(
-                    $(#[$meta])*
-                    pub mod $name;
-                )*
-            }
-            #[doc(hidden)]
-            mod __index {
-                /// Documentation Index:
-                pub mod _________________________________________ {
-                    // $(
-                    //     pub use super::super::docs::$name;
-                    // )*
-                }
-            }
+pub mod completeness;
+mod containers;
+mod future_wrapper;
 
+pub mod resolve;
 
-            $(
-                #[cfg(feature = "doc")]
-                $(#[$meta])*
-                pub mod $name {
-                    pub use super::docs::$name::*;
+mod scopegraph;
+pub use scopegraph::{Scope, ScopeGraph};
 
-                    pub use super::__index::*;
+mod storage;
+pub use storage::Storage;
 
-                    pub use super::docs::*;
-                }
-            )*
-        };
-    }
-}
+/// Derive [`Label`] implementation.
+///
+/// ```rust
+/// # use std::borrow;
+/// use scopegraphs::*;
+/// use scopegraphs::Label;
+///
+/// #[derive(Label, Debug, PartialEq, Eq)]
+/// pub enum Alphabet {
+///     A,
+///     B,
+///     C,
+/// }
+/// use Alphabet::*;
+///
+/// assert_eq!(vec![A, B, C], Alphabet::iter().collect::<Vec<_>>());
+/// ```
+pub use scopegraphs_macros::Label;
 
-#[doc(hidden)]
-mod __hidden {
-    pub mod ____________API_DOCS_BELOW___________ {}
-}
-#[doc(hidden)]
-mod __hidden2 {
-    pub mod _________DOCUMENTATION_BELOW________ {}
-}
+/// Compile a regular expression into Rust code.
+///
+/// Generates a struct implementing [`RegexMatcher`].
+/// Instances of this struct can match the regular expression that is specified.
+///
+/// Syntax: `$attrs type $type<$alphabet_type> = regex`.
+/// For example:
+///
+/// ```rust
+/// # use std::borrow;
+/// use scopegraphs::*;
+///
+/// pub enum Alphabet {
+///     A,
+///     B,
+///     C,
+/// }
+/// use Alphabet::*;
+///
+/// compile_regex!(type Machine<Alphabet> = A* B);
+/// assert!(Machine::new().accepts([A, B]));
+/// ```
+///
+/// # Supported Attributes
+/// * `#[graph="$path"]` location to put a graphviz dot file representing the generated finite state machine. (only with the `dot` feature)
+///
+/// # Query Directly
+///
+/// Instead of using [`compile_regex`], you can also use [`query_regex`], which has a simpler syntax
+/// and can immediately be used to match a string. This is useful if you want to use a regular expression
+/// only once.
+/// ```
+/// # use std::borrow;
+/// # use scopegraphs::*;
+/// #
+/// # pub enum Alphabet {
+/// #    A,
+/// #    B,
+/// #    C,
+/// # }
+/// # use Alphabet::*;
+/// use scopegraphs::query_regex;
+/// assert!(query_regex!(Alphabet: A* B).accepts([A, B]));
+/// ```
+pub use scopegraphs_macros::compile_regex;
 
-pub use __hidden::*;
-pub use __hidden2::_________DOCUMENTATION_BELOW________;
-
-docs! {
-    /// # Concepts of scope graphs
-    ///
-    /// To use a scope graph,
-    /// you need to understand a few basic concepts.
-    /// First of all, the components that comprise a scope graph:
-    ///
-    /// * [A scope](scope)
-    /// * [A scope's data](scope_data)
-    /// * [Labelled edges between scopes](edges)
-    ///
-    /// Once you know what a scope graph is,
-    /// we can start talking about running queries over them.
-    /// For a query to return the desired result, we may need to
-    /// specify the following properties:
-    ///
-    /// * [Regular Expression]()
-    /// * [Completeness]()
-    /// * [Data Well-Formedness]()
-    /// * [Data Equivalence]()
-    /// * [Label Ordering]()
-    ///
-    pub mod concepts;
-
-    /// # Common patterns in scope graphs
-    pub mod patterns;
-}
+/// Define a [label ordering](crate::concepts::label_ordering), an instance of [`LabelOrder`](crate::resolve::LabelOrder)
+///
+/// Syntax:
+/// ```grammar
+/// $type: $( $label_order ),*
+/// ```
+/// with
+/// ```grammar
+/// $label_order: $( $label_group )<*
+/// $label_group: { $($variant),* } | $variant
+/// $variant: $ident | '$'
+/// ```
+///
+/// For example
+/// ```rust
+/// # use scopegraphs_macros::label_order;
+///
+/// #[derive(Copy, Clone)]
+/// enum Lbl {
+///     Def,
+///     Mod,
+///     Lex,
+///     Imp,
+/// }
+///
+/// label_order!(Lbl: $ < { Def, Mod } < Lex, Imp < Lex);
+/// ```
+///
+/// Here, `$` means the end-of-path label: i.e., the current scope.
+///
+/// Using `{ ... }`, labels with equal priority can be grouped.
+///
+/// Multiple partial orders can be combined using `,`-separators: `X < Y, Z < Y`.
+///
+/// Sequences of multiple `<` can be chained (`X < Y < Z`).
+/// This is equivalent to the 2-windowed decomposition: `X < Y, Y < Z` (which, by transitivity, also includes `X < Z`).
+///
+/// The macro will at compile time validate whether the order is a strict partial order, and report
+/// any symmetric or reflexive entries.
+pub use scopegraphs_macros::label_order;

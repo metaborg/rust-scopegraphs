@@ -2,13 +2,23 @@ use crate::completeness::private::Sealed;
 use crate::completeness::{Completeness, CriticalEdgeBasedCompleteness, Delay, ExplicitClose};
 use crate::future_wrapper::FutureWrapper;
 use crate::label::Label;
-use crate::{InnerScopeGraph, Scope};
+use crate::scopegraph::{InnerScopeGraph, Scope};
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::future::poll_fn;
 use std::hash::Hash;
 use std::task::{Poll, Waker};
 
+/// A completeness strategy that makes queries return a [`Future`](std::future::Future)
+/// in case one of the scopes that the query runs over was not yet closed.
+/// The future resolves once all such scopes *are* closed.
+///
+/// Using [`FutureCompleteness`], you can somewhat delegate the task of scheduling
+/// typechecking to one of rust's executors, be it [`tokio`](https://docs.rs/tokio)
+/// or [`futures::block_on`](https://docs.rs/futures/latest/futures/executor/fn.block_on.html).
+// TODO: add practical lessons from Lace.
+///
+/// Extends, and contains an instance of, [`ExplicitClose`].
 #[derive(Debug)]
 pub struct FutureCompleteness<LABEL> {
     explicit_close: ExplicitClose<LABEL>,
@@ -78,7 +88,7 @@ impl<LABEL: Hash + Eq + Label + Copy, DATA> Completeness<LABEL, DATA>
 }
 
 impl<LABEL: Hash + Eq + Copy> FutureCompleteness<LABEL> {
-    pub fn close(&self, scope: Scope, label: &LABEL) {
+    pub(crate) fn close(&self, scope: Scope, label: &LABEL) {
         self.explicit_close.close(scope, label);
         for waker in self
             .wakers

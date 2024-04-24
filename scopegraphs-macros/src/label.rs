@@ -42,7 +42,7 @@ pub fn impl_label(input: DeriveInput) -> TokenStream {
 
     let name = input.ident;
     quote! {
-        impl scopegraphs::label::Label for #name {
+        impl scopegraphs::Label for #name {
             fn iter() -> impl Iterator<Item = Self> {
                 [
                     #(
