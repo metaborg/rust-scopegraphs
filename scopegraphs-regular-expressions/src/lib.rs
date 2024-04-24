@@ -3,6 +3,8 @@
 //! To query a scope graph,
 //! you have to specify what paths are valid for the query to take.
 //! You do so using a regular expression over the labels on the edges of the scope graph.
+//!
+//! See <https://docs.rs/scopegraphs> for all documentation
 #![warn(missing_docs)]
 
 use proc_macro2::{LexError, TokenStream};
