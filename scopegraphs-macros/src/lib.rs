@@ -1,7 +1,7 @@
 // actually, don't warn! We should have the docs on `scopegraphs`
 // re-exports so we can link to other things in `scopegraphs`
 #![allow(missing_docs)]
-///! See <https://docs.rs/scopegraphs> for all documentation
+//! See <https://docs.rs/scopegraphs> for all documentation
 use crate::label::impl_label;
 use crate::order::OrderInput;
 use crate::regex::RegexInput;
