@@ -9,7 +9,7 @@ authors = [
 ]
 description = "A port of scopegraphs (https://pl.ewi.tudelft.nl/research/projects/scope-graphs/) to Rust"
 repository = "https://github.com/metaborg/rust-scopegraphs/"
-rust-version = "1.77"
+rust-version = "1.75"
 
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
