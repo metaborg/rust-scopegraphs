@@ -1,7 +1,8 @@
 use bumpalo::Bump;
 use std::fmt::{Debug, Formatter};
 
-/// Required to construct a [`ScopeGraph`](crate::ScopeGraph).
+/// Holds data for a [`ScopeGraph`](crate::ScopeGraph). Required to construct a `ScopeGraph`.
+///
 /// A `ScopeGraph` will use the storage object to allocate in,
 /// and lifetimes of items in the scope graph will be tied to an instance of `Storage`.
 #[derive(Default)]

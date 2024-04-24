@@ -4,7 +4,7 @@
 //! additions to the scope graph.
 //! This allows safe interleaving of name resolution and scope graph construction.
 //!
-//! The main trait of this module is [`Completeness`]. An instance of this trait should be passed
+//! The main trait of this module is [`Completeness`]. An implementation of this trait should be passed
 //! to [`ScopeGraph::new`](super::ScopeGraph::new) to obtain a scope graph instance.
 //!
 //! Currently, the module contains three safe implementations.

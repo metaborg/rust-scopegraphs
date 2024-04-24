@@ -103,7 +103,7 @@ pub use scopegraphs_macros::Label;
 /// ```
 pub use scopegraphs_macros::compile_regex;
 
-/// Define a [label ordering](crate::concepts::label_ordering), an instance of [`LabelOrder`](crate::resolve::LabelOrder)
+/// Define a [label ordering](crate::concepts::label_ordering), an implementation of [`LabelOrder`](crate::resolve::LabelOrder)
 ///
 /// Syntax:
 /// ```grammar
