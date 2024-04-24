@@ -30,5 +30,7 @@ That is on purpose: The documentation of this library are meant to be the more i
 * [Zwaan, A., & van Antwerpen, H. (2023). Scope graphs: The story so far.](https://repository.tudelft.nl/islandora/object/uuid:3024d587-7c5d-44bd-8471-27b7c2e59160/datastream/OBJ/download)
   Provides a more detailed overview of all work that involved scope graphs until the date of publication.
 
-But more research is ongoing! See our [research overview page]() for an overview of all research that involves scope
+But more research is ongoing! See
+our [research overview page](https://pl.ewi.tudelft.nl/research/projects/scope-graphs/) for an overview of all research
+that involves scope
 graphs.
