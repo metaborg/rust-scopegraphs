@@ -7,13 +7,13 @@ authors = [
     "Aron Zwaan <A.S.Zwaan@tudelft.nl>",
     "Jonathan Dönszelmann <J.B.Doenszelmann@tudelft.nl>"
 ]
-description = "A port of [scopegraphs](https://pl.ewi.tudelft.nl/research/projects/scope-graphs/) to Rust"
+description = "A port of scopegraphs (https://pl.ewi.tudelft.nl/research/projects/scope-graphs/) to Rust"
 
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [dependencies]
 syn = { version = "2.0.29", features = ["full", "extra-traits"] }
-quote = { version = "1.0.33" , optional = true}
+quote = { version = "1.0.33", optional = true }
 proc-macro2 = "1.0.69"
 thiserror = "1.0.50"
 

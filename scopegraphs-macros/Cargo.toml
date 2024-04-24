@@ -7,7 +7,7 @@ authors = [
     "Aron Zwaan <A.S.Zwaan@tudelft.nl>",
     "Jonathan Dönszelmann <J.B.Doenszelmann@tudelft.nl>"
 ]
-description = "A port of [scopegraphs](https://pl.ewi.tudelft.nl/research/projects/scope-graphs/) to Rust"
+description = "A port of scopegraphs (https://pl.ewi.tudelft.nl/research/projects/scope-graphs/) to Rust"
 
 
 [lib]
@@ -18,11 +18,11 @@ proc-macro = true
 [dependencies]
 syn = { version = "2.0.29", features = ["full"] }
 quote = "1.0.33"
-scopegraphs-regular-expressions = {path = "../scopegraphs-regular-expressions", features = ["rust-code-emitting", "dot"], version = "0.2.0"}
+scopegraphs-regular-expressions = { path = "../scopegraphs-regular-expressions", features = ["rust-code-emitting", "dot"], version = "0.2.0" }
 proc-macro2 = "1.0.69"
 
 [dev-dependencies]
-scopegraphs = {path="../scopegraphs"}
+scopegraphs = { path = "../scopegraphs" }
 
 [features]
 dot = ["scopegraphs-regular-expressions/dot"]
