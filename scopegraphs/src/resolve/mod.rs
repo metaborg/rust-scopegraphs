@@ -231,11 +231,21 @@ impl<'sg, LABEL, DATA> Env<'sg, LABEL, DATA> {
 }
 
 /// Error emitted by [Env::get_only_item] when the environment argument did not contain exactly one argument.
-pub enum OnlyElementError {
+pub enum OnlyElementError<'a, 'sg, DATA, LABEL, I>
+where
+    I: Iterator<Item = &'a ResolvedPath<'sg, DATA, LABEL>>,
+{
     /// Environment was empty
     Empty,
     /// Environment contained multiple items
-    Multiple,
+    Multiple {
+        /// the first element that the iterator returned
+        first: &'a ResolvedPath<'sg, DATA, LABEL>,
+        /// the second element the iterator returned (witnessing the environment is not a singleton environment)
+        second: &'a ResolvedPath<'sg, DATA, LABEL>,
+        /// the iterator (can be used to access the remaining elements)
+        rest: I,
+    },
 }
 
 impl<'sg, LABEL, DATA> Env<'sg, LABEL, DATA>
@@ -260,15 +270,31 @@ where
     }
 
     /// Returns `Result::Ok(value)` if the environment is a singleton set, or an error otherwise.
-    pub fn get_only_item(&self) -> Result<ResolvedPath<'sg, LABEL, DATA>, OnlyElementError> {
+    pub fn get_only_item<'a>(
+        &'a self,
+    ) -> Result<
+        ResolvedPath<'sg, LABEL, DATA>,
+        OnlyElementError<
+            'a,
+            'sg,
+            LABEL,
+            DATA,
+            impl Iterator<Item = &'a ResolvedPath<'sg, LABEL, DATA>> + 'a,
+        >,
+    > {
         let mut iter = self.iter();
         iter.next()
             .map_or(Result::Err(OnlyElementError::Empty), |value| {
-                if iter.next().is_some() {
-                    Result::Err(OnlyElementError::Multiple)
-                } else {
-                    Result::Ok(value.clone())
-                }
+                iter.next().map_or_else(
+                    || Result::Ok(value.clone()),
+                    |second| {
+                        Result::Err(OnlyElementError::Multiple {
+                            first: value,
+                            second,
+                            rest: iter,
+                        })
+                    },
+                )
             })
     }
 }
