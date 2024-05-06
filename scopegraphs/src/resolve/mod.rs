@@ -248,6 +248,55 @@ where
     },
 }
 
+impl<'a, 'sg, DATA, LABEL, I> IntoIterator for OnlyElementError<'a, 'sg, DATA, LABEL, I>
+where
+    I: Iterator<Item = &'a ResolvedPath<'sg, DATA, LABEL>>,
+{
+    type Item = &'a ResolvedPath<'sg, DATA, LABEL>;
+    type IntoIter = OnlyElementErrorIter<'a, 'sg, DATA, LABEL, I>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        OnlyElementErrorIter { e: self, offset: 0 }
+    }
+}
+
+/// Iterator over an [`OnlyElementError`], to easily access its elements.
+pub struct OnlyElementErrorIter<'a, 'sg, DATA, LABEL, I>
+where
+    I: Iterator<Item = &'a ResolvedPath<'sg, DATA, LABEL>>,
+{
+    e: OnlyElementError<'a, 'sg, DATA, LABEL, I>,
+    offset: usize,
+}
+
+impl<'a, 'sg, DATA, LABEL, I> Iterator for OnlyElementErrorIter<'a, 'sg, DATA, LABEL, I>
+where
+    I: Iterator<Item = &'a ResolvedPath<'sg, DATA, LABEL>>,
+{
+    type Item = &'a ResolvedPath<'sg, DATA, LABEL>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match &mut self.e {
+            OnlyElementError::Empty => None,
+            OnlyElementError::Multiple {
+                first,
+                second,
+                rest,
+            } => match self.offset {
+                0 => {
+                    self.offset += 1;
+                    Some(first)
+                }
+                1 => {
+                    self.offset += 1;
+                    Some(second)
+                }
+                _ => rest.next(),
+            },
+        }
+    }
+}
+
 impl<'sg, LABEL, DATA> Env<'sg, LABEL, DATA>
 where
     ResolvedPath<'sg, LABEL, DATA>: Eq + Hash + Clone,
@@ -269,7 +318,7 @@ where
         self.0.extend(other.0.iter().cloned())
     }
 
-    /// Returns `Result::Ok(value)` if the environment is a singleton set, or an error otherwise.
+    /// Returns `Ok(value)` if the environment only has a single resolved path, or an error otherwise.
     pub fn get_only_item<'a>(
         &'a self,
     ) -> Result<
@@ -283,19 +332,18 @@ where
         >,
     > {
         let mut iter = self.iter();
-        iter.next()
-            .map_or(Result::Err(OnlyElementError::Empty), |value| {
-                iter.next().map_or_else(
-                    || Result::Ok(value.clone()),
-                    |second| {
-                        Result::Err(OnlyElementError::Multiple {
-                            first: value,
-                            second,
-                            rest: iter,
-                        })
-                    },
-                )
-            })
+        iter.next().map_or(Err(OnlyElementError::Empty), |value| {
+            iter.next().map_or_else(
+                || Ok(value.clone()),
+                |second| {
+                    Err(OnlyElementError::Multiple {
+                        first: value,
+                        second,
+                        rest: iter,
+                    })
+                },
+            )
+        })
     }
 }
 
