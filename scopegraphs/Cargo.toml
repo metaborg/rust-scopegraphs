@@ -28,6 +28,7 @@ scopegraphs-regular-expressions = { path = "../scopegraphs-regular-expressions",
 env_logger = "0.10.1"
 ctor = "0.2.5"
 futures = { version = "0.3.30", default-features = false, features = ["alloc", "executor"] }
+smol = "2.0.0"
 
 [features]
 default = ["dot", "dynamic-regex"]
