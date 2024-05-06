@@ -230,6 +230,14 @@ impl<'sg, LABEL, DATA> Env<'sg, LABEL, DATA> {
     }
 }
 
+/// Error emitted by [Env::get_only_item] when the environment argument did not contain exactly one argument.
+pub enum OnlyElementError {
+    /// Environment was empty
+    Empty,
+    /// Environment contained multiple items
+    Multiple,
+}
+
 impl<'sg, LABEL, DATA> Env<'sg, LABEL, DATA>
 where
     ResolvedPath<'sg, LABEL, DATA>: Eq + Hash + Clone,
@@ -249,6 +257,19 @@ where
     /// Add all paths in `other` to the current environment.
     pub fn merge(&mut self, other: &Self) {
         self.0.extend(other.0.iter().cloned())
+    }
+
+    /// Returns `Result::Ok(value)` if the environment is a singleton set, or an error otherwise.
+    pub fn get_only_item(&self) -> Result<ResolvedPath<'sg, LABEL, DATA>, OnlyElementError> {
+        let mut iter = self.iter();
+        iter.next()
+            .map_or(Result::Err(OnlyElementError::Empty), |value| {
+                if iter.next().is_some() {
+                    Result::Err(OnlyElementError::Multiple)
+                } else {
+                    Result::Ok(value.clone())
+                }
+            })
     }
 }
 
