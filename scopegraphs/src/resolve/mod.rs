@@ -230,6 +230,73 @@ impl<'sg, LABEL, DATA> Env<'sg, LABEL, DATA> {
     }
 }
 
+/// Error emitted by [Env::get_only_item] when the environment argument did not contain exactly one argument.
+pub enum OnlyElementError<'a, 'sg, DATA, LABEL, I>
+where
+    I: Iterator<Item = &'a ResolvedPath<'sg, DATA, LABEL>>,
+{
+    /// Environment was empty
+    Empty,
+    /// Environment contained multiple items
+    Multiple {
+        /// the first element that the iterator returned
+        first: &'a ResolvedPath<'sg, DATA, LABEL>,
+        /// the second element the iterator returned (witnessing the environment is not a singleton environment)
+        second: &'a ResolvedPath<'sg, DATA, LABEL>,
+        /// the iterator (can be used to access the remaining elements)
+        rest: I,
+    },
+}
+
+impl<'a, 'sg, DATA, LABEL, I> IntoIterator for OnlyElementError<'a, 'sg, DATA, LABEL, I>
+where
+    I: Iterator<Item = &'a ResolvedPath<'sg, DATA, LABEL>>,
+{
+    type Item = &'a ResolvedPath<'sg, DATA, LABEL>;
+    type IntoIter = OnlyElementErrorIter<'a, 'sg, DATA, LABEL, I>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        OnlyElementErrorIter { e: self, offset: 0 }
+    }
+}
+
+/// Iterator over an [`OnlyElementError`], to easily access its elements.
+pub struct OnlyElementErrorIter<'a, 'sg, DATA, LABEL, I>
+where
+    I: Iterator<Item = &'a ResolvedPath<'sg, DATA, LABEL>>,
+{
+    e: OnlyElementError<'a, 'sg, DATA, LABEL, I>,
+    offset: usize,
+}
+
+impl<'a, 'sg, DATA, LABEL, I> Iterator for OnlyElementErrorIter<'a, 'sg, DATA, LABEL, I>
+where
+    I: Iterator<Item = &'a ResolvedPath<'sg, DATA, LABEL>>,
+{
+    type Item = &'a ResolvedPath<'sg, DATA, LABEL>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match &mut self.e {
+            OnlyElementError::Empty => None,
+            OnlyElementError::Multiple {
+                first,
+                second,
+                rest,
+            } => match self.offset {
+                0 => {
+                    self.offset += 1;
+                    Some(first)
+                }
+                1 => {
+                    self.offset += 1;
+                    Some(second)
+                }
+                _ => rest.next(),
+            },
+        }
+    }
+}
+
 impl<'sg, LABEL, DATA> Env<'sg, LABEL, DATA>
 where
     ResolvedPath<'sg, LABEL, DATA>: Eq + Hash + Clone,
@@ -249,6 +316,34 @@ where
     /// Add all paths in `other` to the current environment.
     pub fn merge(&mut self, other: &Self) {
         self.0.extend(other.0.iter().cloned())
+    }
+
+    /// Returns `Ok(value)` if the environment only has a single resolved path, or an error otherwise.
+    pub fn get_only_item<'a>(
+        &'a self,
+    ) -> Result<
+        ResolvedPath<'sg, LABEL, DATA>,
+        OnlyElementError<
+            'a,
+            'sg,
+            LABEL,
+            DATA,
+            impl Iterator<Item = &'a ResolvedPath<'sg, LABEL, DATA>> + 'a,
+        >,
+    > {
+        let mut iter = self.iter();
+        iter.next().map_or(Err(OnlyElementError::Empty), |value| {
+            iter.next().map_or_else(
+                || Ok(value.clone()),
+                |second| {
+                    Err(OnlyElementError::Multiple {
+                        first: value,
+                        second,
+                        rest: iter,
+                    })
+                },
+            )
+        })
     }
 }
 

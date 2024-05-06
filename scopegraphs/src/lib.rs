@@ -9,6 +9,7 @@
 #![cfg_attr(docsrs, feature(doc_auto_cfg, doc_cfg))]
 #![cfg_attr(not(docsrs), allow(rustdoc::broken_intra_doc_links))]
 #![allow(unknown_lints)]
+#![allow(unexpected_cfgs)]
 #![allow(clippy::empty_docs)]
 
 #[cfg(feature = "documentation")]
