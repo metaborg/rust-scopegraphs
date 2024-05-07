@@ -231,6 +231,7 @@ impl<'sg, LABEL, DATA> Env<'sg, LABEL, DATA> {
 }
 
 /// Error emitted by [Env::get_only_item] when the environment argument did not contain exactly one argument.
+#[derive(Debug)]
 pub enum OnlyElementError<'a, 'sg, DATA, LABEL, I>
 where
     I: Iterator<Item = &'a ResolvedPath<'sg, DATA, LABEL>>,
@@ -261,6 +262,7 @@ where
 }
 
 /// Iterator over an [`OnlyElementError`], to easily access its elements.
+#[derive(Debug)]
 pub struct OnlyElementErrorIter<'a, 'sg, DATA, LABEL, I>
 where
     I: Iterator<Item = &'a ResolvedPath<'sg, DATA, LABEL>>,
