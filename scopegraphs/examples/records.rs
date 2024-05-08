@@ -7,7 +7,6 @@ use scopegraphs::completable_future::{CompletableFuture, CompletableFutureSignal
 use smol::LocalExecutor;
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::convert::Infallible;
 use std::fmt::{Debug, Formatter};
 use std::future::IntoFuture;
 use std::vec;
@@ -105,9 +104,11 @@ impl UnionFind {
             if let PartialType::Variable(v_left) = left {
                 // arbitrarily choose right as new representative
                 // FIXME: use rank heuristic in case right is a variable?
+                println!("unify: {:?} == {:?}", left, right);
                 *self.get(v_left) = right.clone();
                 for mut fut in std::mem::replace(&mut self.callbacks[v_left.0], vec![]) {
-                    // fut.complete(right.clone());
+                    println!("complete: {:?} == {:?}", left, right);
+                    fut.complete(right.clone());
                 }
             } else if let PartialType::Variable(_) = right {
                 // left is a variable/number, but right is a variable
@@ -163,7 +164,7 @@ impl UnionFind {
     fn callback(&mut self, tv: TypeVar) -> impl std::future::Future<Output = PartialType> {
         let future = CompletableFuture::<PartialType>::new();
         let callbacks = &mut self.callbacks;
-        for i in callbacks.len()..=tv.0 {
+        for _i in callbacks.len()..=tv.0 {
             callbacks.push(vec![]);
         }
 
@@ -207,225 +208,185 @@ struct Ast {
     main: Expr,
 }
 
-#[async_recursion::async_recursion(?Send)]
-async fn typecheck_expr<'sg>(
-    ast: &Expr,
-    scope: Scope,
-    sg: &RecordScopegraph<'sg>,
-    uf: &RefCell<UnionFind>,
-) -> PartialType {
-    match ast {
-        Expr::StructInit { name, fields } => {
-            let struct_scope = resolve_struct_ref(sg, scope, name).await;
-            let fld_futures = fields.iter().map(|(fld_name, fld_init)| async {
-                let (decl_type, init_type) = join(
-                    resolve_member_ref(sg, struct_scope, fld_name),
-                    typecheck_expr(fld_init, scope, sg, uf),
-                )
-                .await;
-
-                uf.borrow_mut().unify(decl_type, init_type)
-            });
-
-            // FIXME: field init exhaustiveness check omitted
-            join_all(fld_futures).await;
-            // FIXME: can we make it 'return' the type before all field initializations are checked?
-            PartialType::Struct {
-                name: name.clone(),
-                scope: struct_scope,
-            }
-        }
-        Expr::Add(l, r) => {
-            let (l, r) = Box::pin(join(
-                typecheck_expr(l, scope, sg, uf),
-                typecheck_expr(r, scope, sg, uf),
-            ))
-            .await;
-
-            // assert equalities
-            let mut _uf = uf.borrow_mut();
-            _uf.unify(l, PartialType::Number);
-            _uf.unify(r, PartialType::Number);
-
-            PartialType::Number
-        }
-        Expr::Number(_) => PartialType::Number,
-        Expr::Ident(var_name) => resolve_lexical_ref(sg, scope, var_name).await,
-        Expr::FieldAccess(inner, field) => {
-            let res = Box::pin(typecheck_expr(inner, scope, sg, uf)).await;
-            let inner_expr_type = uf.borrow_mut().find_ty(res);
-            match inner_expr_type {
-                PartialType::Variable(tv) => {
-                    println!("awaiting refinement of {:?}", tv);
-                    let refined_type = uf.borrow_mut().callback(tv).await;
-                    println!("refined type: {:?}", refined_type);
-                    todo!()
-                },
-                PartialType::Struct { name, scope } => {
-                    let env = sg
-                        .query()
-                        .with_path_wellformedness(query_regex!(RecordLabel: Lexical* Definition))
-                        .with_data_wellformedness(|decl: &RecordData| match decl {
-                            RecordData::VarDecl { name: var_name, .. } => &name == var_name,
-                            _ => false,
-                        })
-                        .with_label_order(label_order!(RecordLabel: Definition < Lexical))
-                        .resolve(scope)
-                        .await;
-                    env.get_only_item()
-                        .expect("variable did not resolve uniquely")
-                        .data()
-                        .expect_var_decl()
-                        .clone()
-                }
-                PartialType::Number => panic!("number has no field {field}"),
-            }
-        }
-        Expr::Let {
-            name,
-            value,
-            in_expr,
-        } => {
-            let new_scope =
-                sg.add_scope_default_with([RecordLabel::Lexical, RecordLabel::Definition]);
-            sg.add_edge(new_scope, RecordLabel::Lexical, scope)
-                .expect("already closed");
-            sg.close(new_scope, &RecordLabel::Lexical);
-
-            let ty_var = PartialType::Variable(uf.borrow_mut().fresh());
-            sg.add_decl(
-                new_scope,
-                RecordLabel::Definition,
-                RecordData::VarDecl {
-                    name: name.clone(),
-                    ty: ty_var.clone(),
-                },
-            )
-            .expect("already closed");
-
-            sg.close(new_scope, &RecordLabel::Definition);
-
-            // compute type of the variable
-            let ty_var_future = async {
-                let ty = typecheck_expr(value, scope, sg, uf).await;
-                uf.borrow_mut().unify(ty_var, ty);
-            };
-
-            // compute type of the result expression
-            let ty_res_future = typecheck_expr(in_expr, new_scope, sg, uf);
-
-            // run both computations concurrently
-            //
-            // this construct is set up in this way to ensure
-            // the `unify(tv, ty_var)` can be executed before
-            // the result type is computed.
-            // this prevents deadlocks when the result type
-            // is dependent on the value type, for example
-            // ```
-            // record A { x: int }
-            // let r = A { x = 42 } in r.x
-            // ```
-            let (_, ty_res) = Box::pin(join(ty_var_future, ty_res_future)).await;
-
-            // return
-            ty_res
-        }
-    }
-}
-
-fn init_structdef<'sg>(struct_def: &StructDef, scope: Scope, sg: &RecordScopegraph<'sg>) -> Scope {
-    let field_scope = sg.add_scope_default_with([RecordLabel::Definition]);
-    // FIXME: use Decl
-    let decl_scope = sg.add_scope(RecordData::TypeDecl {
-        name: struct_def.name.clone(),
-        ty: field_scope,
-    });
-    sg.add_edge(scope, RecordLabel::TypeDefinition, decl_scope)
-        .expect("already closed");
-
-    field_scope
-}
-
-async fn typecheck_structdef<'sg>(
-    struct_def: &StructDef,
-    scope: Scope,
-    field_scope: Scope,
-    sg: &RecordScopegraph<'sg>,
-) {
-    // NO AWAIT ABOVE THIS
-    let fld_decl_futures = struct_def
-        .fields
-        .iter()
-        .map(|(fld_name, fld_ty)| async move {
-            let ty = match fld_ty {
-                Type::StructRef(n) => {
-                    let struct_scope = resolve_struct_ref(sg, scope, n).await;
-                    PartialType::Struct {
-                        name: n.clone(),
-                        scope: struct_scope,
-                    }
-                }
-                Type::Int => PartialType::Number,
-            };
-
-            sg.add_decl(
-                field_scope,
-                RecordLabel::Definition,
-                RecordData::VarDecl {
-                    name: fld_name.clone(),
-                    ty,
-                },
-            )
-            .expect("unexpected close");
-        });
-
-    join_all(fld_decl_futures).await;
-}
 
 type RecordScopegraph<'sg> =
-    ScopeGraph<'sg, RecordLabel, RecordData, FutureCompleteness<RecordLabel>>;
+ScopeGraph<'sg, RecordLabel, RecordData, FutureCompleteness<RecordLabel>>;
 
-fn typecheck(ast: &Ast) -> PartialType {
-    let storage = Storage::new();
-    let sg = RecordScopegraph::new(&storage, FutureCompleteness::default());
-    let uf = RefCell::new(UnionFind::new());
-
-    let global_scope = sg.add_scope_default_with([RecordLabel::TypeDefinition]);
-
-    {
-        let fut = async {
-            let local = LocalExecutor::new();
-
-            for item in &ast.items {
-                // synchronously init record decl
-                let field_scope = init_structdef(item, global_scope, &sg);
-                local
-                    .spawn(typecheck_structdef(item, global_scope, field_scope, &sg))
-                    .detach();
-            }
-
-            // We can close for type definitions since the scopes for this are synchronously made
-            // even before the future is returned and spawned.
-            sg.close(global_scope, &RecordLabel::TypeDefinition);
-
-            let main_task = local
-                .spawn(typecheck_expr(&ast.main, global_scope, &sg, &uf));
-
-            while !local.is_empty() {
-                local.tick().await;
-            }
-
-            // extract result from task
-            main_task.into_future().await
-        };
-
-        let type_checker_result = smol::block_on(fut);
-        type_checker_result
-
-        // FIXME: return type of `main`
-    }
+struct TypeChecker<'sg> {
+    sg: RecordScopegraph<'sg>,
+    uf: RefCell<UnionFind>,
+    ex: LocalExecutor<'sg>,
 }
 
+impl<'a, 'sg>  TypeChecker<'a> {
+
+    fn run_detached<T: 'a>(&self, fut: impl std::future::Future<Output = T> + 'a) {
+        self.ex.spawn(fut).detach()
+    }
+
+    #[async_recursion::async_recursion(?Send)]
+    async fn typecheck_expr(
+        &self,
+        ast: &Expr,
+        scope: Scope,
+    ) -> PartialType {
+        match ast {
+            Expr::StructInit { name, fields } => {
+                let struct_scope = resolve_struct_ref(&self.sg, scope, name).await;
+                let fld_futures = fields.iter().map(|(fld_name, fld_init)| async move {
+                    let (decl_type, init_type) = join(
+                        resolve_member_ref(&self.sg, struct_scope, fld_name),
+                        self.typecheck_expr(fld_init, scope),
+                    )
+                    .await;
+
+                    self.uf.borrow_mut().unify(decl_type, init_type)
+                });
+
+                // FIXME: field init exhaustiveness check omitted
+
+                // asynchronously check field initializations
+                for fut in fld_futures {
+                    self.ex.spawn(fut).detach()
+                }
+                // .. but eagerly return the struct type
+                PartialType::Struct {
+                    name: name.clone(),
+                    scope: struct_scope,
+                }
+            }
+            Expr::Add(l, r) => {
+                // type check left-hand-side asynchronously
+                self.run_detached(async {
+                    let l_ty = self.typecheck_expr(l, scope).await;
+                    self.uf.borrow_mut().unify(l_ty, PartialType::Number)
+                });
+                // and type-check the right-hand-side asynchronously
+                self.run_detached(async {
+                    let r_ty = self.typecheck_expr(r, scope).await;
+                    self.uf.borrow_mut().unify(r_ty, PartialType::Number)
+                });
+
+                // ... but immediately return the current type
+                PartialType::Number
+            }
+            Expr::Number(_) => PartialType::Number,
+            Expr::Ident(var_name) => resolve_lexical_ref(&self.sg, scope, var_name).await,
+            Expr::FieldAccess(inner, field) => {
+                let res = Box::pin(self.typecheck_expr(inner, scope)).await;
+                let inner_expr_type = self.uf.borrow_mut().find_ty(res);
+                match inner_expr_type {
+                    PartialType::Variable(tv) => {
+                        println!("awaiting refinement of {:?}", tv);
+                        let refined_type = self.uf.borrow_mut().callback(tv).await;
+                        println!("refined type: {:?}", refined_type);
+                        todo!("retry type checking with refined type")
+                    },
+                    PartialType::Struct { scope, .. } => resolve_member_ref(&self.sg, scope, field).await,
+                    PartialType::Number => panic!("number has no field {field}"),
+                }
+            }
+            Expr::Let {
+                name,
+                value,
+                in_expr,
+            } => {
+                let new_scope =
+                self.sg.add_scope_default_with([RecordLabel::Lexical, RecordLabel::Definition]);
+                self.sg.add_edge(new_scope, RecordLabel::Lexical, scope)
+                    .expect("already closed");
+                self.sg.close(new_scope, &RecordLabel::Lexical);
+
+                let ty_var = PartialType::Variable(self.uf.borrow_mut().fresh());
+                self.sg.add_decl(
+                    new_scope,
+                    RecordLabel::Definition,
+                    RecordData::VarDecl {
+                        name: name.clone(),
+                        ty: ty_var.clone(),
+                    },
+                )
+                .expect("already closed");
+
+                self.sg.close(new_scope, &RecordLabel::Definition);
+
+                // compute type of the variable
+                let ty_var_future = async move {
+                    let ty = self.typecheck_expr(value, scope).await;
+                    self.uf.borrow_mut().unify(ty_var, ty);
+                };
+
+                // compute type of the result expression
+                let ty_res_future = self.typecheck_expr(in_expr, new_scope);
+
+                // run both computations concurrently
+                //
+                // this construct is set up in this way to ensure
+                // the `unify(tv, ty_var)` can be executed before
+                // the result type is computed.
+                // this prevents deadlocks when the result type
+                // is dependent on the value type, for example
+                // ```
+                // record A { x: int }
+                // let r = A { x = 42 } in r.x
+                // ```
+                self.run_detached(ty_var_future);                
+
+                // return
+                ty_res_future.await
+            }
+        }
+    }
+
+    fn init_structdef(&self, struct_def: &StructDef, scope: Scope) -> Scope {
+        let field_scope = self.sg.add_scope_default_with([RecordLabel::Definition]);
+        // FIXME: use Decl
+        let decl_scope = self.sg.add_scope(RecordData::TypeDecl {
+            name: struct_def.name.clone(),
+            ty: field_scope,
+        });
+        self.sg.add_edge(scope, RecordLabel::TypeDefinition, decl_scope)
+            .expect("already closed");
+
+        field_scope
+    }
+
+    async fn typecheck_structdef(
+        &self,
+        struct_def: &StructDef,
+        scope: Scope,
+        field_scope: Scope,
+    ) {
+        let fld_decl_futures = struct_def
+            .fields
+            .iter()
+            .map(|(fld_name, fld_ty)| async move {
+                let ty = match fld_ty {
+                    Type::StructRef(n) => {
+                        let struct_scope = resolve_struct_ref(&self.sg, scope, n).await;
+                        PartialType::Struct {
+                            name: n.clone(),
+                            scope: struct_scope,
+                        }
+                    }
+                    Type::Int => PartialType::Number,
+                };
+
+                self.sg.add_decl(
+                    field_scope,
+                    RecordLabel::Definition,
+                    RecordData::VarDecl {
+                        name: fld_name.clone(),
+                        ty,
+                    },
+                )
+                .expect("unexpected close");
+            });
+
+        join_all(fld_decl_futures).await;
+    }
+
+}
 async fn resolve_struct_ref(sg: &RecordScopegraph<'_>, scope: Scope, ref_name: &String) -> Scope {
     let env = sg
         .query()
@@ -493,6 +454,49 @@ async fn resolve_member_ref(
         .data()
         .expect_var_decl()
         .clone()
+}
+
+
+fn typecheck(ast: &Ast) -> PartialType {
+    let storage = Storage::new();
+    let sg = RecordScopegraph::new(&storage, FutureCompleteness::default());
+    let uf = RefCell::new(UnionFind::new());
+    let local = LocalExecutor::new();
+
+    let tc = TypeChecker {
+        sg: sg,
+        uf: uf,
+        ex: local,
+    };
+
+    let fut = async {
+        let global_scope = tc.sg.add_scope_default_with([RecordLabel::TypeDefinition]);
+
+        for item in &ast.items {
+            // synchronously init record decl
+            let field_scope = tc.init_structdef(item, global_scope);
+            tc.ex
+                .spawn(tc.typecheck_structdef(item, global_scope, field_scope))
+                .detach();
+        }
+
+        // We can close for type definitions since the scopes for this are synchronously made
+        // even before the future is returned and spawned.
+        tc.sg.close(global_scope, &RecordLabel::TypeDefinition);
+
+        let main_task = tc.ex
+            .spawn(tc.typecheck_expr(&ast.main, global_scope));
+
+        while !tc.ex.is_empty() {
+            tc.ex.tick().await;
+        }
+
+        // extract result from task
+        main_task.into_future().await
+    };
+
+    let type_checker_result = smol::block_on(fut);
+    type_checker_result
 }
 
 fn main() {
