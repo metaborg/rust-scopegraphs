@@ -3,10 +3,13 @@ use scopegraphs::completeness::FutureCompleteness;
 use scopegraphs::resolve::Resolve;
 use scopegraphs::{query_regex, Scope, ScopeGraph, Storage};
 use scopegraphs_macros::{label_order, Label};
+use scopegraphs::completable_future::{CompletableFuture, CompletableFutureSignal};
 use smol::LocalExecutor;
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::convert::Infallible;
 use std::fmt::{Debug, Formatter};
+use std::vec;
 
 #[derive(Debug, Label, Copy, Clone, Hash, PartialEq, Eq)]
 enum RecordLabel {
@@ -56,10 +59,10 @@ enum PartialType {
     Number,
 }
 
-#[derive(Clone)]
 pub struct UnionFind {
     parent: Vec<PartialType>,
     vars: usize,
+    callbacks: Vec<Vec<CompletableFutureSignal<PartialType>>>,
 }
 
 impl Debug for UnionFind {
@@ -80,6 +83,7 @@ impl UnionFind {
         Self {
             parent: vec![],
             vars: 0,
+            callbacks: vec![],
         }
     }
 
@@ -100,7 +104,10 @@ impl UnionFind {
             if let PartialType::Variable(v_left) = left {
                 // arbitrarily choose right as new representative
                 // FIXME: use rank heuristic in case right is a variable?
-                *self.get(v_left) = right;
+                *self.get(v_left) = right.clone();
+                for mut fut in std::mem::replace(&mut self.callbacks[v_left.0], vec![]) {
+                    // fut.complete(right.clone());
+                }
             } else if let PartialType::Variable(_) = right {
                 // left is a variable/number, but right is a variable
                 worklist.push((right, left)) // will match first case in next iteration
@@ -150,6 +157,17 @@ impl UnionFind {
             PartialType::Struct { name, .. } => Some(Type::StructRef(name)),
             PartialType::Number => Some(Type::Int),
         }
+    }
+
+    fn callback(&mut self, tv: TypeVar) -> impl std::future::Future<Output = PartialType> {
+        let future = CompletableFuture::<PartialType>::new();
+        let callbacks = &mut self.callbacks;
+        for i in callbacks.len()..=tv.0 {
+            callbacks.push(vec![]);
+        }
+
+        callbacks[tv.0].push(future.signal());
+        future
     }
 }
 
@@ -236,7 +254,12 @@ async fn typecheck_expr<'sg>(
             let res = Box::pin(typecheck_expr(inner, scope, sg, uf)).await;
             let inner_expr_type = uf.borrow_mut().find_ty(res);
             match inner_expr_type {
-                PartialType::Variable(_) => todo!("no delay mechanism yet"),
+                PartialType::Variable(tv) => {
+                    println!("awaiting refinement of {:?}", tv);
+                    let refined_type = uf.borrow_mut().callback(tv).await;
+                    println!("refined type: {:?}", refined_type);
+                    todo!()
+                },
                 PartialType::Struct { name, scope } => {
                     let env = sg
                         .query()
