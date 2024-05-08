@@ -9,6 +9,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::convert::Infallible;
 use std::fmt::{Debug, Formatter};
+use std::future::IntoFuture;
 use std::vec;
 
 #[derive(Debug, Label, Copy, Clone, Hash, PartialEq, Eq)]
@@ -384,7 +385,7 @@ async fn typecheck_structdef<'sg>(
 type RecordScopegraph<'sg> =
     ScopeGraph<'sg, RecordLabel, RecordData, FutureCompleteness<RecordLabel>>;
 
-fn typecheck(ast: &Ast) {
+fn typecheck(ast: &Ast) -> PartialType {
     let storage = Storage::new();
     let sg = RecordScopegraph::new(&storage, FutureCompleteness::default());
     let uf = RefCell::new(UnionFind::new());
@@ -407,13 +408,15 @@ fn typecheck(ast: &Ast) {
             // even before the future is returned and spawned.
             sg.close(global_scope, &RecordLabel::TypeDefinition);
 
-            local
-                .spawn(typecheck_expr(&ast.main, global_scope, &sg, &uf))
-                .detach();
+            let main_task = local
+                .spawn(typecheck_expr(&ast.main, global_scope, &sg, &uf));
 
             while !local.is_empty() {
                 local.tick().await;
             }
+
+            // extract result from task
+            main_task.into_future().await
         };
 
         let type_checker_result = smol::block_on(fut);
