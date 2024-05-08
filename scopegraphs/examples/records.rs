@@ -215,7 +215,7 @@ ScopeGraph<'sg, RecordLabel, RecordData, FutureCompleteness<RecordLabel>>;
 struct TypeChecker<'sg> {
     sg: RecordScopegraph<'sg>,
     uf: RefCell<UnionFind>,
-    ex: LocalExecutor<'sg>,
+    ex: LocalExecutor<'sg>, // make executor part of type checker to allow run-and-forget semantics of type checking subtasks (see run_detached() usage sites)
 }
 
 impl<'a, 'sg>  TypeChecker<'a> {
