@@ -27,7 +27,6 @@ mod render;
 
 pub use scopegraphs_regular_expressions::*;
 
-pub mod completable_future;
 pub mod completeness;
 pub mod containers;
 mod future_wrapper;
