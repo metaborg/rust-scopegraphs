@@ -60,6 +60,7 @@ enum PartialType {
     Number,
 }
 
+#[derive(Default)]
 pub struct UnionFind {
     parent: Vec<PartialType>,
     vars: usize,
@@ -80,14 +81,6 @@ impl Debug for UnionFind {
 }
 
 impl UnionFind {
-    pub fn new() -> Self {
-        Self {
-            parent: vec![],
-            vars: 0,
-            callbacks: vec![],
-        }
-    }
-
     fn fresh(&mut self) -> TypeVar {
         let old = self.vars;
         self.vars += 1;
@@ -106,16 +99,14 @@ impl UnionFind {
                 // arbitrarily choose right as new representative
                 // FIXME: use rank heuristic in case right is a variable?
                 *self.get(v_left) = right.clone();
-                for mut fut in std::mem::replace(&mut self.callbacks[v_left.0], vec![]) {
+                for mut fut in std::mem::take(&mut self.callbacks[v_left.0]) {
                     fut.complete(right.clone());
                 }
             } else if let PartialType::Variable(_) = right {
                 // left is a variable/number, but right is a variable
                 worklist.push((right, left)) // will match first case in next iteration
-            } else {
-                if left != right {
-                    panic!("Cannot unify {:?} and {:?}", left, right);
-                }
+            } else if left != right {
+                panic!("Cannot unify {:?} and {:?}", left, right);
             }
         }
     }
@@ -448,10 +439,7 @@ async fn resolve_lexical_ref(
         .with_path_wellformedness(query_regex!(RecordLabel: Lexical* Definition))
         .with_label_order(label_order!(RecordLabel: Definition < Lexical))
         .with_data_wellformedness(|record_data: &RecordData| -> bool {
-            match record_data {
-                RecordData::VarDecl { name, .. } if name == var_name => true,
-                _ => false,
-            }
+            matches!(record_data, RecordData::VarDecl { name, .. } if name == var_name)
         })
         .resolve(scope)
         .await;
@@ -490,16 +478,10 @@ async fn resolve_member_ref(
 fn typecheck(ast: &Ast) -> PartialType {
     let storage = Storage::new();
     let sg = RecordScopegraph::new(&storage, FutureCompleteness::default());
-    let uf = RefCell::new(UnionFind::new());
+    let uf = RefCell::new(UnionFind::default());
     let local = LocalExecutor::new();
 
-    let tc = Rc::new(TypeChecker {
-        sg: sg,
-        uf: uf,
-        ex: local,
-    });
-
-    let _tc = tc.clone();
+    let tc = Rc::new(TypeChecker { sg, uf, ex: local });
 
     let fut = async move {
         let global_scope = tc.sg.add_scope_default_with([RecordLabel::TypeDefinition]);
@@ -521,9 +503,8 @@ fn typecheck(ast: &Ast) -> PartialType {
         // even before the future is returned and spawned.
         tc.sg.close(global_scope, &RecordLabel::TypeDefinition);
 
-        let _tc = tc.clone();
         let main_task = tc.ex.spawn(TypeChecker::typecheck_expr(
-            _tc.clone(),
+            tc.clone(),
             &ast.main,
             global_scope,
         ));
@@ -536,8 +517,7 @@ fn typecheck(ast: &Ast) -> PartialType {
         main_task.into_future().await
     };
 
-    let type_checker_result = smol::block_on(fut);
-    type_checker_result
+    smol::block_on(fut)
 }
 
 fn main() {
@@ -649,8 +629,8 @@ mod completable_future {
     impl WakerWrapper {
         fn register(&mut self, waker: &Waker) {
             match self {
-                &mut WakerWrapper::Registered(ref _dont_care) => (),
-                &mut WakerWrapper::NotRegistered => {
+                WakerWrapper::Registered(_dont_care) => (),
+                WakerWrapper::NotRegistered => {
                     let w = AtomicWaker::new();
                     w.register(waker);
                     *self = WakerWrapper::Registered(w)
@@ -659,9 +639,9 @@ mod completable_future {
         }
 
         fn wake(&self) {
-            match self {
-                &WakerWrapper::Registered(ref w) => w.wake(),
-                &WakerWrapper::NotRegistered => (),
+            match *self {
+                WakerWrapper::Registered(ref w) => w.wake(),
+                WakerWrapper::NotRegistered => (),
             };
         }
     }
