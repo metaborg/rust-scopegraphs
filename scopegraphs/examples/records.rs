@@ -1,14 +1,16 @@
 use futures::future::{join, join_all};
+use scopegraphs::completable_future::{CompletableFuture, CompletableFutureSignal};
 use scopegraphs::completeness::FutureCompleteness;
 use scopegraphs::resolve::Resolve;
 use scopegraphs::{query_regex, Scope, ScopeGraph, Storage};
 use scopegraphs_macros::{label_order, Label};
-use scopegraphs::completable_future::{CompletableFuture, CompletableFutureSignal};
 use smol::LocalExecutor;
+use std::borrow::Borrow;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
 use std::future::IntoFuture;
+use std::rc::Rc;
 use std::vec;
 
 #[derive(Debug, Label, Copy, Clone, Hash, PartialEq, Eq)]
@@ -208,9 +210,8 @@ struct Ast {
     main: Expr,
 }
 
-
 type RecordScopegraph<'sg> =
-ScopeGraph<'sg, RecordLabel, RecordData, FutureCompleteness<RecordLabel>>;
+    ScopeGraph<'sg, RecordLabel, RecordData, FutureCompleteness<RecordLabel>>;
 
 struct TypeChecker<'sg> {
     sg: RecordScopegraph<'sg>,
@@ -218,36 +219,41 @@ struct TypeChecker<'sg> {
     ex: LocalExecutor<'sg>, // make executor part of type checker to allow run-and-forget semantics of type checking subtasks (see run_detached() usage sites)
 }
 
-impl<'a, 'sg>  TypeChecker<'a> {
-
+impl<'a, 'sg> TypeChecker<'a> {
     fn run_detached<T: 'a>(&self, fut: impl std::future::Future<Output = T> + 'a) {
         self.ex.spawn(fut).detach()
     }
 
     #[async_recursion::async_recursion(?Send)]
-    async fn typecheck_expr(
-        &self,
-        ast: &Expr,
-        scope: Scope,
-    ) -> PartialType {
+    async fn typecheck_expr<'ast: 'a>(tc: Rc<Self>, ast: &'ast Expr, scope: Scope) -> PartialType
+    where
+        'a: 'async_recursion,
+    {
         match ast {
             Expr::StructInit { name, fields } => {
-                let struct_scope = resolve_struct_ref(&self.sg, scope, name).await;
-                let fld_futures = fields.iter().map(|(fld_name, fld_init)| async move {
-                    let (decl_type, init_type) = join(
-                        resolve_member_ref(&self.sg, struct_scope, fld_name),
-                        self.typecheck_expr(fld_init, scope),
-                    )
-                    .await;
+                let struct_scope = resolve_struct_ref(&tc.sg, scope, name).await;
+                let fld_futures = fields.iter().map(|(fld_name, fld_init)| {
+                    let tc = tc.clone();
+                    async move {
+                        let (decl_type, init_type) = join(
+                            resolve_member_ref(&tc.clone().sg, struct_scope, fld_name),
+                            Self::typecheck_expr(tc.clone(), fld_init, scope),
+                        )
+                        .await;
 
-                    self.uf.borrow_mut().unify(decl_type, init_type)
+                        println!("borrow_mut (struct_init) (1)");
+                        let mut _uf = tc.uf.borrow_mut();
+                        _uf.unify(decl_type, init_type);
+                        drop(_uf);
+                        println!("dropped (struct_init) (1)");
+                    }
                 });
 
                 // FIXME: field init exhaustiveness check omitted
 
                 // asynchronously check field initializations
                 for fut in fld_futures {
-                    self.ex.spawn(fut).detach()
+                    tc.ex.spawn(fut).detach()
                 }
                 // .. but eagerly return the struct type
                 PartialType::Struct {
@@ -257,32 +263,60 @@ impl<'a, 'sg>  TypeChecker<'a> {
             }
             Expr::Add(l, r) => {
                 // type check left-hand-side asynchronously
-                self.run_detached(async {
-                    let l_ty = self.typecheck_expr(l, scope).await;
-                    self.uf.borrow_mut().unify(l_ty, PartialType::Number)
+                let _scope = scope;
+                let _tc = tc.clone();
+                tc.clone().run_detached(async move {
+                    let l_ty = Self::typecheck_expr(_tc.clone(), l, _scope).await;
+                    println!("borrow_mut (add; left) (2)");
+                    let mut _uf = _tc.uf.borrow_mut();
+                    _uf.unify(l_ty, PartialType::Number);
+                    drop(_uf);
+                    println!("dropped (add; left) (2)");
                 });
                 // and type-check the right-hand-side asynchronously
-                self.run_detached(async {
-                    let r_ty = self.typecheck_expr(r, scope).await;
-                    self.uf.borrow_mut().unify(r_ty, PartialType::Number)
+                let _tc = tc.clone();
+                tc.clone().run_detached(async move {
+                    let r_ty = Self::typecheck_expr(_tc.clone(), r, scope).await;
+                    println!("borrow_mut (add; right) (3)");
+                    let mut _uf = _tc.uf.borrow_mut();
+                    _uf.unify(r_ty, PartialType::Number);
+                    drop(_uf);
+                    println!("dropped (add; right) (3)");
                 });
 
                 // ... but immediately return the current type
                 PartialType::Number
             }
             Expr::Number(_) => PartialType::Number,
-            Expr::Ident(var_name) => resolve_lexical_ref(&self.sg, scope, var_name).await,
+            Expr::Ident(var_name) => resolve_lexical_ref(&tc.sg, scope, var_name).await,
             Expr::FieldAccess(inner, field) => {
-                let res = Box::pin(self.typecheck_expr(inner, scope)).await;
-                let inner_expr_type = self.uf.borrow_mut().find_ty(res);
+                let res = Box::pin(Self::typecheck_expr(tc.clone(), inner, scope)).await;
+                let inner_expr_type = {
+                    println!("borrow_mut (field_access) (4)");
+                    let mut _uf = tc.uf.borrow_mut();
+                    let ty = _uf.find_ty(res);
+                    drop(_uf);
+                    println!("dropped (field_access) (4)");
+                    ty
+                };
                 match inner_expr_type {
                     PartialType::Variable(tv) => {
                         println!("awaiting refinement of {:?}", tv);
-                        let refined_type = self.uf.borrow_mut().callback(tv).await;
+
+                        let refined_type = {
+                            println!("borrow_mut (field_access; var) (5)");
+                            let mut _uf = tc.uf.borrow_mut();
+                            let ty_fut = _uf.callback(tv);
+                            drop(_uf);
+                            println!("dropped (field_access; var) (5)");
+                            ty_fut.await
+                        };
                         println!("refined type: {:?}", refined_type);
-                        todo!("retry type checking with refined type")
-                    },
-                    PartialType::Struct { scope, .. } => resolve_member_ref(&self.sg, scope, field).await,
+                        refined_type
+                    }
+                    PartialType::Struct { scope, .. } => {
+                        resolve_member_ref(&tc.sg, scope, field).await
+                    }
                     PartialType::Number => panic!("number has no field {field}"),
                 }
             }
@@ -291,33 +325,49 @@ impl<'a, 'sg>  TypeChecker<'a> {
                 value,
                 in_expr,
             } => {
-                let new_scope =
-                self.sg.add_scope_default_with([RecordLabel::Lexical, RecordLabel::Definition]);
-                self.sg.add_edge(new_scope, RecordLabel::Lexical, scope)
+                let new_scope = tc
+                    .sg
+                    .add_scope_default_with([RecordLabel::Lexical, RecordLabel::Definition]);
+                tc.sg
+                    .add_edge(new_scope, RecordLabel::Lexical, scope)
                     .expect("already closed");
-                self.sg.close(new_scope, &RecordLabel::Lexical);
+                tc.sg.close(new_scope, &RecordLabel::Lexical);
 
-                let ty_var = PartialType::Variable(self.uf.borrow_mut().fresh());
-                self.sg.add_decl(
-                    new_scope,
-                    RecordLabel::Definition,
-                    RecordData::VarDecl {
-                        name: name.clone(),
-                        ty: ty_var.clone(),
-                    },
-                )
-                .expect("already closed");
+                let ty_var = {
+                    println!("borrow_mut (let) (6)");
+                    let mut _uf = tc.uf.borrow_mut();
+                    let ty_var = PartialType::Variable(_uf.fresh());
+                    drop(_uf);
+                    println!("dropped (let) (6)");
+                    ty_var
+                };
+                tc.sg
+                    .add_decl(
+                        new_scope,
+                        RecordLabel::Definition,
+                        RecordData::VarDecl {
+                            name: name.clone(),
+                            ty: ty_var.clone(),
+                        },
+                    )
+                    .expect("already closed");
 
-                self.sg.close(new_scope, &RecordLabel::Definition);
+                tc.sg.close(new_scope, &RecordLabel::Definition);
 
                 // compute type of the variable
+                let _tc = tc.clone();
                 let ty_var_future = async move {
-                    let ty = self.typecheck_expr(value, scope).await;
-                    self.uf.borrow_mut().unify(ty_var, ty);
+                    let ty = Self::typecheck_expr(_tc.clone(), value, scope).await;
+
+                    println!("borrow_mut (let; result) (7)");
+                    let mut _uf = _tc.uf.borrow_mut();
+                    _uf.unify(ty_var, ty);
+                    drop(_uf);
+                    println!("dropped (let; result) (7)");
                 };
 
                 // compute type of the result expression
-                let ty_res_future = self.typecheck_expr(in_expr, new_scope);
+                let ty_res_future = Self::typecheck_expr(tc.clone(), in_expr, new_scope);
 
                 // run both computations concurrently
                 //
@@ -330,7 +380,7 @@ impl<'a, 'sg>  TypeChecker<'a> {
                 // record A { x: int }
                 // let r = A { x = 42 } in r.x
                 // ```
-                self.run_detached(ty_var_future);                
+                tc.run_detached(ty_var_future);
 
                 // return
                 ty_res_future.await
@@ -345,25 +395,25 @@ impl<'a, 'sg>  TypeChecker<'a> {
             name: struct_def.name.clone(),
             ty: field_scope,
         });
-        self.sg.add_edge(scope, RecordLabel::TypeDefinition, decl_scope)
+        self.sg
+            .add_edge(scope, RecordLabel::TypeDefinition, decl_scope)
             .expect("already closed");
 
         field_scope
     }
 
     async fn typecheck_structdef(
-        &self,
+        tc: Rc<TypeChecker<'a>>,
         struct_def: &StructDef,
         scope: Scope,
         field_scope: Scope,
     ) {
-        let fld_decl_futures = struct_def
-            .fields
-            .iter()
-            .map(|(fld_name, fld_ty)| async move {
+        let fld_decl_futures = struct_def.fields.iter().map(|(fld_name, fld_ty)| {
+            let tc = tc.clone();
+            async move {
                 let ty = match fld_ty {
                     Type::StructRef(n) => {
-                        let struct_scope = resolve_struct_ref(&self.sg, scope, n).await;
+                        let struct_scope = resolve_struct_ref(&tc.sg, scope, n).await;
                         PartialType::Struct {
                             name: n.clone(),
                             scope: struct_scope,
@@ -372,20 +422,21 @@ impl<'a, 'sg>  TypeChecker<'a> {
                     Type::Int => PartialType::Number,
                 };
 
-                self.sg.add_decl(
-                    field_scope,
-                    RecordLabel::Definition,
-                    RecordData::VarDecl {
-                        name: fld_name.clone(),
-                        ty,
-                    },
-                )
-                .expect("unexpected close");
-            });
+                tc.sg
+                    .add_decl(
+                        field_scope,
+                        RecordLabel::Definition,
+                        RecordData::VarDecl {
+                            name: fld_name.clone(),
+                            ty,
+                        },
+                    )
+                    .expect("unexpected close");
+            }
+        });
 
         join_all(fld_decl_futures).await;
     }
-
 }
 async fn resolve_struct_ref(sg: &RecordScopegraph<'_>, scope: Scope, ref_name: &String) -> Scope {
     let env = sg
@@ -456,27 +507,33 @@ async fn resolve_member_ref(
         .clone()
 }
 
-
 fn typecheck(ast: &Ast) -> PartialType {
     let storage = Storage::new();
     let sg = RecordScopegraph::new(&storage, FutureCompleteness::default());
     let uf = RefCell::new(UnionFind::new());
     let local = LocalExecutor::new();
 
-    let tc = TypeChecker {
+    let tc = Rc::new(TypeChecker {
         sg: sg,
         uf: uf,
         ex: local,
-    };
+    });
 
-    let fut = async {
+    let _tc = tc.clone();
+
+    let fut = async move {
         let global_scope = tc.sg.add_scope_default_with([RecordLabel::TypeDefinition]);
 
         for item in &ast.items {
             // synchronously init record decl
             let field_scope = tc.init_structdef(item, global_scope);
             tc.ex
-                .spawn(tc.typecheck_structdef(item, global_scope, field_scope))
+                .spawn(TypeChecker::typecheck_structdef(
+                    tc.clone(),
+                    item,
+                    global_scope,
+                    field_scope,
+                ))
                 .detach();
         }
 
@@ -484,8 +541,12 @@ fn typecheck(ast: &Ast) -> PartialType {
         // even before the future is returned and spawned.
         tc.sg.close(global_scope, &RecordLabel::TypeDefinition);
 
-        let main_task = tc.ex
-            .spawn(tc.typecheck_expr(&ast.main, global_scope));
+        let _tc = tc.clone();
+        let main_task = tc.ex.spawn(async move {
+            let ty_main = TypeChecker::typecheck_expr(_tc, &ast.main, global_scope).await;
+            println!("!!! type of main: {:?}", ty_main);
+            ty_main
+        });
 
         while !tc.ex.is_empty() {
             tc.ex.tick().await;

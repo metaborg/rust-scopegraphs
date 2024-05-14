@@ -1,5 +1,5 @@
 //! Copied and adapted from https://crates.io/crates/completable_future (due to dependency mismatch)
-//! 
+//!
 //! # Completable Future
 //!
 //! Similar to Java's CompletableFuture, this crate provides a simple
@@ -22,18 +22,18 @@
 //! ```
 //! extern crate futures;
 //! extern crate completable_future;
-//! 
+//!
 //! use futures::prelude::*;
 //! use futures::executor::block_on;
 //! use std::thread::spawn;
 //! use std::thread::sleep;
 //! use std::time::Duration;
 //! use completable_future::CompletableFuture;
-//! 
+//!
 //! fn main() {
 //!     let fut1 = CompletableFuture::<String, ()>::new();
 //!     // we will give the signal to some worker for it to complete
-//!     let mut signal = fut1.signal(); 
+//!     let mut signal = fut1.signal();
 //!     let fut2 = fut1.and_then(|s| {
 //!         // this will come from whoever completes the future
 //!         println!("in fut2: {}", s);
@@ -56,12 +56,12 @@
 //!     j.join().unwrap();
 //! }
 //! ```
- 
+
 use futures::future::Future;
-use futures::task::{Context, Waker, AtomicWaker};
+use futures::task::{AtomicWaker, Context, Waker};
+use std::mem;
 use std::pin::Pin;
 use std::sync::{Arc, Mutex};
-use std::mem;
 use std::task::Poll;
 
 enum WakerWrapper {
@@ -77,7 +77,7 @@ impl WakerWrapper {
                 let w = AtomicWaker::new();
                 w.register(waker);
                 *self = WakerWrapper::Registered(w)
-            },
+            }
         }
     }
 
@@ -121,8 +121,8 @@ struct SignalInternal<V> {
 pub struct CompletableFutureSignal<V> {
     internal: Arc<Mutex<SignalInternal<V>>>,
 }
- 
-impl<V> CompletableFutureSignal<V> {   
+
+impl<V> CompletableFutureSignal<V> {
     fn mutate_self(&mut self, new_state: FutureState<V>) -> bool {
         let mut internal = self.internal.lock().unwrap();
         match internal.state {
@@ -130,7 +130,7 @@ impl<V> CompletableFutureSignal<V> {
                 internal.state.swap(new_state);
                 internal.waker.wake();
                 true
-            },
+            }
             _ => false,
         }
     }
@@ -157,15 +157,15 @@ impl<V> CompletableFutureSignal<V> {
 pub struct CompletableFuture<V> {
     internal: Arc<Mutex<SignalInternal<V>>>,
 }
- 
+
 impl<V> CompletableFuture<V> {
     /// Construct a CompletableFuture.
     pub fn new() -> CompletableFuture<V> {
         CompletableFuture {
-            internal: Arc::new(Mutex::new(SignalInternal{
+            internal: Arc::new(Mutex::new(SignalInternal {
                 waker: WakerWrapper::NotRegistered,
                 state: FutureState::Pending,
-            }))
+            })),
         }
     }
 
@@ -173,10 +173,10 @@ impl<V> CompletableFuture<V> {
     /// with the value provided.
     pub fn completed(val: V) -> CompletableFuture<V> {
         CompletableFuture {
-            internal: Arc::new(Mutex::new(SignalInternal{
+            internal: Arc::new(Mutex::new(SignalInternal {
                 waker: WakerWrapper::NotRegistered,
                 state: FutureState::Completed(val),
-            }))
+            })),
         }
     }
 
@@ -191,7 +191,7 @@ impl<V> CompletableFuture<V> {
 
 impl<V> Future for CompletableFuture<V> {
     type Output = V;
-    
+
     fn poll(self: Pin<&mut Self>, ctx: &mut Context) -> Poll<Self::Output> {
         let mut signal = self.internal.lock().unwrap();
         signal.waker.register(ctx.waker());
@@ -199,7 +199,9 @@ impl<V> Future for CompletableFuture<V> {
         let state = &mut signal.state;
         match state {
             FutureState::Pending => Poll::Pending,
-            FutureState::Taken => panic!("bug: the value has been taken, yet I'm still polled again"),
+            FutureState::Taken => {
+                panic!("bug: the value has been taken, yet I'm still polled again")
+            }
             FutureState::Completed(_) => Poll::Ready(state.unwrap_val()),
         }
     }
