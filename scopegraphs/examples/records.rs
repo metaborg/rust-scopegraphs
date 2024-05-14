@@ -442,10 +442,7 @@ impl<'a, 'sg> TypeChecker<'a> {
     }
 
     fn with_unifier<T, F: FnOnce(&mut UnionFind) -> T>(&self, f: F) -> T {
-        let mut uf = self.uf.borrow_mut();
-        let res = f(&mut uf);
-        drop(uf);
-        res
+        f(&mut self.uf.borrow_mut())
     }
 }
 async fn resolve_struct_ref(sg: &RecordScopegraph<'_>, scope: Scope, ref_name: &String) -> Scope {
