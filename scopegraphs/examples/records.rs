@@ -5,7 +5,6 @@ use scopegraphs::resolve::Resolve;
 use scopegraphs::{query_regex, Scope, ScopeGraph, Storage};
 use scopegraphs_macros::{label_order, Label};
 use smol::LocalExecutor;
-use std::borrow::Borrow;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
@@ -106,10 +105,8 @@ impl UnionFind {
             if let PartialType::Variable(v_left) = left {
                 // arbitrarily choose right as new representative
                 // FIXME: use rank heuristic in case right is a variable?
-                println!("unify: {:?} == {:?}", left, right);
                 *self.get(v_left) = right.clone();
                 for mut fut in std::mem::replace(&mut self.callbacks[v_left.0], vec![]) {
-                    println!("complete: {:?} == {:?}", left, right);
                     fut.complete(right.clone());
                 }
             } else if let PartialType::Variable(_) = right {
@@ -155,6 +152,7 @@ impl UnionFind {
         &mut parent[tv.0]
     }
 
+    #[allow(unused)]
     fn type_of(&mut self, var: TypeVar) -> Option<Type> {
         match self.find(var) {
             PartialType::Variable(_) => None,
@@ -177,6 +175,7 @@ impl UnionFind {
 
 #[derive(Debug)]
 enum Type {
+    #[allow(unused)]
     StructRef(String),
     Int,
 }
@@ -229,7 +228,7 @@ impl<'a, 'sg> TypeChecker<'a> {
     where
         'a: 'async_recursion,
     {
-        match ast {
+        let ty_res = match ast {
             Expr::StructInit { name, fields } => {
                 let struct_scope = resolve_struct_ref(&tc.sg, scope, name).await;
                 let fld_futures = fields.iter().map(|(fld_name, fld_init)| {
@@ -241,11 +240,7 @@ impl<'a, 'sg> TypeChecker<'a> {
                         )
                         .await;
 
-                        println!("borrow_mut (struct_init) (1)");
-                        let mut _uf = tc.uf.borrow_mut();
-                        _uf.unify(decl_type, init_type);
-                        drop(_uf);
-                        println!("dropped (struct_init) (1)");
+                        tc.with_unifier(|uf| uf.unify(decl_type, init_type));
                     }
                 });
 
@@ -267,21 +262,13 @@ impl<'a, 'sg> TypeChecker<'a> {
                 let _tc = tc.clone();
                 tc.clone().run_detached(async move {
                     let l_ty = Self::typecheck_expr(_tc.clone(), l, _scope).await;
-                    println!("borrow_mut (add; left) (2)");
-                    let mut _uf = _tc.uf.borrow_mut();
-                    _uf.unify(l_ty, PartialType::Number);
-                    drop(_uf);
-                    println!("dropped (add; left) (2)");
+                    _tc.with_unifier(|uf| uf.unify(l_ty, PartialType::Number));
                 });
                 // and type-check the right-hand-side asynchronously
                 let _tc = tc.clone();
                 tc.clone().run_detached(async move {
                     let r_ty = Self::typecheck_expr(_tc.clone(), r, scope).await;
-                    println!("borrow_mut (add; right) (3)");
-                    let mut _uf = _tc.uf.borrow_mut();
-                    _uf.unify(r_ty, PartialType::Number);
-                    drop(_uf);
-                    println!("dropped (add; right) (3)");
+                    _tc.with_unifier(|uf| uf.unify(r_ty, PartialType::Number));
                 });
 
                 // ... but immediately return the current type
@@ -290,35 +277,9 @@ impl<'a, 'sg> TypeChecker<'a> {
             Expr::Number(_) => PartialType::Number,
             Expr::Ident(var_name) => resolve_lexical_ref(&tc.sg, scope, var_name).await,
             Expr::FieldAccess(inner, field) => {
-                let res = Box::pin(Self::typecheck_expr(tc.clone(), inner, scope)).await;
-                let inner_expr_type = {
-                    println!("borrow_mut (field_access) (4)");
-                    let mut _uf = tc.uf.borrow_mut();
-                    let ty = _uf.find_ty(res);
-                    drop(_uf);
-                    println!("dropped (field_access) (4)");
-                    ty
-                };
-                match inner_expr_type {
-                    PartialType::Variable(tv) => {
-                        println!("awaiting refinement of {:?}", tv);
-
-                        let refined_type = {
-                            println!("borrow_mut (field_access; var) (5)");
-                            let mut _uf = tc.uf.borrow_mut();
-                            let ty_fut = _uf.callback(tv);
-                            drop(_uf);
-                            println!("dropped (field_access; var) (5)");
-                            ty_fut.await
-                        };
-                        println!("refined type: {:?}", refined_type);
-                        refined_type
-                    }
-                    PartialType::Struct { scope, .. } => {
-                        resolve_member_ref(&tc.sg, scope, field).await
-                    }
-                    PartialType::Number => panic!("number has no field {field}"),
-                }
+                let res = Self::typecheck_expr(tc.clone(), inner, scope).await;
+                let inner_expr_type = tc.with_unifier(|uf| uf.find_ty(res));
+                Self::type_check_field_access(tc, inner_expr_type, field).await
             }
             Expr::Let {
                 name,
@@ -333,14 +294,7 @@ impl<'a, 'sg> TypeChecker<'a> {
                     .expect("already closed");
                 tc.sg.close(new_scope, &RecordLabel::Lexical);
 
-                let ty_var = {
-                    println!("borrow_mut (let) (6)");
-                    let mut _uf = tc.uf.borrow_mut();
-                    let ty_var = PartialType::Variable(_uf.fresh());
-                    drop(_uf);
-                    println!("dropped (let) (6)");
-                    ty_var
-                };
+                let ty_var = PartialType::Variable(tc.with_unifier(|uf| uf.fresh()));
                 tc.sg
                     .add_decl(
                         new_scope,
@@ -358,12 +312,7 @@ impl<'a, 'sg> TypeChecker<'a> {
                 let _tc = tc.clone();
                 let ty_var_future = async move {
                     let ty = Self::typecheck_expr(_tc.clone(), value, scope).await;
-
-                    println!("borrow_mut (let; result) (7)");
-                    let mut _uf = _tc.uf.borrow_mut();
-                    _uf.unify(ty_var, ty);
-                    drop(_uf);
-                    println!("dropped (let; result) (7)");
+                    _tc.with_unifier(|uf| uf.unify(ty_var, ty))
                 };
 
                 // compute type of the result expression
@@ -385,19 +334,39 @@ impl<'a, 'sg> TypeChecker<'a> {
                 // return
                 ty_res_future.await
             }
+        };
+        ty_res
+    }
+
+    #[async_recursion::async_recursion(?Send)]
+    async fn type_check_field_access(
+        tc: Rc<TypeChecker<'a>>, 
+        inner_expr_type: PartialType, 
+        field: &String
+    ) -> PartialType 
+    where 'a: 'async_recursion
+    {
+        match inner_expr_type {
+            PartialType::Variable(tv) => {
+                let refined_type = tc.with_unifier(|uf| uf.callback(tv)).await;
+                Self::type_check_field_access(tc, refined_type, field).await
+            }
+            PartialType::Struct { scope, .. } => {
+                resolve_member_ref(&tc.sg, scope, field).await
+            }
+            PartialType::Number => panic!("number has no field {field}"),
         }
     }
 
     fn init_structdef(&self, struct_def: &StructDef, scope: Scope) -> Scope {
         let field_scope = self.sg.add_scope_default_with([RecordLabel::Definition]);
-        // FIXME: use Decl
-        let decl_scope = self.sg.add_scope(RecordData::TypeDecl {
-            name: struct_def.name.clone(),
-            ty: field_scope,
-        });
         self.sg
-            .add_edge(scope, RecordLabel::TypeDefinition, decl_scope)
+            .add_decl(scope, RecordLabel::TypeDefinition, RecordData::TypeDecl {
+                name: struct_def.name.clone(),
+                ty: field_scope,
+            })
             .expect("already closed");
+        self.sg.close(scope, &RecordLabel::Definition);
 
         field_scope
     }
@@ -436,7 +405,16 @@ impl<'a, 'sg> TypeChecker<'a> {
         });
 
         join_all(fld_decl_futures).await;
+        tc.sg.close(field_scope, &RecordLabel::Definition);
     }
+
+    fn with_unifier<T, F: FnOnce(&mut UnionFind) -> T>(&self, f: F) -> T {
+        let mut uf = self.uf.borrow_mut();
+        let res = f(&mut uf);
+        drop(uf);
+        res
+    }
+
 }
 async fn resolve_struct_ref(sg: &RecordScopegraph<'_>, scope: Scope, ref_name: &String) -> Scope {
     let env = sg
@@ -542,11 +520,8 @@ fn typecheck(ast: &Ast) -> PartialType {
         tc.sg.close(global_scope, &RecordLabel::TypeDefinition);
 
         let _tc = tc.clone();
-        let main_task = tc.ex.spawn(async move {
-            let ty_main = TypeChecker::typecheck_expr(_tc, &ast.main, global_scope).await;
-            println!("!!! type of main: {:?}", ty_main);
-            ty_main
-        });
+        let main_task = tc.ex
+            .spawn(TypeChecker::typecheck_expr(_tc.clone(), &ast.main, global_scope));
 
         while !tc.ex.is_empty() {
             tc.ex.tick().await;
@@ -590,5 +565,5 @@ fn main() {
         },
     };
 
-    println!("{:?}", typecheck(&example));
+    println!("Type of example is: {:?}", typecheck(&example));
 }
