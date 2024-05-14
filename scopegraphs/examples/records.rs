@@ -99,8 +99,10 @@ impl UnionFind {
                 // arbitrarily choose right as new representative
                 // FIXME: use rank heuristic in case right is a variable?
                 *self.get(v_left) = right.clone();
-                for mut fut in std::mem::take(&mut self.callbacks[v_left.0]) {
-                    fut.complete(right.clone());
+                if self.callbacks.len() > v_left.0 {
+                    for mut fut in std::mem::take(&mut self.callbacks[v_left.0]) {
+                        fut.complete(right.clone());
+                    }
                 }
             } else if let PartialType::Variable(_) = right {
                 // left is a variable/number, but right is a variable
@@ -166,7 +168,6 @@ impl UnionFind {
 
 #[derive(Debug)]
 enum Type {
-    #[allow(unused)]
     StructRef(String),
     Int,
 }
@@ -178,6 +179,7 @@ struct StructDef {
 }
 
 #[derive(Debug)]
+#[allow(unused)]
 enum Expr {
     StructInit {
         name: String,
@@ -190,6 +192,10 @@ enum Expr {
     Let {
         name: String,
         value: Box<Expr>,
+        in_expr: Box<Expr>,
+    },
+    LetRec {
+        values: HashMap<String, Expr>,
         in_expr: Box<Expr>,
     },
 }
@@ -324,6 +330,39 @@ impl<'a, 'sg> TypeChecker<'a> {
 
                 // return
                 ty_res_future.await
+            }
+            Expr::LetRec { values, in_expr } => {
+                let new_scope = tc
+                    .sg
+                    .add_scope_default_with([RecordLabel::Lexical, RecordLabel::Definition]);
+                tc.sg
+                    .add_edge(new_scope, RecordLabel::Lexical, scope)
+                    .expect("already closed");
+                tc.sg.close(new_scope, &RecordLabel::Lexical);
+
+                let _tc = tc.clone();
+                values.iter().for_each(|(name, init)| {
+                    let ty = PartialType::Variable(_tc.with_unifier(|uf| uf.fresh()));
+                    _tc.sg
+                        .add_decl(
+                            new_scope,
+                            RecordLabel::Definition,
+                            RecordData::VarDecl {
+                                name: name.clone(),
+                                ty: ty.clone(),
+                            },
+                        )
+                        .expect("already closed");
+                    let __tc = _tc.clone();
+                    _tc.run_detached(async move {
+                        let ty_init = Self::typecheck_expr(__tc.clone(), init, new_scope).await;
+                        __tc.with_unifier(|uf| uf.unify(ty, ty_init))
+                    });
+                });
+                tc.sg.close(new_scope, &RecordLabel::Definition);
+
+                // compute type of the result expression
+                Self::typecheck_expr(tc.clone(), in_expr, new_scope).await
             }
         };
         ty_res
@@ -522,30 +561,70 @@ fn typecheck(ast: &Ast) -> PartialType {
 
 fn main() {
     let example = Ast {
-        items: vec![StructDef {
-            name: "A".to_string(),
-            fields: {
-                let mut m = HashMap::new();
-                m.insert("y".to_string(), Type::Int);
-                m
-            },
-        }],
-        main: Expr::Let {
-            name: "x".to_string(),
-            value: Box::new(Expr::StructInit {
+        items: vec![
+            StructDef {
                 name: "A".to_string(),
                 fields: {
                     let mut m = HashMap::new();
-                    m.insert(
-                        "y".to_string(),
-                        Expr::Add(Box::new(Expr::Number(4)), Box::new(Expr::Number(5))),
-                    );
+                    m.insert("b".to_string(), Type::StructRef("B".to_string()));
+                    m.insert("x".to_string(), Type::Int);
                     m
                 },
-            }),
+            },
+            StructDef {
+                name: "B".to_string(),
+                fields: {
+                    let mut m = HashMap::new();
+                    m.insert("a".to_string(), Type::StructRef("A".to_string()));
+                    m.insert("x".to_string(), Type::Int);
+                    m
+                },
+            },
+        ],
+        main: Expr::LetRec {
+            values: {
+                let mut m = HashMap::new();
+                m.insert(
+                    "a".to_string(),
+                    Expr::StructInit {
+                        name: "A".to_string(),
+                        fields: {
+                            let mut m = HashMap::new();
+                            m.insert("b".to_string(), Expr::Ident("b".to_string()));
+                            m.insert(
+                                "x".to_string(),
+                                Expr::Add(Box::new(Expr::Number(4)), Box::new(Expr::Number(5))),
+                            );
+                            m
+                        },
+                    },
+                );
+                m.insert(
+                    "b".to_string(),
+                    Expr::StructInit {
+                        name: "B".to_string(),
+                        fields: {
+                            let mut m = HashMap::new();
+                            m.insert("a".to_string(), Expr::Ident("a".to_string()));
+                            m.insert(
+                                "x".to_string(),
+                                Expr::Add(Box::new(Expr::Number(4)), Box::new(Expr::Number(5))),
+                            );
+                            m
+                        },
+                    },
+                );
+                m
+            },
             in_expr: Box::new(Expr::FieldAccess(
-                Box::new(Expr::Ident("x".to_string())),
-                "y".to_string(),
+                Box::new(Expr::FieldAccess(
+                    Box::new(Expr::FieldAccess(
+                        Box::new(Expr::Ident("b".to_string())),
+                        "a".to_string(),
+                    )),
+                    "b".to_string(),
+                )),
+                "x".to_string(),
             )),
         },
     };
