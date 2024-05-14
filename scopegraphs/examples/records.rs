@@ -244,9 +244,8 @@ impl<'a, 'sg> TypeChecker<'a> {
                 // FIXME: field init exhaustiveness check omitted
 
                 // asynchronously check field initializations
-                for fut in fld_futures {
-                    tc.ex.spawn(fut).detach()
-                }
+                fld_futures.for_each(|fut| tc.run_detached(fut));
+
                 // .. but eagerly return the struct type
                 PartialType::Struct {
                     name: name.clone(),
@@ -525,14 +524,12 @@ fn typecheck(ast: &Ast) -> PartialType {
         for item in &ast.items {
             // synchronously init record decl
             let field_scope = tc.init_structdef(item, global_scope);
-            tc.ex
-                .spawn(TypeChecker::typecheck_structdef(
-                    tc.clone(),
-                    item,
-                    global_scope,
-                    field_scope,
-                ))
-                .detach();
+            tc.run_detached(TypeChecker::typecheck_structdef(
+                tc.clone(),
+                item,
+                global_scope,
+                field_scope,
+            ));
         }
 
         // We can close for type definitions since the scopes for this are synchronously made
