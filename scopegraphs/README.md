@@ -2,6 +2,14 @@
 ![docs.rs](https://img.shields.io/docsrs/scopegraphs?style=for-the-badge)
 ![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/metaborg/rust-scopegraphs/rust.yml?style=for-the-badge)
 
+> # Warning
+> This software is actively being developed, tested and documented.
+> Most features work, but we cannot guarantee api stability just yet,
+> nor is the documentation as good as we want it to be. If you don't understand
+> something, feel free to either document it for us, or let us know.
+>
+> **This library is not ready for production usage**
+
 Scope graphs are an abstraction that allow you to express the complicated
 name resolution patterns that many programming languages have.
 Put simply, a scope graph encodes what names are defined in which scopes of
