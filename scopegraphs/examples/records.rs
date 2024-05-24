@@ -817,6 +817,7 @@ in a.b.a.x;
 
     Ok(())
 }
+<<<<<<< HEAD
 
 #[cfg(test)]
 mod tests {
@@ -833,3 +834,5 @@ mod tests {
         test_example(" main = 42; ", ast::Type::Int)
     }
 }
+=======
+>>>>>>> fe89878 (Also add tests for nightly, remove failing test)
