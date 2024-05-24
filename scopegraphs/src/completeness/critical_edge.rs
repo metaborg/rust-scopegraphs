@@ -73,7 +73,7 @@ where
     CMPL: CriticalEdgeBasedCompleteness<LABEL, DATA>,
 {
     /// Adds a new scope with some open edges.
-    pub fn add_scope_with<I>(&mut self, data: DATA, open_edges: I) -> Scope
+    pub fn add_scope_with<I>(&self, data: DATA, open_edges: I) -> Scope
     where
         I: IntoIterator<Item = LABEL>,
     {
@@ -84,7 +84,7 @@ where
     }
 
     /// Adds a new scope with no open edges.
-    pub fn add_scope_closed(&mut self, data: DATA) -> Scope {
+    pub fn add_scope_closed(&self, data: DATA) -> Scope {
         let scope = self.inner_scope_graph.add_scope(data);
         self.completeness.init_scope_with(HashSet::new());
         scope
@@ -97,7 +97,7 @@ where
     CMPL: CriticalEdgeBasedCompleteness<LABEL, DATA>,
 {
     /// Adds a new scope with some open edges and default data.
-    pub fn add_scope_default_with<I>(&mut self, open_edges: I) -> Scope
+    pub fn add_scope_default_with<I>(&self, open_edges: I) -> Scope
     where
         I: IntoIterator<Item = LABEL>,
     {
@@ -105,7 +105,7 @@ where
     }
 
     /// Adds a new scope with no open edges and default data.
-    pub fn add_scope_default_closed(&mut self) -> Scope {
+    pub fn add_scope_default_closed(&self) -> Scope {
         self.add_scope_with(DATA::default(), HashSet::new())
     }
 }

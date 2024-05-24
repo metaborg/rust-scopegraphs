@@ -407,7 +407,7 @@ mod tests {
     fn test_label_order_async() {
         futures::executor::block_on(async {
             let storage = Storage::new();
-            let mut scope_graph: ScopeGraph<Lbl, TData, FutureCompleteness<Lbl>> =
+            let scope_graph: ScopeGraph<Lbl, TData, FutureCompleteness<Lbl>> =
                 ScopeGraph::new(&storage, FutureCompleteness::default());
 
             let s0 = scope_graph.add_scope_default_closed();
@@ -650,7 +650,7 @@ mod tests {
     #[test]
     fn test_label_order_complex_explicit_close() {
         let storage = Storage::new();
-        let mut scope_graph: ScopeGraph<Lbl, TData, ExplicitClose<Lbl>> =
+        let scope_graph: ScopeGraph<Lbl, TData, ExplicitClose<Lbl>> =
             ScopeGraph::new(&storage, ExplicitClose::default());
 
         let s0 = scope_graph.add_scope_default_closed();
@@ -701,7 +701,7 @@ mod tests {
     #[test]
     fn test_caching() {
         let storage = Storage::new();
-        let mut scope_graph: ScopeGraph<Lbl, TData, ImplicitClose<Lbl>> =
+        let scope_graph: ScopeGraph<Lbl, TData, ImplicitClose<Lbl>> =
             ScopeGraph::new(&storage, ImplicitClose::default());
 
         let s0 = scope_graph.add_scope_default_with([Def]);

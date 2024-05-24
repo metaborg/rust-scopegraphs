@@ -9,6 +9,7 @@ use std::io;
 use std::io::Write;
 use std::path::Path;
 
+/// Modifies how a scope is rendered based on user-defined scope data.
 pub trait RenderScopeData {
     /// Renders a scope (or probably rather, the data in a scope).
     /// Can return None if there's no data to render.

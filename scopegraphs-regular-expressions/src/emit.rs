@@ -29,7 +29,7 @@ impl Automaton {
                 quote!(
                     match token {
                         #(
-                            #matchers => {self.state = #new_states;}
+                            #alphabet::#matchers => {self.state = #new_states;}
                         ),*
                         _ => {self.state = #default_transition;}
                     }
