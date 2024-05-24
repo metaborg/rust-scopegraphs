@@ -1,9 +1,12 @@
 use self::completable_future::{CompletableFuture, CompletableFutureSignal};
+use crate::ast::{Expr, Program, StructDef, Type};
+use crate::resolve::{resolve_lexical_ref, resolve_member_ref, resolve_record_ref};
 use async_recursion::async_recursion;
 use futures::future::{join, join_all};
 use scopegraphs::completeness::FutureCompleteness;
+use scopegraphs::RenderScopeData;
 use scopegraphs::{Scope, ScopeGraph, Storage};
-use scopegraphs_macros::{Label};
+use scopegraphs_macros::Label;
 use smol::LocalExecutor;
 use std::cell::RefCell;
 use std::error::Error;
@@ -11,9 +14,6 @@ use std::fmt::{Debug, Formatter};
 use std::fs::File;
 use std::future::Future;
 use std::rc::Rc;
-use crate::ast::{Expr, Program, StructDef, Type};
-use crate::resolve::{resolve_lexical_ref, resolve_member_ref, resolve_record_ref};
-use scopegraphs::RenderScopeData;
 
 #[derive(Debug, Label, Copy, Clone, Hash, PartialEq, Eq)]
 enum SgLabel {
@@ -40,9 +40,9 @@ enum SgData {
 impl RenderScopeData for SgData {
     fn render(&self) -> Option<String> {
         match self {
-            SgData::VarDecl { name, ty} => Some(format!("var {name}: {ty:?}")),
-            SgData::TypeDecl { name, scope} => Some(format!("record {name} -> {scope:?}")),
-            SgData::Nothing => None
+            SgData::VarDecl { name, ty } => Some(format!("var {name}: {ty:?}")),
+            SgData::TypeDecl { name, scope } => Some(format!("record {name} -> {scope:?}")),
+            SgData::Nothing => None,
         }
     }
 }
@@ -192,6 +192,7 @@ impl UnionFind {
         &mut parent[tv.0]
     }
 
+    #[allow(unused)]
     fn type_of(&mut self, var: TypeVar) -> Option<Type> {
         match self.find(var) {
             PartialType::Variable(_) => None,
@@ -209,7 +210,7 @@ impl UnionFind {
     }
 
     /// Wait for when tv is unified with something.
-    fn wait_for_unification(&mut self, tv: TypeVar) -> impl Future<Output=PartialType> {
+    fn wait_for_unification(&mut self, tv: TypeVar) -> impl Future<Output = PartialType> {
         let future = CompletableFuture::<PartialType>::new();
         let callbacks = &mut self.callbacks;
         for _ in callbacks.len()..=tv.0 {
@@ -217,7 +218,7 @@ impl UnionFind {
         }
 
         callbacks[tv.0].push(future.signal());
-        
+
         future
     }
 }
@@ -243,10 +244,12 @@ mod ast {
             name: String,
             fields: HashMap<String, Expr>,
         },
+        #[allow(unused)]
         Add(Box<Expr>, Box<Expr>),
         Number(u64),
         Ident(String),
         FieldAccess(Box<Expr>, String),
+        #[allow(unused)]
         Let {
             name: String,
             value: Box<Expr>,
@@ -483,12 +486,16 @@ where
 }
 
 mod resolve {
-    use scopegraphs::{query_regex, Scope};
-    use scopegraphs::resolve::Resolve;
-    use scopegraphs_macros::label_order;
     use crate::{PartialType, RecordScopegraph, SgData, SgLabel};
+    use scopegraphs::resolve::Resolve;
+    use scopegraphs::{query_regex, Scope};
+    use scopegraphs_macros::label_order;
 
-    pub async fn resolve_record_ref(sg: &RecordScopegraph<'_>, scope: Scope, ref_name: &str) -> Scope {
+    pub async fn resolve_record_ref(
+        sg: &RecordScopegraph<'_>,
+        scope: Scope,
+        ref_name: &str,
+    ) -> Scope {
         let env = sg
             .query()
             .with_path_wellformedness(query_regex!(SgLabel: Lexical* TypeDefinition))
@@ -591,7 +598,9 @@ fn typecheck(ast: &Program) -> Option<Type> {
         res.await
     });
 
-    tc.sg.render(&mut File::create("sg.dot").unwrap(), "sg").unwrap();
+    tc.sg
+        .render(&mut File::create("sg.dot").unwrap(), "sg")
+        .unwrap();
     println!("{:?}", tc.uf.borrow());
 
     let resolved_main_ty = tc.uf.borrow_mut().type_of_partial_type(main_ty);
@@ -604,21 +613,17 @@ mod parse {
     use winnow::combinator::{alt, delimited, opt, preceded, repeat, separated, terminated};
     use winnow::error::{ParserError, StrContext};
 
+    use crate::ast::{Expr, Program, StructDef, Type};
     use winnow::prelude::*;
     use winnow::seq;
     use winnow::stream::AsChar;
     use winnow::token::{one_of, take_while};
-    use crate::ast::{Program, Expr, StructDef, Type};
 
     fn ws<'a, F, O, E: ParserError<&'a str>>(inner: F) -> impl Parser<&'a str, O, E>
-        where
-            F: Parser<&'a str, O, E>,
+    where
+        F: Parser<&'a str, O, E>,
     {
-        delimited(
-            multispace0,
-            inner,
-            multispace0
-        )
+        delimited(multispace0, inner, multispace0)
     }
 
     fn parse_ident(input: &mut &'_ str) -> PResult<String> {
@@ -627,12 +632,9 @@ mod parse {
             take_while(0.., |c: char| c.is_alphanum() || c == '_'),
         )
             .recognize()
-            .verify(|i: &str| {
-                i != "in" && i != "new" && i != "letrec" && i != "record"
-            })
-        )
-            .parse_next(input)
-            .map(|i| i.to_string())
+            .verify(|i: &str| i != "in" && i != "new" && i != "letrec" && i != "record"))
+        .parse_next(input)
+        .map(|i| i.to_string())
     }
 
     fn parse_int(input: &mut &'_ str) -> PResult<u64> {
@@ -640,27 +642,29 @@ mod parse {
             1..,
             terminated(one_of('0'..='9'), repeat(0.., '_').map(|()| ())),
         )
-            .map(|()| ())
-            .recognize()
-            .parse_next(input)
-            .map(|i| i.parse().expect("not an integer"))
+        .map(|()| ())
+        .recognize()
+        .parse_next(input)
+        .map(|i| i.parse().expect("not an integer"))
     }
 
     fn parse_type(input: &mut &'_ str) -> PResult<Type> {
         ws(alt((
             "int".value(Type::Int),
             parse_ident.map(Type::StructRef),
-        ))).parse_next(input)
+        )))
+        .parse_next(input)
     }
 
     fn parse_field_def(input: &mut &'_ str) -> PResult<(String, Type)> {
         seq!(
-        _: multispace0,
-        parse_ident,
-        _: ws(":"),
-        parse_type,
-        _: multispace0,
-    ).parse_next(input)
+            _: multispace0,
+            parse_ident,
+            _: ws(":"),
+            parse_type,
+            _: multispace0,
+        )
+        .parse_next(input)
     }
 
     fn parse_field_defs(input: &mut &'_ str) -> PResult<HashMap<String, Type>> {
@@ -669,12 +673,13 @@ mod parse {
 
     fn parse_field(input: &mut &'_ str) -> PResult<(String, Expr)> {
         seq!(
-        _: multispace0,
-        parse_ident,
-        _: ws(":"),
-        parse_expr,
-        _: multispace0,
-    ).parse_next(input)
+            _: multispace0,
+            parse_ident,
+            _: ws(":"),
+            parse_expr,
+            _: multispace0,
+        )
+        .parse_next(input)
     }
 
     fn parse_fields(input: &mut &'_ str) -> PResult<HashMap<String, Expr>> {
@@ -683,21 +688,23 @@ mod parse {
 
     fn parse_item(input: &mut &'_ str) -> PResult<StructDef> {
         seq! {StructDef {
-        name: parse_ident,
-        // `_` fields are ignored when building the struct
-        _: ws("{"),
-        fields: parse_field_defs,
-        _: ws("}"),
-    }}.parse_next(input)
+            name: parse_ident,
+            // `_` fields are ignored when building the struct
+            _: ws("{"),
+            fields: parse_field_defs,
+            _: ws("}"),
+        }}
+        .parse_next(input)
     }
 
     fn parse_value(input: &mut &'_ str) -> PResult<(String, Expr)> {
         seq!(
-        parse_ident,
-        _: ws("="),
-        parse_expr,
-        _: ws(";")
-    ).parse_next(input)
+            parse_ident,
+            _: ws("="),
+            parse_expr,
+            _: ws(";")
+        )
+        .parse_next(input)
     }
 
     fn parse_values(input: &mut &'_ str) -> PResult<HashMap<String, Expr>> {
@@ -709,33 +716,41 @@ mod parse {
             parse_int.map(Expr::Number),
             parse_ident.map(Expr::Ident),
             seq! {
-            _: ws("new"),
-            parse_ident,
-            // `_` fields are ignored when building the struct
-            _: ws("{"),
-            parse_fields,
-            _: ws("}"),
-        }.map(|(name, fields)| Expr::StructInit { name, fields }),
+                _: ws("new"),
+                parse_ident,
+                // `_` fields are ignored when building the struct
+                _: ws("{"),
+                parse_fields,
+                _: ws("}"),
+            }
+            .map(|(name, fields)| Expr::StructInit { name, fields }),
             seq! {
-            _: ws("letrec"),
-            parse_values,
-            _: ws("in"),
-            parse_expr,
-        }.map(|(values, in_expr)| Expr::LetRec { values, in_expr: Box::new(in_expr) }),
+                _: ws("letrec"),
+                parse_values,
+                _: ws("in"),
+                parse_expr,
+            }
+            .map(|(values, in_expr)| Expr::LetRec {
+                values,
+                in_expr: Box::new(in_expr),
+            }),
             seq! {
-            _: ws("("),
-            parse_expr,
-            _: ws(")"),
-        }.map(|(i, )| i),
-        )).context(StrContext::Label("parse expr"))
-            .parse_next(input)
+                _: ws("("),
+                parse_expr,
+                _: ws(")"),
+            }
+            .map(|(i,)| i),
+        ))
+        .context(StrContext::Label("parse expr"))
+        .parse_next(input)
     }
 
     fn parse_expr(input: &mut &'_ str) -> PResult<Expr> {
         let first = ws(parse_basic_expr).parse_next(input)?;
-        let mut res = repeat(0.., (ws("."), parse_ident).map(|(_, i)| i)).fold(|| first.clone(), |acc, val| {
-            Expr::FieldAccess(Box::new(acc), val)
-        });
+        let mut res = repeat(0.., (ws("."), parse_ident).map(|(_, i)| i)).fold(
+            || first.clone(),
+            |acc, val| Expr::FieldAccess(Box::new(acc), val),
+        );
 
         res.parse_next(input)
     }
@@ -750,18 +765,18 @@ mod parse {
         let mut main = None;
 
         while !input.is_empty() {
-            match ws(
-                alt((
-                    ws(preceded(ws("record"), parse_item.map(ItemOrExpr::Item))),
-                    seq!(
+            match ws(alt((
+                ws(preceded(ws("record"), parse_item.map(ItemOrExpr::Item))),
+                seq!(
                     _: ws("main"),
                     _: ws("="),
                     ws(parse_expr.map(ItemOrExpr::Expr)),
                     _: ws(";"),
-                ).map(|(i, )| i),
-                )).context(StrContext::Label("parse item")),
-            )
-                .parse_next(&mut input)?
+                )
+                .map(|(i,)| i),
+            ))
+            .context(StrContext::Label("parse item")))
+            .parse_next(&mut input)?
             {
                 ItemOrExpr::Expr(e) => main = Some(e),
                 ItemOrExpr::Item(i) => items.push(i),
