@@ -72,8 +72,8 @@ pub struct TypeVar(usize);
 enum PartialType {
     /// A variable
     Variable(TypeVar),
-    /// A struct named `name` with a scope.
-    /// The scope contains the field of the struct.
+    /// A record named `name` with a scope.
+    /// The scope contains the field of the record.
     /// See "scopes as types"
     Record { name: String, scope: Scope },
     /// A number type
@@ -293,13 +293,13 @@ where
     async fn typecheck_expr<'a>(self: Rc<Self>, ast: &'ex Expr, scope: Scope) -> PartialType {
         match ast {
             Expr::StructInit { name, fields } => {
-                let struct_scope = resolve_record_ref(&self.sg, scope, name).await;
+                let record_scope = resolve_record_ref(&self.sg, scope, name).await;
 
                 // defer typechecking of all the fields..
                 for (field_name, field_initializer) in fields {
                     self.spawn(|this| async move {
                         let (decl_type, init_type) = join(
-                            resolve_member_ref(&this.sg, struct_scope, field_name),
+                            resolve_member_ref(&this.sg, record_scope, field_name),
                             this.clone().typecheck_expr(field_initializer, scope),
                         )
                         .await;
@@ -310,10 +310,10 @@ where
 
                 // FIXME: field init exhaustiveness check omitted
 
-                // .. but eagerly return the struct type
+                // .. but eagerly return the record type
                 PartialType::Record {
                     name: name.clone(),
-                    scope: struct_scope,
+                    scope: record_scope,
                 }
             }
             Expr::Add(l, r) => {
@@ -430,14 +430,14 @@ where
         }
     }
 
-    fn init_struct_def(&self, struct_def: &StructDef, scope: Scope) -> Scope {
+    fn init_record_def(&self, record_def: &StructDef, scope: Scope) -> Scope {
         let field_scope = self.sg.add_scope_default_with([SgLabel::Definition]);
         self.sg
             .add_decl(
                 scope,
                 SgLabel::TypeDefinition,
                 SgData::TypeDecl {
-                    name: struct_def.name.clone(),
+                    name: record_def.name.clone(),
                     scope: field_scope,
                 },
             )
@@ -447,21 +447,21 @@ where
         field_scope
     }
 
-    async fn typecheck_struct_def(
+    async fn typecheck_record_def(
         self: Rc<Self>,
-        struct_def: &StructDef,
+        record_def: &StructDef,
         scope: Scope,
         field_scope: Scope,
     ) {
-        let fld_decl_futures = struct_def.fields.iter().map(|(fld_name, fld_ty)| {
+        let fld_decl_futures = record_def.fields.iter().map(|(fld_name, fld_ty)| {
             let this = self.clone();
             async move {
                 let ty = match fld_ty {
                     Type::StructRef(n) => {
-                        let struct_scope = resolve_record_ref(&this.sg, scope, n).await;
+                        let record_scope = resolve_record_ref(&this.sg, scope, n).await;
                         PartialType::Record {
                             name: n.clone(),
-                            scope: struct_scope,
+                            scope: record_scope,
                         }
                     }
                     Type::Int => PartialType::Int,
@@ -539,7 +539,7 @@ mod resolve {
 
     pub async fn resolve_member_ref(
         sg: &RecordScopegraph<'_>,
-        struct_scope: Scope,
+        record_scope: Scope,
         ref_name: &str,
     ) -> PartialType {
         let env = sg
@@ -551,7 +551,7 @@ mod resolve {
                 } => decl_name == ref_name,
                 _ => false,
             })
-            .resolve(struct_scope)
+            .resolve(record_scope)
             .await;
 
         env.get_only_item()
@@ -575,8 +575,8 @@ fn typecheck(ast: &Program) -> Option<Type> {
     // typecheck all the type definitions somewhere in the future
     for item in &ast.items {
         // synchronously init record decl
-        let field_scope = tc.init_struct_def(item, global_scope);
-        tc.spawn(|this| this.typecheck_struct_def(item, global_scope, field_scope));
+        let field_scope = tc.init_record_def(item, global_scope);
+        tc.spawn(|this| this.typecheck_record_def(item, global_scope, field_scope));
     }
 
     // We can close for type definitions since the scopes for this are synchronously
@@ -689,7 +689,7 @@ mod parse {
     fn parse_item(input: &mut &'_ str) -> PResult<StructDef> {
         seq! {StructDef {
             name: parse_ident,
-            // `_` fields are ignored when building the struct
+            // `_` fields are ignored when building the record
             _: ws("{"),
             fields: parse_field_defs,
             _: ws("}"),
@@ -718,7 +718,7 @@ mod parse {
             seq! {
                 _: ws("new"),
                 parse_ident,
-                // `_` fields are ignored when building the struct
+                // `_` fields are ignored when building the record
                 _: ws("{"),
                 parse_fields,
                 _: ws("}"),
