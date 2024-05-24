@@ -69,7 +69,6 @@ pub trait Completeness<LABEL, DATA>: Sealed {
         inner_scope_graph: &InnerScopeGraph<LABEL, DATA>,
         scope: Scope,
     ) {
-        // FIXME: has all scopes open!
         self.cmpl_new_scope(inner_scope_graph, scope)
     }
 

@@ -1,4 +1,4 @@
-use crate::ast::{Expr, Program, StructDef, Type};
+use crate::ast::{Expr, Program, RecordDef, Type};
 use crate::resolve::{resolve_lexical_ref, resolve_member_ref, resolve_record_ref};
 use async_recursion::async_recursion;
 use futures::future::{join, join_all};
@@ -84,13 +84,15 @@ enum PartialType {
 pub struct UnionFind {
     /// Records the parent of each type variable.
     /// Kind of assumes type variables are assigned linearly.
-    /// The "parent" of type variable 0 is stored at index 0
+    ///
+    /// For example the "parent" of type variable 0 is stored at index 0
     parent: Vec<PartialType>,
     /// Keep track of type variables we've given out
     vars: usize,
     /// A vec of signals for each type variable.
-    /// Whenever type variable 0 is unified with anything, we go through
-    /// the list at index 0 and notify each.
+    ///
+    /// For example, whenever type variable 0 is unified with anything,
+    /// we go through the list at index 0 and notify each.
     callbacks: Vec<Vec<Sender<PartialType>>>,
 }
 
@@ -233,7 +235,7 @@ mod ast {
     }
 
     #[derive(Debug)]
-    pub struct StructDef {
+    pub struct RecordDef {
         pub name: String,
         pub fields: HashMap<String, Type>,
     }
@@ -264,7 +266,7 @@ mod ast {
     #[derive(Debug)]
     pub struct Program {
         /// Items can occur in any order. Like in Rust!
-        pub items: Vec<StructDef>,
+        pub record_types: Vec<RecordDef>,
         pub main: Expr,
     }
 }
@@ -430,7 +432,7 @@ where
         }
     }
 
-    fn init_record_def(&self, record_def: &StructDef, scope: Scope) -> Scope {
+    fn init_record_def(&self, record_def: &RecordDef, scope: Scope) -> Scope {
         let field_scope = self.sg.add_scope_default_with([SgLabel::Definition]);
         self.sg
             .add_decl(
@@ -449,7 +451,7 @@ where
 
     async fn typecheck_record_def(
         self: Rc<Self>,
-        record_def: &StructDef,
+        record_def: &RecordDef,
         scope: Scope,
         field_scope: Scope,
     ) {
@@ -573,7 +575,7 @@ fn typecheck(ast: &Program) -> Option<Type> {
     let global_scope = tc.sg.add_scope_default_with([SgLabel::TypeDefinition]);
 
     // typecheck all the type definitions somewhere in the future
-    for item in &ast.items {
+    for item in &ast.record_types {
         // synchronously init record decl
         let field_scope = tc.init_record_def(item, global_scope);
         tc.spawn(|this| this.typecheck_record_def(item, global_scope, field_scope));
@@ -613,7 +615,7 @@ mod parse {
     use winnow::combinator::{alt, delimited, opt, preceded, repeat, separated, terminated};
     use winnow::error::{ParserError, StrContext};
 
-    use crate::ast::{Expr, Program, StructDef, Type};
+    use crate::ast::{Expr, Program, RecordDef, Type};
     use winnow::prelude::*;
     use winnow::seq;
     use winnow::stream::AsChar;
@@ -686,8 +688,8 @@ mod parse {
         terminated(separated(0.., ws(parse_field), ws(",")), opt(ws(","))).parse_next(input)
     }
 
-    fn parse_item(input: &mut &'_ str) -> PResult<StructDef> {
-        seq! {StructDef {
+    fn parse_item(input: &mut &'_ str) -> PResult<RecordDef> {
+        seq! {RecordDef {
             name: parse_ident,
             // `_` fields are ignored when building the record
             _: ws("{"),
@@ -756,7 +758,7 @@ mod parse {
     }
 
     enum ItemOrExpr {
-        Item(StructDef),
+        Item(RecordDef),
         Expr(Expr),
     }
 
@@ -784,7 +786,7 @@ mod parse {
         }
 
         Ok(Program {
-            items,
+            record_types: items,
             main: main.expect("no main"),
         })
     }
