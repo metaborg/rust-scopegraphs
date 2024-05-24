@@ -817,12 +817,3 @@ in a.b.a.x;
 
     Ok(())
 }
-
-#[cfg(test)]
-mod tests {
-
-    #[test]
-    pub fn test_fail() {
-        panic!("test in example!")
-    }
-}
