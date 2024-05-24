@@ -6,6 +6,7 @@ use scopegraphs::completeness::FutureCompleteness;
 use scopegraphs::RenderScopeData;
 use scopegraphs::{Scope, ScopeGraph, Storage};
 use scopegraphs_macros::Label;
+use smol::channel::{bounded, Sender};
 use smol::LocalExecutor;
 use std::cell::RefCell;
 use std::error::Error;
@@ -13,8 +14,6 @@ use std::fmt::{Debug, Formatter};
 use std::fs::File;
 use std::future::Future;
 use std::rc::Rc;
-use smol::channel::{bounded, Sender};
-
 
 #[derive(Debug, Label, Copy, Clone, Hash, PartialEq, Eq)]
 enum SgLabel {
@@ -220,9 +219,7 @@ impl UnionFind {
         let (tx, rx) = bounded(1);
         callbacks[tv.0].push(tx);
 
-        async move {
-            rx.recv().await.expect("sender dropped")
-        }
+        async move { rx.recv().await.expect("sender dropped") }
     }
 }
 

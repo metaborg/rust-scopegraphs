@@ -9,10 +9,10 @@
 //!
 //! Currently, the module contains three safe implementations.
 //! * [`ImplicitClose`] is the easiest to use, and most likely the preferred choice for simple
-//! sequential type checkers.
+//!   sequential type checkers.
 //! * [`ExplicitClose`] requires some manual bookkeeping, but allows more flexible handling of
-//! queries. This is the most suitable choice for type checkers that need to do dynamic scheduling.
-//! Running queries can return an error, because scopes relevant to the query weren't closed yet.
+//!   queries. This is the most suitable choice for type checkers that need to do dynamic scheduling.
+//!   Running queries can return an error, because scopes relevant to the query weren't closed yet.
 //! * [`FutureCompleteness`] is like [`ExplicitClose`], except queries can no longer error. Instead,
 //!   queries return a [`Future`](std::future::Future) that resolves when all scopes related to the query are closed.
 
