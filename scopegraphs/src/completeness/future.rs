@@ -43,6 +43,13 @@ impl<LABEL: Hash + Eq + Label + Copy, DATA> Completeness<LABEL, DATA>
         self.explicit_close.cmpl_new_scope(inner_scope_graph, scope)
     }
 
+    fn cmpl_new_complete_scope(&self, _: &InnerScopeGraph<LABEL, DATA>, _: Scope) {
+        <FutureCompleteness<LABEL> as CriticalEdgeBasedCompleteness<LABEL, DATA>>::init_scope_with(
+            self,
+            HashSet::new(), // init with empty label set to prevent extension
+        )
+    }
+
     type NewEdgeResult = <ExplicitClose<LABEL> as Completeness<LABEL, DATA>>::NewEdgeResult;
 
     fn cmpl_new_edge(

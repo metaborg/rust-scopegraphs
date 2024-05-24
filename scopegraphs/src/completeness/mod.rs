@@ -17,6 +17,7 @@
 //!   queries return a [`Future`](std::future::Future) that resolves when all scopes related to the query are closed.
 
 mod future;
+
 pub use future::*;
 
 mod critical_edge;
@@ -68,9 +69,7 @@ pub trait Completeness<LABEL, DATA>: Sealed {
         &self,
         inner_scope_graph: &InnerScopeGraph<LABEL, DATA>,
         scope: Scope,
-    ) {
-        self.cmpl_new_scope(inner_scope_graph, scope)
-    }
+    );
 
     type NewEdgeResult;
     fn cmpl_new_edge(
