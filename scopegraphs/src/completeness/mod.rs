@@ -28,6 +28,8 @@ mod implicit;
 pub use implicit::*;
 mod unchecked;
 pub use unchecked::*;
+mod drop;
+pub use drop::*;
 
 mod private {
     pub trait Sealed {}
