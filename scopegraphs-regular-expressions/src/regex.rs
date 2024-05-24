@@ -2,7 +2,6 @@ use crate::compile::AlphabetOrder;
 use proc_macro2::TokenStream;
 use std::collections::HashSet;
 use std::fmt::Debug;
-#[cfg(feature = "pretty-print")]
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::hash::{Hash, Hasher};
@@ -14,31 +13,26 @@ pub struct Symbol {
     pub(super) name: Path,
 }
 
-#[cfg(feature = "pretty-print")]
 impl Eq for Symbol {}
 
-#[cfg(feature = "pretty-print")]
 impl PartialEq for Symbol {
     fn eq(&self, other: &Self) -> bool {
         self.to_string() == other.to_string()
     }
 }
 
-#[cfg(feature = "pretty-print")]
 impl Debug for Symbol {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         Display::fmt(self, f)
     }
 }
 
-#[cfg(feature = "pretty-print")]
 impl Hash for Symbol {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.to_string().hash(state)
     }
 }
 
-#[cfg(feature = "pretty-print")]
 impl Display for Symbol {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let name = &self.name;
@@ -341,7 +335,6 @@ fn normalize_and(l: &Rc<Regex>, r: &Rc<Regex>, ab: &AlphabetOrder) -> Rc<Regex> 
     }
 }
 
-#[cfg(feature = "pretty-print")]
 impl Display for Regex {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {

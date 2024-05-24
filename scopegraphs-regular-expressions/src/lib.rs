@@ -17,7 +17,6 @@ mod dynamic;
 mod parse;
 mod regex;
 
-#[cfg(feature = "rust-code-emitting")]
 mod emit;
 
 #[cfg(feature = "dot")]
