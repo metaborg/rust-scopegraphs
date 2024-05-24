@@ -228,7 +228,7 @@ impl UnionFind {
 mod ast {
     use std::collections::HashMap;
 
-    #[derive(Debug, Clone)]
+    #[derive(Debug, Clone, PartialEq, Eq)]
     pub enum Type {
         StructRef(String),
         Int,
@@ -816,4 +816,20 @@ in a.b.a.x;
     println!("Type of example is: {:?}", typecheck(&example));
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{ast, parse::parse, typecheck};
+
+    fn test_example(program: &str, expected_main_type: ast::Type) {
+        let ast = parse(program).expect("parse failure");
+        let ty = typecheck(&ast).expect("type not instantiated");
+        assert_eq!(ty, expected_main_type)
+    }
+
+    #[test]
+    fn test_integer() {
+        test_example(" main = 42; ", ast::Type::Int)
+    }
 }
