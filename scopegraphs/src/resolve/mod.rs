@@ -394,10 +394,13 @@ pub trait Resolve<'sg, 'rslv> {
     /// This depends on the [completeness strategy](crate::completeness::Completeness) used.
     ///
     /// * Using [`ImplicitClose`](crate::completeness::ImplicitClose) this is a simply a `Vec<Scope>`.
-    /// Querying using this completeness strategy cannot fail.
+    ///   Querying using this completeness strategy cannot fail.
     /// * Using [`ExplicitClose`](crate::completeness::ExplicitClose) this is a [`EdgesOrDelay<Scope, LABEL>`](crate::completeness::EdgesOrDelay).
+    ///
     /// Querying can fail, because a scope this query traverses wasn't closed yet.
+    ///
     /// Using [`FutureCompleteness`](crate::completeness::FutureCompleteness), this is a [`Future`](std::future::Future).
+    ///
     /// Querying can pend, because a scope this query traverses wasn't closed yet.
     type EnvContainer
     where

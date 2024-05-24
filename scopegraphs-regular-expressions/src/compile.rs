@@ -30,6 +30,7 @@ impl MatchState {
 /// This struct can either be turned into a
 /// * [`DynamicMatcher`](crate::dynamic::DynamicMatcher) to match on a regex that was compiled at runtime.
 /// * An implementation of [`RegexMatcher`](crate::RegexMatcher) generated using [emit](Automaton::emit).
+///
 /// This function can be called at compile time (through the `compile_regex!` macro) and it
 /// emits the Rust code that can match the regular expression.
 ///
