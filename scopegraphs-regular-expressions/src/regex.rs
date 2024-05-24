@@ -14,20 +14,24 @@ pub struct Symbol {
     pub(super) name: Path,
 }
 
+#[cfg(feature = "pretty-print")]
 impl Eq for Symbol {}
 
+#[cfg(feature = "pretty-print")]
 impl PartialEq for Symbol {
     fn eq(&self, other: &Self) -> bool {
         self.to_string() == other.to_string()
     }
 }
 
+#[cfg(feature = "pretty-print")]
 impl Debug for Symbol {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         Display::fmt(self, f)
     }
 }
 
+#[cfg(feature = "pretty-print")]
 impl Hash for Symbol {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.to_string().hash(state)
