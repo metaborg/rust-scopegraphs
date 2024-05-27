@@ -18,3 +18,4 @@ Cargo.lock
 .idea/
 
 *.dot
+.direnv
