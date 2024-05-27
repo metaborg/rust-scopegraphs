@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use winnow::ascii::multispace0;
 use winnow::combinator::{alt, delimited, opt, preceded, repeat, separated, terminated};
 use winnow::error::{ParserError, StrContext};
@@ -57,7 +56,7 @@ fn parse_field_def(input: &mut &'_ str) -> PResult<(String, Type)> {
     .parse_next(input)
 }
 
-fn parse_field_defs(input: &mut &'_ str) -> PResult<HashMap<String, Type>> {
+fn parse_field_defs(input: &mut &'_ str) -> PResult<Vec<(String, Type)>> {
     terminated(separated(0.., ws(parse_field_def), ws(",")), opt(ws(","))).parse_next(input)
 }
 
@@ -72,7 +71,7 @@ fn parse_field(input: &mut &'_ str) -> PResult<(String, Expr)> {
     .parse_next(input)
 }
 
-fn parse_fields(input: &mut &'_ str) -> PResult<HashMap<String, Expr>> {
+fn parse_fields(input: &mut &'_ str) -> PResult<Vec<(String, Expr)>> {
     terminated(separated(0.., ws(parse_field), ws(",")), opt(ws(","))).parse_next(input)
 }
 
@@ -97,7 +96,7 @@ fn parse_value(input: &mut &'_ str) -> PResult<(String, Expr)> {
     .parse_next(input)
 }
 
-fn parse_values(input: &mut &'_ str) -> PResult<HashMap<String, Expr>> {
+fn parse_values(input: &mut &'_ str) -> PResult<Vec<(String, Expr)>> {
     repeat(0.., parse_value).parse_next(input)
 }
 
