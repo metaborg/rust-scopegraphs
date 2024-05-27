@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Type {
     StructRef(String),
@@ -9,14 +7,14 @@ pub enum Type {
 #[derive(Debug)]
 pub struct RecordDef {
     pub name: String,
-    pub fields: HashMap<String, Type>,
+    pub fields: Vec<(String, Type)>,
 }
 
 #[derive(Debug, Clone)]
 pub enum Expr {
     StructInit {
         name: String,
-        fields: HashMap<String, Expr>,
+        fields: Vec<(String, Expr)>,
     },
     #[allow(unused)]
     Add(Box<Expr>, Box<Expr>),
@@ -30,7 +28,7 @@ pub enum Expr {
         in_expr: Box<Expr>,
     },
     LetRec {
-        values: HashMap<String, Expr>,
+        values: Vec<(String, Expr)>,
         in_expr: Box<Expr>,
     },
 }

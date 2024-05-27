@@ -392,7 +392,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic = "duplicate definition"]
+    #[should_panic = "variable did not resolve uniquely: OnlyElementError::Multiple {..}"]
     fn test_letrec_shadow() {
         test_example(
             "record A {} main = letrec a = new A {}; a = 42; in a;",
