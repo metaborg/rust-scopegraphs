@@ -4,17 +4,28 @@ use crate::{Label, Scope, ScopeGraph};
 
 use super::ExplicitClose;
 
-/// Represents the permission to extend a scope with
-pub struct ScopeExt<'ext, 'storage, LABEL: Hash + Eq + Label, DATA> {
-    // Bound on Label required for Drop implementation
+/// Represents the permission to extend a scope with a particular label.
+///
+/// Do not instantiate this struct manually, but use the [new_scope_with_ext] macro instead.
+pub struct ScopeExt<
+    'ext,
+    'storage,
+    LABEL: Hash + Eq + Label, /* <= Bound here required for Drop implementation */
+    DATA,
+> {
+    /// Scope for which this object witnesses the permission to extend.
     scope: Scope,
+    /// Label with which [scope] may be extended
     label: LABEL,
+    /// Scope graph in which the scope may be extended.
     sg: &'ext ScopeGraph<'storage, LABEL, DATA, ExplicitClose<LABEL>>,
 }
 
 impl<'ext, 'storage, LABEL: Hash + Eq + Label, DATA> Drop
     for ScopeExt<'ext, 'storage, LABEL, DATA>
 {
+    /// This is the trick! When the permission is dropped, we know for sure that no future extensions will be made (otherwise, [self] should have been kept alive)
+    /// Thus, we can close the critical edge.
     fn drop(&mut self) {
         self.sg.close(self.scope, &self.label)
     }
@@ -43,12 +54,15 @@ macro_rules! new_scope_with_ext {
         let sg = $sg;       // evaluate scope graph expression
         let data = $data;   // evaluate data expression
 
+        // create new scope
         let scope = sg.add_scope_with(data, [$($lbl),*]);
 
-        (scope $(, unsafe { ScopeExt::init(scope, $lbl, sg) } )*)
+        // return the scope, and the extension permissions
+        (scope, $(unsafe { ScopeExt::init(scope, $lbl, sg) }),*)
     }
   };
 
+  // case when no data is given: falls back on [Default] value for data
   ($sg:expr, [$($lbl:expr),* ]) => { new_scope_with_ext!($sg, Default::default(), [$($lbl),*]) };
 }
 
@@ -56,9 +70,11 @@ impl<'ext, 'storage, LABEL: Hash + Eq + Label + Copy + Debug, DATA>
     ScopeGraph<'storage, LABEL, DATA, ExplicitClose<LABEL>>
 {
     /// Adds a new edge to the target. The source and label are inferred from the `scope_ext` argument.
+    ///
+    /// By virtue of the [ScopeExt] still being alive, we are guaranteed that the edge is still open.
     pub fn ext_edge(&self, scope_ext: &ScopeExt<'ext, 'storage, LABEL, DATA>, target: Scope) {
         self.add_edge(scope_ext.scope, scope_ext.label, target)
-            .expect("existence of ScopeExt instance guarantees safety");
+            .expect("Existence of ScopeExt instance guarantees safety");
     }
 }
 
