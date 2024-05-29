@@ -1,72 +1,101 @@
-use crate::{scopegraph::InnerScopeGraph, Label, Scope, ScopeGraph};
+use std::{fmt::Debug, hash::Hash};
 
-use super::{private::Sealed, Completeness, CriticalEdgeBasedCompleteness, ExplicitClose};
+use crate::{Label, Scope, ScopeGraph};
 
-use std::{collections::HashSet, hash::Hash};
+use super::ExplicitClose;
 
-/// Completeness implementation that leverages the [Drop] trait to close edges.
-#[derive(Debug, Default)]
-pub struct DropClose<LABEL> {
-    explicit_close: ExplicitClose<LABEL>,
-}
-
-impl<LABEL> Sealed for DropClose<LABEL> {}
-
-impl<LABEL: Hash + Eq + Label, DATA> Completeness<LABEL, DATA> for DropClose<LABEL> {
-    fn cmpl_new_scope(&self, inner_scope_graph: &InnerScopeGraph<LABEL, DATA>, scope: Scope) {
-        self.explicit_close.cmpl_new_scope(inner_scope_graph, scope)
-    }
-
-    fn cmpl_new_complete_scope(
-        &self,
-        inner_scope_graph: &InnerScopeGraph<LABEL, DATA>,
-        scope: Scope,
-    ) {
-        self.explicit_close
-            .cmpl_new_complete_scope(inner_scope_graph, scope)
-    }
-
-    type NewEdgeResult = <ExplicitClose<LABEL> as Completeness<LABEL, DATA>>::NewEdgeResult;
-
-    fn cmpl_new_edge(
-        &self,
-        inner_scope_graph: &InnerScopeGraph<LABEL, DATA>,
-        src: Scope,
-        lbl: LABEL,
-        dst: Scope,
-    ) -> Self::NewEdgeResult {
-        self.explicit_close
-            .cmpl_new_edge(inner_scope_graph, src, lbl, dst)
-    }
-
-    type GetEdgesResult<'rslv> = <ExplicitClose<LABEL> as Completeness<LABEL, DATA>>::GetEdgesResult<'rslv>
-        where Self: 'rslv, LABEL: 'rslv, DATA: 'rslv;
-
-    fn cmpl_get_edges<'rslv>(
-        &'rslv self,
-        inner_scope_graph: &'rslv InnerScopeGraph<LABEL, DATA>,
-        src: Scope,
-        lbl: LABEL,
-    ) -> Self::GetEdgesResult<'rslv>
-    where
-        LABEL: 'rslv,
-        DATA: 'rslv,
-    {
-        self.explicit_close
-            .cmpl_get_edges(inner_scope_graph, src, lbl)
-    }
-}
-
-impl<LABEL: Hash + Eq + Label, DATA> CriticalEdgeBasedCompleteness<LABEL, DATA>
-    for DropClose<LABEL>
-{
-    fn init_scope_with(&self, open_edges: HashSet<LABEL>) {
-        CriticalEdgeBasedCompleteness::<_, DATA>::init_scope_with(&self.explicit_close, open_edges)
-    }
-}
-
-pub struct ScopeExt<'ext, 'storage, LABEL, DATA, CMPL> {
+/// Represents the permission to extend a scope with
+pub struct ScopeExt<'ext, 'storage, LABEL: Hash + Eq + Label, DATA> {
+    // Bound on Label required for Drop implementation
     scope: Scope,
     label: LABEL,
-    sg: &'ext ScopeGraph<'storage, LABEL, DATA, CMPL>,
+    sg: &'ext ScopeGraph<'storage, LABEL, DATA, ExplicitClose<LABEL>>,
+}
+
+impl<'ext, 'storage, LABEL: Hash + Eq + Label, DATA> Drop
+    for ScopeExt<'ext, 'storage, LABEL, DATA>
+{
+    fn drop(&mut self) {
+        self.sg.close(self.scope, &self.label)
+    }
+}
+
+impl<'ext, 'storage, LABEL: Hash + Eq + Label, DATA> ScopeExt<'ext, 'storage, LABEL, DATA> {
+    /// This is an implementation detail of the [new_scope_with_ext!] macro and should not be called directly!
+    #[doc(hidden)]
+    pub unsafe fn init(
+        scope: Scope,
+        label: LABEL,
+        sg: &'ext ScopeGraph<'storage, LABEL, DATA, ExplicitClose<LABEL>>,
+    ) -> ScopeExt<'ext, 'storage, LABEL, DATA> {
+        ScopeExt { scope, label, sg }
+    }
+}
+
+/// Creates a scope (with some data if specified), and permission to extend it for each label specified in the label list argument.
+///
+/// TODO: Better documentation, examples.
+#[macro_export]
+macro_rules! new_scope_with_ext {
+  ($sg:expr, $data:expr, [ $($lbl:expr),* ]) => {
+    {
+        // put initialized code in block
+        let sg = $sg;       // evaluate scope graph expression
+        let data = $data;   // evaluate data expression
+
+        let scope = sg.add_scope_with(data, [$($lbl),*]);
+
+        (scope $(, unsafe { ScopeExt::init(scope, $lbl, sg) } )*)
+    }
+  };
+
+  ($sg:expr, [$($lbl:expr),* ]) => { new_scope_with_ext!($sg, Default::default(), [$($lbl),*]) };
+}
+
+impl<'ext, 'storage, LABEL: Hash + Eq + Label + Copy + Debug, DATA>
+    ScopeGraph<'storage, LABEL, DATA, ExplicitClose<LABEL>>
+{
+    /// Adds a new edge to the target. The source and label are inferred from the `scope_ext` argument.
+    pub fn ext_edge(&self, scope_ext: &ScopeExt<'ext, 'storage, LABEL, DATA>, target: Scope) {
+        self.add_edge(scope_ext.scope, scope_ext.label, target)
+            .expect("existence of ScopeExt instance guarantees safety");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{
+        completeness::ExplicitClose, completeness::ScopeExt, storage::Storage, Label, ScopeGraph,
+    };
+
+    use std::cmp::{Eq, PartialEq};
+
+    pub mod scopegraphs {
+        pub use crate::*;
+    }
+
+    #[derive(Debug, Hash, Label, PartialEq, Eq, Clone, Copy)]
+    enum Lbl {
+        Lbl1,
+        Lbl2,
+    }
+
+    #[test]
+    pub fn with_drop() {
+        let storage = Storage::new();
+        let scope_graph: ScopeGraph<Lbl, (), ExplicitClose<Lbl>> =
+            ScopeGraph::new(&storage, ExplicitClose::default());
+
+        let (s1, lbl12_ext) = new_scope_with_ext!(&scope_graph, (), [Lbl::Lbl2]);
+        let (s2, lbl21_ext, lbl22_ext) = new_scope_with_ext!(&scope_graph, [Lbl::Lbl1, Lbl::Lbl2]);
+
+        scope_graph.ext_edge(&lbl12_ext, s2);
+        scope_graph.ext_edge(&lbl21_ext, s1);
+        scope_graph.ext_edge(&lbl22_ext, s1);
+
+        drop(lbl12_ext);
+        drop(lbl21_ext);
+        println!("{:?}", scope_graph);
+        drop(lbl22_ext);
+    }
 }
