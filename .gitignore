@@ -19,3 +19,5 @@ Cargo.lock
 
 *.dot
 .direnv
+
+**/render-docs

@@ -30,4 +30,16 @@ pub mod completeness;
 pub mod data_wellformedness;
 pub mod data_equivalence;
 pub mod path_wellformedness;
-pub mod label_ordering;
+
+#[aquamarine::aquamarine]
+/// # Label Ordering
+///
+/// ```mermaid
+/// graph LR
+///     s([Source]) --> a[[aquamarine]]
+///     r[[rustdoc]] --> f([Docs w/ Mermaid!])
+///     subgraph rustc[Rust Compiler]
+///     a -. "inject mermaid.js" .-> r
+///     end
+/// ```
+pub mod label_ordering {}

@@ -5,7 +5,7 @@ edition = "2021"
 license = "MIT OR Apache-2.0"
 authors = [
     "Aron Zwaan <A.S.Zwaan@tudelft.nl>",
-    "Jonathan Dönszelmann <J.B.Doenszelmann@tudelft.nl>"
+    "Jonathan Dönszelmann <J.B.Doenszelmann@tudelft.nl>",
 ]
 description = "A port of scopegraphs https://pl.ewi.tudelft.nl/research/projects/scope-graphs/ to Rust"
 repository = "https://github.com/metaborg/rust-scopegraphs/"
@@ -24,17 +24,26 @@ log = "0.4.20"
 scopegraphs-macros = { path = "../scopegraphs-macros", version = "0.2.0" }
 scopegraphs-regular-expressions = { path = "../scopegraphs-regular-expressions", version = "0.2.0" }
 
+aquamarine = "0.5"
+
 [dev-dependencies]
 env_logger = "0.10.1"
 ctor = "0.2.5"
-futures = { version = "0.3.30", default-features = false, features = ["alloc", "executor"] }
+futures = { version = "0.3.30", default-features = false, features = [
+    "alloc",
+    "executor",
+] }
 smol = "2.0.0"
 async-recursion = "1.1.1"
 winnow = "0.6.8"
 
 [features]
 default = ["dot", "dynamic-regex"]
-dot = ["scopegraphs-regular-expressions/dot", "scopegraphs-macros/dot", "dep:dot"]
+dot = [
+    "scopegraphs-regular-expressions/dot",
+    "scopegraphs-macros/dot",
+    "dep:dot",
+]
 dynamic-regex = ["scopegraphs-regular-expressions/dynamic"]
 documentation = []
 

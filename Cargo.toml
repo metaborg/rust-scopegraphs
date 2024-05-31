@@ -4,9 +4,11 @@ members = [
     "scopegraphs",
     "scopegraphs-macros",
     "scopegraphs-regular-expressions",
+    "scopegraphs-render-docs",
 ]
 default-members = [
     "scopegraphs",
     "scopegraphs-macros",
     "scopegraphs-regular-expressions",
+    "scopegraphs-render-docs",
 ]
