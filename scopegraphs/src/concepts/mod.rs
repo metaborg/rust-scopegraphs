@@ -22,7 +22,89 @@
 //!
 #![cfg_attr(rustfmt, rustfmt_skip)]
 
-pub mod scope;
+use scopegraphs_render_docs::render_scopegraphs;
+
+
+/// A scope is a node in a scope graph.
+///
+///
+///
+/// # use scopegraphs_render_docs::render_scopegraphs;
+#[render_scopegraphs]
+/// ```rust
+/// # use scopegraphs::*;
+/// # use completeness::{UncheckedCompleteness};
+/// # use resolve::{DataWellformedness, Resolve, ResolvedPath};
+/// # use render::{RenderSettings, RenderScopeData, RenderScopeLabel};
+/// #
+/// # #[derive(Label, Hash, PartialEq, Eq, Debug, Clone, Copy)]
+/// # enum Lbl {
+/// #     Lex,
+/// #     Imp,
+/// #     Def,
+/// # }
+/// # use Lbl::*;
+/// #
+/// # #[derive(Hash, PartialEq, Eq, Debug, Default, Clone)]
+/// # enum TData<'a> {
+/// #     #[default]
+/// #     NoData,
+/// #     Data {
+/// #         name: &'a str,
+/// #         data: usize,
+/// #     },
+/// # }
+/// #
+/// # use TData::*;
+/// #
+/// # impl RenderScopeData for TData<'_> {
+/// #     fn render_node(&self) -> Option<String> {
+/// #         match self {
+/// #             NoData => None,
+/// #             Data {name, data} => Some(format!("{name}: {data}")),
+/// #         }
+/// #     }
+/// # }
+/// #
+/// # impl RenderScopeLabel for Lbl {
+/// #     fn render(&self) -> String {
+/// #         match self {
+/// #             Lex => "lex",
+/// #             Imp => "imp",
+/// #             Def => "def",
+/// #         }.to_string()
+/// #     }
+/// # }
+/// #
+/// # impl<'a> TData<'a> {
+/// #     fn matches(&self, n: &str) -> bool {
+/// #         match self {
+/// #             NoData => false,
+/// #             Data { name, .. } => *name == n,
+/// #         }
+/// #     }
+/// #
+/// #     fn matcher(n: &'a str) -> impl DataWellformedness<Self> {
+/// #         |data: &Self| data.matches(n)
+/// #     }
+/// #
+/// #     fn from_default(name: &'a str) -> Self {
+/// #         Data { name, data: 0 }
+/// #     }
+/// # }
+/// # let storage = Storage::new();
+/// # let sg: ScopeGraph<Lbl, TData, UncheckedCompleteness> =
+/// # unsafe { ScopeGraph::raw(&storage) };
+///
+/// let s0 = sg.add_scope_default();
+/// let s1 = sg.add_scope_default();
+/// sg.add_edge(s0, Lex, s1);
+/// sg.add_decl(s0, Def, Data { name: "x", data: 0 });
+/// sg.add_decl(s1, Def, Data { name: "x", data: 1 });
+///
+/// sg.render_to("output.dot", RenderSettings::default()).unwrap();
+/// ```
+pub mod scope {}
 pub mod scope_data;
 pub mod edges;
 
@@ -31,7 +113,6 @@ pub mod data_wellformedness;
 pub mod data_equivalence;
 pub mod path_wellformedness;
 
-#[aquamarine::aquamarine]
 /// # Label Ordering
 ///
 /// ```mermaid

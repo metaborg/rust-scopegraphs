@@ -22,6 +22,7 @@ log = "0.4.20"
 
 scopegraphs-macros = { path = "../scopegraphs-macros", version = "0.2.0" }
 scopegraphs-regular-expressions = { path = "../scopegraphs-regular-expressions", version = "0.2.0" }
+scopegraphs-render-docs = { path = "../scopegraphs-render-docs", version = "0.2.0", optional = true }
 
 [dev-dependencies]
 env_logger = "0.10.1"
@@ -38,7 +39,7 @@ winnow = "0.6.8"
 default = ["dot", "dynamic-regex"]
 dot = ["scopegraphs-regular-expressions/dot", "scopegraphs-macros/dot"]
 dynamic-regex = ["scopegraphs-regular-expressions/dynamic"]
-documentation = []
+documentation = ["dep:scopegraphs-render-docs"]
 
 [package.metadata.playground]
 features = ["documentation"]
