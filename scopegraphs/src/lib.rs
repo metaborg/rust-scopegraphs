@@ -23,9 +23,7 @@ mod label;
 pub use label::Label;
 
 #[cfg(feature = "dot")]
-mod render;
-#[cfg(feature = "dot")]
-pub use render::RenderScopeData;
+pub mod render;
 
 pub use scopegraphs_regular_expressions::*;
 
