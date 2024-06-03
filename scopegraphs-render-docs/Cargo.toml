@@ -1,0 +1,25 @@
+[package]
+name = "scopegraphs-render-docs"
+version = "0.2.0"
+authors = ["Mike Lubinets <git@mkl.dev>", "Frank Rehberger <frehberg@gmail.com>", "Jonathan Dönszelmann <jonathan@donsz.nl>"]
+description = "Derived from Aquamarine, a mermaid.js integration for rustdoc, renders scopegraphs by executing doctests to generate mermaid"
+keywords = ["proc_macro", "docs", "rustdoc", "mermaid", "diagram"]
+categories = ["visualization", "development-tools::build-utils"]
+repository = "https://github.com/mersinvald/aquamarine"
+edition = "2018"
+license = "MIT"
+include = ["src/**/*", "Cargo.toml", "doc/js/**"]
+
+[lib]
+proc-macro = true
+
+[dependencies]
+quote = "1"
+proc-macro2 = "1"
+proc-macro-error = { version = "1", default-features = false }
+itertools = "0.10"
+syn = "2"
+include_dir = "0.7"
+
+[dev-dependencies]
+pretty_assertions = "1"
