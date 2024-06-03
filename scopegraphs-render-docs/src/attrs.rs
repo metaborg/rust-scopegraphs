@@ -10,7 +10,7 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 use std::io::{stderr, stdout, Write};
 use std::path::Path;
 use std::path::PathBuf;
-use std::process::Command;
+use std::process::{Command, Stdio};
 use std::{fs, io};
 use syn::{Attribute, Ident, MetaNameValue};
 
@@ -297,6 +297,54 @@ fn run_code(code: &str) -> Result<Vec<String>, EvalError> {
     );
     let target_dir = std::env::var("CARGO_TARGET_DIR").unwrap_or("./target".to_string());
 
+    // this if is so it works on docs.rs,
+    // which sets a custom target and compiles in a folder called "workdir"
+    let (sg_dir, target_dir) = if manifest_dir.join("..").join("workdir").exists() {
+        (
+            manifest_dir
+                .join("..")
+                .join("workdir")
+                .to_string_lossy()
+                .to_string(),
+            "/opt/rustwide/target".to_string(),
+        )
+    } else {
+        (
+            manifest_dir
+                .join("..")
+                .join("scopegraphs")
+                .to_string_lossy()
+                .to_string(),
+            target_dir,
+        )
+    };
+
+    fn copy_dir_all(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> io::Result<()> {
+        fs::create_dir_all(&dst)?;
+        for entry in fs::read_dir(src)? {
+            let entry = entry?;
+            let ty = entry.file_type()?;
+            if ty.is_dir() {
+                copy_dir_all(entry.path(), dst.as_ref().join(entry.file_name()))?;
+            } else {
+                fs::copy(entry.path(), dst.as_ref().join(entry.file_name()))?;
+            }
+        }
+        Ok(())
+    }
+
+    let sg_target_dir = temp_dir().join("SG_TARGET");
+    if sg_target_dir.exists() {
+        fs::remove_dir_all(&sg_target_dir).map_err(EvalError::RemoveOldOutputDir)?;
+    }
+    copy_dir_all(target_dir, &sg_target_dir).expect("copy dir");
+    if sg_target_dir.join("debug").join(".cargo-lock").exists() {
+        fs::remove_file(sg_target_dir.join("debug").join(".cargo-lock")).unwrap();
+    }
+    if sg_target_dir.join("release").join(".cargo-lock").exists() {
+        fs::remove_file(sg_target_dir.join("release").join(".cargo-lock")).unwrap();
+    }
+
     let cargo = PathBuf::from(std::env::var("CARGO").expect("$CARGO is set during compilation"));
 
     let code_hash = hash_str(code).to_string();
@@ -319,9 +367,9 @@ name = \"render_docs_{code_hash}\"
 edition=\"2021\"
 
 [dev-dependencies]
-scopegraphs = {{path = \"{}/../scopegraphs\"}}
+scopegraphs = {{path = \"{}\"}}
     ",
-            manifest_dir.to_string_lossy()
+            sg_dir
         ),
     )
     .map_err(EvalError::WriteProject)?;
@@ -341,10 +389,13 @@ fn documented() {{}}
 
     let output = Command::new(cargo)
         .current_dir(out_dir)
-        .env("CARGO_TARGET_DIR", target_dir)
+        .env("CARGO_TARGET_DIR", sg_target_dir)
         .arg("test")
+        .arg("--offline")
         .arg("--doc")
         .arg("documented")
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::inherit())
         .output()
         .map_err(EvalError::RunCargo)?;
 

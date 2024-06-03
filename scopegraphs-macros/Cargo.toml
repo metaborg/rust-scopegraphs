@@ -1,6 +1,6 @@
 [package]
 name = "scopegraphs-macros"
-version = "0.2.9"
+version = "0.2.13"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 authors = [
@@ -20,7 +20,7 @@ proc-macro = true
 [dependencies]
 syn = { version = "2.0.29", features = [] }
 quote = "1.0.33"
-scopegraphs-regular-expressions = { path = "../scopegraphs-regular-expressions", features = ["dot"], version = "0.2.0" }
+scopegraphs-regular-expressions = { path = "../scopegraphs-regular-expressions", features = ["dot"], version = "0.2" }
 proc-macro2 = "1.0.69"
 
 [dev-dependencies]
