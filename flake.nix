@@ -81,6 +81,7 @@
             cargo install cargo-docs-rs
 
             rustup default $RUSTC_VERSION
+            rustup toolchain add nightly
             rustup component add rust-src rust-analyzer
 
           '';
