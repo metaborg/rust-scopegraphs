@@ -380,6 +380,7 @@ scopegraphs = {{path = \"{}\"}}
 /// ```rust
 {}
 /// ```
+#[allow(unused)]
 fn documented() {{}}
     ",
             code.lines().map(|i| format!("/// {i}")).join("\n")
