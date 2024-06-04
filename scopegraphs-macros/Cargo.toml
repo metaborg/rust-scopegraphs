@@ -18,10 +18,10 @@ proc-macro = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-syn = { version = "2.0", features = [] }
-quote = "1.0"
+syn = { version = "2", features = [] }
+quote = "1"
 scopegraphs-regular-expressions = { path = "../scopegraphs-regular-expressions", features = ["dot"], version = "0.3" }
-proc-macro2 = "1.0"
+proc-macro2 = "1"
 
 [dev-dependencies]
 scopegraphs = { path = "../scopegraphs" }
