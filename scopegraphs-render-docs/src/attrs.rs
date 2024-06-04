@@ -259,12 +259,6 @@ pub enum EvalError {
     ReadDir(io::Error),
 }
 
-fn hash_str(s: &str) -> u64 {
-    let mut hasher = DefaultHasher::new();
-    s.hash(&mut hasher);
-    hasher.finish()
-}
-
 fn find_diagrams(path: &Path) -> Result<Vec<String>, EvalError> {
     let mut diagrams = Vec::new();
 
