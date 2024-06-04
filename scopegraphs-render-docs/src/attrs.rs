@@ -123,13 +123,6 @@ impl quote::ToTokens for Attrs {
                                     i,
                                 );
                             }
-                            EvalError::RemoveOldOutputDir(i) => {
-                                emit_error!(
-                                    Span::call_site(),
-                                    "failed to remove previously existing output directory {:?}",
-                                    i,
-                                );
-                            }
                             EvalError::RunCargo(i) => {
                                 emit_error!(Span::call_site(), "error while running cargo {:?}", i);
                             }
@@ -261,7 +254,6 @@ const MERMAID_INIT_SCRIPT: &str = r#"
 pub enum EvalError {
     CreateDir(io::Error),
     WriteProject(io::Error),
-    RemoveOldOutputDir(io::Error),
     RunCargo(io::Error),
     ReadDir(io::Error),
 }
@@ -299,7 +291,7 @@ fn run_code(code: &str) -> Result<Vec<String>, EvalError> {
 
     // this if is so it works on docs.rs,
     // which sets a custom target and compiles in a folder called "workdir"
-    let (sg_dir, target_dir) = if manifest_dir.join("..").join("workdir").exists() {
+    let (sg_dir, target_dir, offline) = if manifest_dir.join("..").join("workdir").exists() {
         (
             manifest_dir
                 .join("..")
@@ -307,6 +299,7 @@ fn run_code(code: &str) -> Result<Vec<String>, EvalError> {
                 .to_string_lossy()
                 .to_string(),
             "/opt/rustwide/target".to_string(),
+            true,
         )
     } else {
         (
@@ -316,6 +309,7 @@ fn run_code(code: &str) -> Result<Vec<String>, EvalError> {
                 .to_string_lossy()
                 .to_string(),
             target_dir,
+            true,
         )
     };
 
@@ -333,26 +327,32 @@ fn run_code(code: &str) -> Result<Vec<String>, EvalError> {
         Ok(())
     }
 
-    let sg_target_dir = temp_dir().join("SG_TARGET");
-    if sg_target_dir.exists() {
-        fs::remove_dir_all(&sg_target_dir).map_err(EvalError::RemoveOldOutputDir)?;
-    }
-    copy_dir_all(target_dir, &sg_target_dir).expect("copy dir");
-    if sg_target_dir.join("debug").join(".cargo-lock").exists() {
-        fs::remove_file(sg_target_dir.join("debug").join(".cargo-lock")).unwrap();
-    }
-    if sg_target_dir.join("release").join(".cargo-lock").exists() {
-        fs::remove_file(sg_target_dir.join("release").join(".cargo-lock")).unwrap();
-    }
-
-    let cargo = PathBuf::from(std::env::var("CARGO").expect("$CARGO is set during compilation"));
-
     let code_hash = hash_str(code).to_string();
     let out_dir = &temp_dir().join("render-docs").join(&code_hash);
     println!("testing in {out_dir:?}");
 
+    let sg_target_dir = temp_dir().join(format!("SG_TARGET-{}", code_hash));
+    if sg_target_dir.exists() {
+        let _ = fs::remove_dir_all(&sg_target_dir);
+    }
+    copy_dir_all(target_dir, &sg_target_dir).expect("copy dir");
+    if sg_target_dir.join("debug").exists() {
+        let _ = fs::remove_file(sg_target_dir.join("debug").join(".cargo-lock"));
+        let _ = fs::remove_file(sg_target_dir.join("debug").join(".fingerprint"));
+        let _ = fs::remove_file(sg_target_dir.join("debug").join("tmp"));
+        let _ = fs::remove_file(sg_target_dir.join("debug").join("incremental"));
+    }
+    if sg_target_dir.join("release").exists() {
+        let _ = fs::remove_file(sg_target_dir.join("release").join(".cargo-lock"));
+        let _ = fs::remove_file(sg_target_dir.join("release").join(".fingerprint"));
+        let _ = fs::remove_file(sg_target_dir.join("release").join("tmp"));
+        let _ = fs::remove_file(sg_target_dir.join("release").join("incremental"));
+    }
+
+    let cargo = PathBuf::from(std::env::var("CARGO").expect("$CARGO is set during compilation"));
+
     if out_dir.exists() {
-        fs::remove_dir_all(out_dir).map_err(EvalError::RemoveOldOutputDir)?;
+        let _ = fs::remove_dir_all(out_dir);
     }
 
     fs::create_dir_all(out_dir).map_err(EvalError::CreateDir)?;
@@ -388,21 +388,28 @@ fn documented() {{}}
     )
     .map_err(EvalError::WriteProject)?;
 
-    let output = Command::new(cargo)
+    let mut command = Command::new(cargo);
+    let command = command
         .current_dir(out_dir)
         .env("CARGO_TARGET_DIR", sg_target_dir)
-        .arg("test")
-        .arg("--offline")
-        .arg("--doc")
-        .arg("documented")
-        .stdout(Stdio::inherit())
-        .stderr(Stdio::inherit())
-        .output()
-        .map_err(EvalError::RunCargo)?;
+        .arg("test");
+
+    let output = if offline {
+        command.arg("--offline")
+    } else {
+        command
+    }
+    .arg("--doc")
+    .arg("documented")
+    .stdout(Stdio::inherit())
+    .stderr(Stdio::inherit())
+    .output()
+    .map_err(EvalError::RunCargo)?;
 
     if !output.status.success() {
         stdout().write_all(&output.stdout).unwrap();
         stderr().write_all(&output.stderr).unwrap();
+        panic!("build docs didn't work")
     }
 
     find_diagrams(out_dir)
