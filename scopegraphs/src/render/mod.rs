@@ -11,6 +11,16 @@ use std::path::Path;
 
 mod traverse;
 
+/// The backend to generate a graph for
+#[derive(Default, Copy, Clone, Debug)]
+pub enum Target {
+    /// Generate graphviz dot code
+    Dot,
+    /// Generate a mermaid graph
+    #[default]
+    Mermaid,
+}
+
 /// Global settings related to rendering scope graphs.
 pub struct RenderSettings {
     /// Whether to display label text next to edges
@@ -19,6 +29,8 @@ pub struct RenderSettings {
     ///
     /// Defaults to the filename given to [`ScopeGraph::render_to`].
     pub title: Option<String>,
+    /// The output format to use for the visualization.
+    pub target: Target,
 }
 
 impl RenderSettings {
@@ -34,6 +46,7 @@ impl Default for RenderSettings {
         Self {
             show_edge_labels: true,
             title: None,
+            target: Default::default(),
         }
     }
 }
@@ -106,8 +119,12 @@ fn scope_to_node_name(s: Scope) -> String {
     format!("scope_{}", s.0)
 }
 
-fn escape_text(inp: &str) -> String {
+fn escape_text_dot(inp: &str) -> String {
     inp.replace('"', "\\\"")
+}
+
+fn escape_text_mermaid(inp: &str) -> String {
+    inp.replace('"', "&amp;quot;")
 }
 
 impl<
@@ -120,6 +137,78 @@ impl<
     ///
     /// Note: you can also visualize a [single regular expression this way](crate::Automaton::render)
     pub fn render<W: Write>(&self, output: &mut W, settings: RenderSettings) -> io::Result<()> {
+        match settings.target {
+            Target::Dot => self.render_dot(output, settings),
+            Target::Mermaid => self.render_mermaid(output, settings),
+        }
+    }
+
+    fn render_mermaid<W: Write>(&self, output: &mut W, settings: RenderSettings) -> io::Result<()> {
+        let (mut edges, nodes) = traverse::traverse(self);
+
+        if let Some(ref i) = settings.title {
+            // title
+            writeln!(output, "---")?;
+            writeln!(output, r#"title: {}"#, escape_text_mermaid(i))?;
+            writeln!(output, "---")?;
+        }
+
+        writeln!(output, "flowchart LR")?;
+
+        // color scheme
+        // writeln!(
+        //     output,
+        //     r#"node [colorscheme="ylgnbu6",width="0.1",height="0.1",margin="0.01",xlp="b"]"#
+        // )?;
+
+        // straight edges
+        // writeln!(output, r#"splines=false;"#)?;
+
+        // nodes
+        for (scope, data) in nodes {
+            edges.extend(
+                data.extra_edges()
+                    .into_iter()
+                    .map(|to| Edge { from: scope, to }),
+            );
+            let name = scope_to_node_name(scope);
+
+            let mut attrs = Vec::new();
+
+            let label =
+                escape_text_mermaid(&data.render_node().unwrap_or_else(|| scope.0.to_string()));
+
+            if let Some(label) = data.render_node_label() {
+                attrs.push(format!(r#"[xlabel="{}"]"#, escape_text_mermaid(&label)))
+            }
+
+            attrs.push(r#"[penwidth="2.0"]"#.to_string());
+
+            // writeln!(output, r#"{name} {}"#, attrs.join(""))?
+            if data.definition() {
+                writeln!(output, r#"    {name}["{label}"]"#)?;
+            } else {
+                writeln!(output, r#"    {name}(("{label}"))"#)?;
+            }
+        }
+
+        // edges
+        for edge in edges {
+            let from = scope_to_node_name(edge.from);
+            let to = scope_to_node_name(edge.to.to);
+            let label = escape_text_mermaid(&edge.to.label_text);
+
+            if settings.show_edge_labels {
+                writeln!(output, r#"{from} ==>|"{label}"| {to}"#)?
+            } else {
+                writeln!(output, "    {from} ==> {to}")?
+            }
+        }
+
+        Ok(())
+    }
+
+    fn render_dot<W: Write>(&self, output: &mut W, settings: RenderSettings) -> io::Result<()> {
         let (mut edges, nodes) = traverse::traverse(self);
 
         writeln!(output, "digraph {{")?;
@@ -133,7 +222,7 @@ impl<
         if let Some(ref i) = settings.title {
             // title
             writeln!(output, r#"labelloc="t";"#)?;
-            writeln!(output, r#"label="{}";"#, escape_text(i))?;
+            writeln!(output, r#"label="{}";"#, escape_text_dot(i))?;
         }
 
         // straight edges
@@ -155,11 +244,11 @@ impl<
             } else {
                 attrs.push(r#"[shape="circle"]"#.to_string())
             };
-            let label = escape_text(&data.render_node().unwrap_or_else(|| scope.0.to_string()));
+            let label = escape_text_dot(&data.render_node().unwrap_or_else(|| scope.0.to_string()));
             attrs.push(format!(r#"[label="{label}"]"#));
 
             if let Some(label) = data.render_node_label() {
-                attrs.push(format!(r#"[xlabel="{}"]"#, escape_text(&label)))
+                attrs.push(format!(r#"[xlabel="{}"]"#, escape_text_dot(&label)))
             }
 
             attrs.push(r#"[penwidth="2.0"]"#.to_string());
