@@ -17,6 +17,8 @@ Cargo.lock
 .idea/
 
 *.dot
+*.mmd
+
 .direnv
 
 **/render-docs
