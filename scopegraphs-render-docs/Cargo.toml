@@ -20,6 +20,7 @@ proc-macro-error = { version = "1", default-features = false }
 itertools = "0.10"
 syn = "2"
 include_dir = "0.7"
+uuid = { version = "1.8.0", features = ["v4"] }
 
 [dev-dependencies]
 pretty_assertions = "1"

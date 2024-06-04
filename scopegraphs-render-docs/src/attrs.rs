@@ -13,6 +13,7 @@ use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::{fs, io};
 use syn::{Attribute, Ident, MetaNameValue};
+use uuid::Uuid;
 
 // embedded JS code being inserted as html script elmenets
 static MERMAID_JS_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/doc/js/");
@@ -327,7 +328,7 @@ fn run_code(code: &str) -> Result<Vec<String>, EvalError> {
         Ok(())
     }
 
-    let code_hash = hash_str(code).to_string();
+    let code_hash = Uuid::new_v4().to_string();
     let out_dir = &temp_dir().join("render-docs").join(&code_hash);
     println!("testing in {out_dir:?}");
 
@@ -341,12 +342,14 @@ fn run_code(code: &str) -> Result<Vec<String>, EvalError> {
         let _ = fs::remove_file(sg_target_dir.join("debug").join(".fingerprint"));
         let _ = fs::remove_file(sg_target_dir.join("debug").join("tmp"));
         let _ = fs::remove_file(sg_target_dir.join("debug").join("incremental"));
+        // let _ = fs::remove_file(sg_target_dir.join("debug").join("build"));
     }
     if sg_target_dir.join("release").exists() {
         let _ = fs::remove_file(sg_target_dir.join("release").join(".cargo-lock"));
         let _ = fs::remove_file(sg_target_dir.join("release").join(".fingerprint"));
         let _ = fs::remove_file(sg_target_dir.join("release").join("tmp"));
         let _ = fs::remove_file(sg_target_dir.join("release").join("incremental"));
+        // let _ = fs::remove_file(sg_target_dir.join("release").join("build"));
     }
 
     let cargo = PathBuf::from(std::env::var("CARGO").expect("$CARGO is set during compilation"));
@@ -392,6 +395,7 @@ fn documented() {{}}
     let command = command
         .current_dir(out_dir)
         .env("CARGO_TARGET_DIR", sg_target_dir)
+        .env_remove("CARGO_MAKEFLAGS")
         .arg("test");
 
     let output = if offline {
