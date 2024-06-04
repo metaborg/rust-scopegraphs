@@ -1,6 +1,6 @@
 [package]
 name = "scopegraphs"
-version = "0.2.18"
+version = "0.3.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 authors = [
@@ -20,9 +20,9 @@ bumpalo = "3.14.0"
 scopegraphs-prust-lib = { version = "0.1.0" }
 log = "0.4.20"
 
-scopegraphs-macros = { path = "../scopegraphs-macros", version = "0.2" }
-scopegraphs-regular-expressions = { path = "../scopegraphs-regular-expressions", version = "0.2" }
-scopegraphs-render-docs = { path = "../scopegraphs-render-docs", version = "0.2", optional = true }
+scopegraphs-macros = { path = "../scopegraphs-macros", version = "0.3" }
+scopegraphs-regular-expressions = { path = "../scopegraphs-regular-expressions", version = "0.3" }
+scopegraphs-render-docs = { path = "../scopegraphs-render-docs", version = "0.3", optional = true }
 
 [dev-dependencies]
 env_logger = "0.10.1"
