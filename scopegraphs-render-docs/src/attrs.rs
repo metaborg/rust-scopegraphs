@@ -519,19 +519,19 @@ fn split_attr_body(ident: &Ident, input: &str, loc: &mut Location) -> Vec<Attr> 
     let mut ctx: Ctx<'_> = Default::default();
 
     let flush_buffer_as_doc_comment = |ctx: &mut Ctx| {
-        if !ctx.buffer.is_empty() {
-            ctx.attrs.push(Attr::DocComment(
-                ident.clone(),
-                ctx.buffer.drain(..).join(" "),
-            ));
-        }
+        // if !ctx.buffer.is_empty() {
+        ctx.attrs.push(Attr::DocComment(
+            ident.clone(),
+            ctx.buffer.drain(..).join(" "),
+        ));
+        // }
     };
 
     let flush_buffer_as_diagram_entry = |ctx: &mut Ctx| {
         let s = ctx.buffer.drain(..).join(" ");
-        if !s.trim().is_empty() {
-            ctx.attrs.push(Attr::DiagramEntry(ident.clone(), s));
-        }
+        // if !s.trim().is_empty() {
+        ctx.attrs.push(Attr::DiagramEntry(ident.clone(), s));
+        // }
     };
 
     while let Some(token) = tokens.next() {
@@ -563,13 +563,13 @@ fn split_attr_body(ident: &Ident, input: &str, loc: &mut Location) -> Vec<Attr> 
         }
     }
 
-    if !ctx.buffer.is_empty() {
-        if loc.is_inside() {
-            flush_buffer_as_diagram_entry(&mut ctx);
-        } else {
-            flush_buffer_as_doc_comment(&mut ctx);
-        };
-    }
+    // if !ctx.buffer.is_empty() {
+    if loc.is_inside() {
+        flush_buffer_as_diagram_entry(&mut ctx);
+    } else {
+        flush_buffer_as_doc_comment(&mut ctx);
+    };
+    // }
 
     ctx.attrs
 }
