@@ -74,6 +74,40 @@ pub struct Path<LABEL> {
     // FIXME: put fields in same Arc
 }
 
+impl<LABEL> Path<LABEL> {
+    /// Iterate over the scopes that a path traverses.
+    pub fn scopes(&self) -> PathScopeIterator<LABEL> {
+        PathScopeIterator {
+            path: Some(self.inner_path.as_ref()),
+        }
+    }
+}
+
+/// Iterator over a [`Path`] or [`ResolvedPath`]
+pub struct PathScopeIterator<'a, LABEL> {
+    path: Option<&'a InnerPath<LABEL>>,
+}
+
+impl<'a, LABEL> Iterator for PathScopeIterator<'a, LABEL> {
+    type Item = Scope;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.path {
+            None => None,
+            Some(InnerPath::Start { source }) => {
+                let res = Some(*source);
+                self.path = None;
+                res
+            }
+            Some(InnerPath::Step { prefix, target, .. }) => {
+                let res = Some(*target);
+                self.path = Some(prefix.inner_path.as_ref());
+                res
+            }
+        }
+    }
+}
+
 impl<LABEL> PartialEq for Path<LABEL>
 where
     Scope: PartialEq,
@@ -140,6 +174,13 @@ impl<'sg, LABEL, DATA> ResolvedPath<'sg, LABEL, DATA> {
     /// Get the data on this target scope.
     pub fn data(&self) -> &DATA {
         self.data
+    }
+}
+
+impl<'sg, LABEL, DATA> ResolvedPath<'sg, LABEL, DATA> {
+    /// Iterate over the scopes that a path traverses.
+    pub fn scopes(&self) -> PathScopeIterator<LABEL> {
+        self.path.scopes()
     }
 }
 
