@@ -3,6 +3,7 @@
 //! Generally, use `sg.render_to(filename, Settings::default()` for the most basic rendering.
 
 use crate::completeness::Completeness;
+use crate::resolve::ResolvedPath;
 use crate::{Scope, ScopeGraph};
 use std::fs::File;
 use std::io;
@@ -22,7 +23,7 @@ pub enum Target {
 }
 
 /// Global settings related to rendering scope graphs.
-pub struct RenderSettings {
+pub struct RenderSettings<'sg, LABEL, DATA> {
     /// Whether to display label text next to edges
     pub show_edge_labels: bool,
     /// The title which should be displayed above the graph.
@@ -31,9 +32,11 @@ pub struct RenderSettings {
     pub title: Option<String>,
     /// The output format to use for the visualization.
     pub target: Target,
+    /// A resolved path that should also be rendered. Useful for debugging queries.
+    pub path: Option<ResolvedPath<'sg, LABEL, DATA>>,
 }
 
-impl RenderSettings {
+impl<'sg, LABEL, DATA> RenderSettings<'sg, LABEL, DATA> {
     /// Sets the name of the scope graph
     pub fn with_name(mut self, name: impl AsRef<str>) -> Self {
         self.title = Some(name.as_ref().to_string());
@@ -41,12 +44,13 @@ impl RenderSettings {
     }
 }
 
-impl Default for RenderSettings {
+impl<'sg, LABEL, DATA> Default for RenderSettings<'sg, LABEL, DATA> {
     fn default() -> Self {
         Self {
             show_edge_labels: true,
             title: None,
             target: Default::default(),
+            path: None,
         }
     }
 }
@@ -136,14 +140,22 @@ impl<
     /// Visualize the entire scope graph as a graph, by emitting a graphviz dot file.
     ///
     /// Note: you can also visualize a [single regular expression this way](crate::Automaton::render)
-    pub fn render<W: Write>(&self, output: &mut W, settings: RenderSettings) -> io::Result<()> {
+    pub fn render<W: Write>(
+        &self,
+        output: &mut W,
+        settings: RenderSettings<'_, LABEL, DATA>,
+    ) -> io::Result<()> {
         match settings.target {
             Target::Dot => self.render_dot(output, settings),
             Target::Mermaid => self.render_mermaid(output, settings),
         }
     }
 
-    fn render_mermaid<W: Write>(&self, output: &mut W, settings: RenderSettings) -> io::Result<()> {
+    fn render_mermaid<W: Write>(
+        &self,
+        output: &mut W,
+        settings: RenderSettings<'_, LABEL, DATA>,
+    ) -> io::Result<()> {
         let (mut edges, nodes) = traverse::traverse(self);
 
         if let Some(ref i) = settings.title {
@@ -193,22 +205,49 @@ impl<
         }
 
         // edges
-        for edge in edges {
-            let from = scope_to_node_name(edge.from);
-            let to = scope_to_node_name(edge.to.to);
+        for (idx, edge) in edges.iter().enumerate() {
+            let (from, to) = (edge.from, edge.to.to);
+
+            let from_str = scope_to_node_name(from);
+            let to_str = scope_to_node_name(to);
             let label = escape_text_mermaid(&edge.to.label_text);
 
             if settings.show_edge_labels {
-                writeln!(output, r#"{from} ==>|"{label}"| {to}"#)?
+                writeln!(output, r#"{from_str} ==>|"{label}"| {to_str}"#)?
             } else {
-                writeln!(output, "    {from} ==> {to}")?
+                writeln!(output, "    {from_str} ==> {to_str}")?
+            }
+
+            if let Some(ref i) = settings.path {
+                let mut prev = None;
+                let mut part_of_path = false;
+                for curr in i.scopes() {
+                    if let Some(ref mut prev) = prev {
+                        if (to, from) == (*prev, curr) {
+                            part_of_path = true;
+                            break;
+                        }
+
+                        *prev = curr;
+                    } else {
+                        prev = Some(curr);
+                    }
+                }
+
+                if part_of_path {
+                    writeln!(output, "linkStyle {idx} stroke: red")?;
+                }
             }
         }
 
         Ok(())
     }
 
-    fn render_dot<W: Write>(&self, output: &mut W, settings: RenderSettings) -> io::Result<()> {
+    fn render_dot<W: Write>(
+        &self,
+        output: &mut W,
+        settings: RenderSettings<'_, LABEL, DATA>,
+    ) -> io::Result<()> {
         let (mut edges, nodes) = traverse::traverse(self);
 
         writeln!(output, "digraph {{")?;
@@ -278,7 +317,7 @@ impl<
     pub fn render_to(
         &self,
         path: impl AsRef<Path>,
-        mut settings: RenderSettings,
+        mut settings: RenderSettings<'_, LABEL, DATA>,
     ) -> io::Result<()> {
         let path = path.as_ref();
         let mut w = File::create(path)?;

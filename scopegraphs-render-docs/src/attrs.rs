@@ -96,13 +96,20 @@ impl quote::ToTokens for Attrs {
                         .map(Attr::expect_diagram_entry_text)
                         .collect::<Vec<_>>();
 
-                    tokens.extend(quote! {#[doc = "```rust"]});
-                    for i in &diagram {
-                        tokens.extend(quote! {
-                            #[doc = #i]
-                        });
+                    if !diagram
+                        .iter()
+                        .filter(|i| !i.trim().is_empty())
+                        .all(|i| i.trim().starts_with('#'))
+                        && !diagram.is_empty()
+                    {
+                        tokens.extend(quote! {#[doc = "```rust"]});
+                        for i in &diagram {
+                            tokens.extend(quote! {
+                                #[doc = #i]
+                            });
+                        }
+                        tokens.extend(quote! {#[doc = "```"]});
                     }
-                    tokens.extend(quote! {#[doc = "```"]});
 
                     match generate_diagram_rustdoc(&diagram) {
                         Ok(i) => {

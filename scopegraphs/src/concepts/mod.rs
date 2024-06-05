@@ -479,7 +479,7 @@ pub mod scope_data {}
 /// Note, it's common to create new scopes for each variable definition like this.
 ///
 /// A rough approximation of a program which would have such a scope structure would be:
-/// ```rust, no_run
+/// ```ignore
 /// // in the global scope
 /// let bar = 3;
 /// fn foo() {
@@ -513,7 +513,7 @@ pub mod scope_data {}
 ///
 /// Let's go for the simple case first. Let's say we now write the following example:
 ///
-/// ```rust, no_run
+/// ```ignore
 /// // in the global scope
 /// let bar = 3;
 /// fn foo() {
@@ -528,10 +528,83 @@ pub mod scope_data {}
 /// So first, we look in the current scope: `foo`'s scope. We immediately find a `Definition`
 /// edge which brings us to a variable definition with the name `baz`. So we're done!
 ///
+/// ```rust
+/// # use scopegraphs::*;
+/// # use completeness::{UncheckedCompleteness};
+/// # use resolve::{DataWellformedness, Resolve, ResolvedPath};
+/// # use render::{RenderSettings, RenderScopeData, RenderScopeLabel};
+/// #
+/// # #[derive(Label, Hash, PartialEq, Eq, Debug, Clone, Copy)]
+/// # enum Lbl {
+/// #      Lexical,
+/// #      Definition,
+/// # }
+/// #
+/// # #[derive(Hash, PartialEq, Eq, Debug, Default, Clone)]
+/// # enum Data<'a> {
+/// #     #[default]
+/// #     NoData,
+/// #     Variable {
+/// #         name: &'a str,
+/// #     },
+/// # }
+/// #
+/// # impl RenderScopeData for Data<'_> {
+/// #     fn render_node(&self) -> Option<String> {
+/// #         match self {
+/// #             Self::Variable {..} => Some(format!("{self:?}")),
+/// #             _ => None,
+/// #         }
+/// #     }
+/// #
+/// #     fn definition(&self) -> bool {
+/// #         matches!(self, Self::Variable {..})
+/// #     }
+/// # }
+/// #
+/// # impl RenderScopeLabel for Lbl {
+/// #     fn render(&self) -> String {
+/// #         match self {
+/// #             Self::Lexical => "lexical",
+/// #             Self::Definition => "definition",
+/// #         }.to_string()
+/// #     }
+/// # }
+/// #
+/// # let storage = Storage::new();
+/// # let sg: ScopeGraph<Lbl, Data, UncheckedCompleteness> =
+/// # unsafe { ScopeGraph::raw(&storage) };
+/// #
+/// # let global = sg.add_scope_default();
+/// # let fn_foo = sg.add_scope_default();
+/// #
+/// # // create a scope in which the variable `bar` is defined
+/// # let declares_a_global = sg.add_scope(Data::Variable {name: "bar"});
+/// #
+/// # // create another scope in which the variable `bar` is defined inside foo
+/// # let declares_a_local_in_foo = sg.add_scope(Data::Variable {name: "baz"});
+/// #
+/// # // Add some edges
+/// # sg.add_edge(fn_foo, Lbl::Lexical, global);
+/// #
+/// # sg.add_edge(global, Lbl::Definition, declares_a_global);
+/// # sg.add_edge(fn_foo, Lbl::Definition, declares_a_local_in_foo);
+/// #
+/// # let res = sg.query()
+/// #     .with_path_wellformedness(query_regex!(Lbl: Lexical* Definition))
+/// #     .with_data_wellformedness(|a: &Data| matches!(a, Data::Variable {name: "baz"}))
+/// #     .resolve(fn_foo);
+/// #
+/// # sg.render_to("output.mmd", RenderSettings {
+/// #     path: Some(res.get_only_item().unwrap()),
+/// #     ..Default::default()
+/// # }).unwrap()
+/// ```
+///
 /// ## Example 2: in the enclosing (global) scope
 /// Alright, now for a slightly more complicated example:
 ///
-/// ```rust, no_run
+/// ```ignore
 /// // in the global scope
 /// let bar = 3;
 /// fn foo() {
@@ -546,12 +619,85 @@ pub mod scope_data {}
 /// So, we can choose to instead traverse the `Lexical` edge to look in the global scope.
 /// Now we *can* find a definition of `bar` (using a `Definition` edge), so we're done.
 ///
+/// ```rust
+/// # use scopegraphs::*;
+/// # use completeness::{UncheckedCompleteness};
+/// # use resolve::{DataWellformedness, Resolve, ResolvedPath};
+/// # use render::{RenderSettings, RenderScopeData, RenderScopeLabel};
+/// #
+/// # #[derive(Label, Hash, PartialEq, Eq, Debug, Clone, Copy)]
+/// # enum Lbl {
+/// #      Lexical,
+/// #      Definition,
+/// # }
+/// #
+/// # #[derive(Hash, PartialEq, Eq, Debug, Default, Clone)]
+/// # enum Data<'a> {
+/// #     #[default]
+/// #     NoData,
+/// #     Variable {
+/// #         name: &'a str,
+/// #     },
+/// # }
+/// #
+/// # impl RenderScopeData for Data<'_> {
+/// #     fn render_node(&self) -> Option<String> {
+/// #         match self {
+/// #             Self::Variable {..} => Some(format!("{self:?}")),
+/// #             _ => None,
+/// #         }
+/// #     }
+/// #
+/// #     fn definition(&self) -> bool {
+/// #         matches!(self, Self::Variable {..})
+/// #     }
+/// # }
+/// #
+/// # impl RenderScopeLabel for Lbl {
+/// #     fn render(&self) -> String {
+/// #         match self {
+/// #             Self::Lexical => "lexical",
+/// #             Self::Definition => "definition",
+/// #         }.to_string()
+/// #     }
+/// # }
+/// #
+/// # let storage = Storage::new();
+/// # let sg: ScopeGraph<Lbl, Data, UncheckedCompleteness> =
+/// # unsafe { ScopeGraph::raw(&storage) };
+/// #
+/// # let global = sg.add_scope_default();
+/// # let fn_foo = sg.add_scope_default();
+/// #
+/// # // create a scope in which the variable `bar` is defined
+/// # let declares_a_global = sg.add_scope(Data::Variable {name: "bar"});
+/// #
+/// # // create another scope in which the variable `bar` is defined inside foo
+/// # let declares_a_local_in_foo = sg.add_scope(Data::Variable {name: "baz"});
+/// #
+/// # // Add some edges
+/// # sg.add_edge(fn_foo, Lbl::Lexical, global);
+/// #
+/// # sg.add_edge(global, Lbl::Definition, declares_a_global);
+/// # sg.add_edge(fn_foo, Lbl::Definition, declares_a_local_in_foo);
+/// #
+/// # let res = sg.query()
+/// #     .with_path_wellformedness(query_regex!(Lbl: Lexical* Definition))
+/// #     .with_data_wellformedness(|a: &Data| matches!(a, Data::Variable {name: "bar"}))
+/// #     .resolve(fn_foo);
+/// #
+/// # sg.render_to("output.mmd", RenderSettings {
+/// #     path: Some(res.get_only_item().unwrap()),
+/// #     ..Default::default()
+/// # }).unwrap()
+/// ```
+///
 /// ## Example 3: when name resolution fails
 ///
 /// Finally, let's look at an example in which name resolution should obviously fail,
 /// and discuss why it does, using the scope graph we constructed.
 ///
-/// ```rust, no_run
+/// ```ignore
 /// // in the global scope
 /// let bar = 3;
 /// fn foo() {
