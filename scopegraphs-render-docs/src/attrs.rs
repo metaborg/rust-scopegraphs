@@ -526,12 +526,12 @@ fn split_attr_body(ident: &Ident, input: &str, loc: &mut Location) -> Vec<Attr> 
     let mut ctx: Ctx<'_> = Default::default();
 
     let flush_buffer_as_doc_comment = |ctx: &mut Ctx| {
-        if !ctx.buffer.is_empty() {
-            ctx.attrs.push(Attr::DocComment(
-                ident.clone(),
-                ctx.buffer.drain(..).join(" "),
-            ));
-        }
+        // if !ctx.buffer.is_empty() {
+        ctx.attrs.push(Attr::DocComment(
+            ident.clone(),
+            ctx.buffer.drain(..).join(" "),
+        ));
+        // }
     };
 
     let flush_buffer_as_diagram_entry = |ctx: &mut Ctx| {
