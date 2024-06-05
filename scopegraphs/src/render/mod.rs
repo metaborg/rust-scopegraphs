@@ -4,6 +4,7 @@
 
 use crate::completeness::Completeness;
 use crate::resolve::ResolvedPath;
+use crate::resolve::ResolvedPath;
 use crate::{Label, Scope, ScopeGraph};
 use std::fs::File;
 use std::io;
