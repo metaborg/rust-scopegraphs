@@ -519,12 +519,12 @@ fn split_attr_body(ident: &Ident, input: &str, loc: &mut Location) -> Vec<Attr> 
     let mut ctx: Ctx<'_> = Default::default();
 
     let flush_buffer_as_doc_comment = |ctx: &mut Ctx| {
-        // if !ctx.buffer.is_empty() {
-        ctx.attrs.push(Attr::DocComment(
-            ident.clone(),
-            ctx.buffer.drain(..).join(" "),
-        ));
-        // }
+        if !ctx.buffer.is_empty() {
+            ctx.attrs.push(Attr::DocComment(
+                ident.clone(),
+                ctx.buffer.drain(..).join(" "),
+            ));
+        }
     };
 
     let flush_buffer_as_diagram_entry = |ctx: &mut Ctx| {
@@ -684,6 +684,9 @@ mod tests {
         fn check(case: TestCase) {
             let mut loc = case.location;
             let attrs = split_attr_body(&case.ident, case.input, &mut loc);
+            println!("{attrs:?}");
+            println!("---");
+            println!("{:?}", case.expect_attrs);
             assert_eq!(loc, case.expect_location);
             assert_eq!(attrs, case.expect_attrs);
         }
@@ -785,7 +788,10 @@ mod tests {
                 location: Location::InsideDiagram,
                 input: "```",
                 expect_location: Location::OutsideDiagram,
-                expect_attrs: vec![Attr::DiagramEnd(i())],
+                expect_attrs: vec![
+                    Attr::DiagramEntry(i(), "".to_string()),
+                    Attr::DiagramEnd(i()),
+                ],
             };
 
             check(case)
