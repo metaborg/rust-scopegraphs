@@ -397,6 +397,7 @@ pub mod scope_data {}
 
 #[render_scopegraphs]
 /// Edges connect [`Scopes`](crate::concepts::scope) together, based on the rules of the language you're trying to create.
+///
 /// By adding edges, you're really starting to use scope graphs.
 ///
 /// You can think of edges as the path a name resolution can take. Edges are always directed.
