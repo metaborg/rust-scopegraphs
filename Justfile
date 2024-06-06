@@ -3,6 +3,9 @@ watch-docs:
 
 publish:
     cargo publish -p scopegraphs-render-docs
+    sleep 10
     cargo publish -p scopegraphs-regular-expressions
+    sleep 10
     cargo publish -p scopegraphs-macros
+    sleep 10
     cargo publish -p scopegraphs
