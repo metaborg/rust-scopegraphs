@@ -7,6 +7,8 @@ use crate::Label;
 use std::collections::HashSet;
 use std::hash::Hash;
 
+use super::Implicit;
+
 /// Critical-edge based [`Completeness`] implementation.
 ///
 /// Unlike [`ExplicitClose`](crate::completeness::ExplicitClose), this implementation will implicitly close edges once traversed.
@@ -93,3 +95,5 @@ impl<LABEL: Hash + Eq + Label, DATA> CriticalEdgeBasedCompleteness<LABEL, DATA>
         self.critical_edges.init_scope(open_labels)
     }
 }
+
+impl<LABEL: Hash + Eq + Label, DATA> Implicit<LABEL, DATA> for ImplicitClose<LABEL> {}

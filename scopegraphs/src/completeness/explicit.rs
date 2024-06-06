@@ -1,11 +1,13 @@
 use crate::completeness::private::Sealed;
 use crate::completeness::{
     Completeness, CriticalEdgeBasedCompleteness, CriticalEdgeSet, Delay, EdgeClosedError,
-    EdgesOrDelay, FutureCompleteness,
+    EdgesOrDelay,
 };
-use crate::scopegraph::{InnerScopeGraph, Scope, ScopeGraph};
+use crate::scopegraph::{InnerScopeGraph, Scope};
 use crate::Label;
 use std::{collections::HashSet, hash::Hash};
+
+use super::{UserClosed, Witness};
 
 /// Critical-edge based [`Completeness`] implementation.
 ///
@@ -101,190 +103,10 @@ impl<LABEL: Hash + Eq + Label, DATA> CriticalEdgeBasedCompleteness<LABEL, DATA>
     }
 }
 
-impl<LABEL: Hash + Eq> ExplicitClose<LABEL> {
+impl<LABEL: Hash + Eq + Label, DATA> UserClosed<LABEL, DATA> for ExplicitClose<LABEL> {
     /// Close a scope for a certain label
     /// // TODO: link to "closing" in concepts
-    pub fn close(&self, scope: Scope, label: &LABEL) {
+    fn close(&self, scope: Scope, label: &LABEL, _witness: Witness) {
         self.critical_edges.close(scope, label);
-    }
-}
-
-impl<'sg, LABEL: Hash + Eq, DATA> ScopeGraph<'sg, LABEL, DATA, ExplicitClose<LABEL>> {
-    // TODO: fix this sentence
-    /// Closes an edge, (i.e., prohibit future new
-    ///
-    /// For example, the following program will return an error.
-    /// ```
-    /// # use scopegraphs::completeness::ExplicitClose;
-    /// # use scopegraphs::Label;
-    /// # use scopegraphs::Storage;
-    /// # use scopegraphs::ScopeGraph;
-    ///
-    /// # #[derive(Eq, Hash, PartialEq, Label)] enum Lbl { Def }
-    /// # use Lbl::*;
-    /// let storage = Storage::new();
-    /// let mut sg = ScopeGraph::<Lbl, usize, _>::new(&storage, ExplicitClose::default());
-    ///
-    /// let s1 = sg.add_scope_with(0, [Def]);
-    /// let s2 = sg.add_scope_closed(42);
-    ///
-    /// sg.close(s1, &Def);
-    /// sg.add_edge(s1, Def, s2).expect_err("cannot add edge after closing edge");
-    /// ```
-    ///
-    /// Closing is required to permit queries to traverse these edges:
-    /// ```
-    ///
-    /// # use scopegraphs::completeness::ExplicitClose;
-    /// # use scopegraphs::ScopeGraph;
-    /// # use scopegraphs::resolve::{DefaultDataEquivalence, DefaultLabelOrder, EdgeOrData, Resolve};
-    /// # use scopegraphs_macros::{compile_regex, Label};
-    /// # use scopegraphs::Storage;
-    /// #
-    /// # #[derive(Eq, Hash, PartialEq, Label, Debug, Copy, Clone)]
-    /// # enum Lbl { Def }
-    /// # use Lbl::*;
-    /// # type LblD = EdgeOrData<Lbl>;
-    /// #
-    /// # compile_regex!(type Regex<Lbl> = Def);
-    /// let storage = Storage::new();
-    /// let mut sg = ScopeGraph::<Lbl, usize, _>::new(&storage, ExplicitClose::default());
-    ///
-    /// let s1 = sg.add_scope_with(0, [Def]);
-    /// let s2 = sg.add_scope_closed(42);
-    ///
-    /// // Note: not calling `sg.close(s1, &Def)`
-    ///
-    /// let query_result = sg.query()
-    ///     .with_path_wellformedness(Regex::new()) // regex: `Def`
-    ///     .with_data_wellformedness(|x: &usize| *x == 42) // match `42`
-    ///     .resolve(s1);
-    ///
-    /// query_result.expect_err("require s1/Def to be closed");
-    /// ```
-    ///
-    /// Closing allows queries to resolve:
-    /// ```
-    ///
-    /// # use scopegraphs::completeness::ExplicitClose;
-    /// # use scopegraphs::ScopeGraph;
-    /// # use scopegraphs::resolve::{DefaultDataEquivalence, DefaultLabelOrder, EdgeOrData, Resolve};
-    /// # use scopegraphs_macros::{compile_regex, Label};
-    /// # use scopegraphs::Storage;
-    /// #
-    /// # #[derive(Eq, Hash, PartialEq, Label, Debug, Copy, Clone)]
-    /// # enum Lbl { Def }
-    /// # use Lbl::*;
-    /// # type LblD = EdgeOrData<Lbl>;
-    /// #
-    /// # compile_regex!(type Regex<Lbl> = Def);
-    /// let storage = Storage::new();
-    /// let mut sg = ScopeGraph::<Lbl, usize, _>::new(&storage, ExplicitClose::default());
-    ///
-    /// let s1 = sg.add_scope_with(0, [Def]);
-    /// let s2 = sg.add_scope_closed(42);
-    ///
-    /// // Note: closing the edge *after* creating all edges, *before* doing the query
-    /// sg.close(s1, &Def);
-    ///
-    /// let query_result = sg.query()
-    ///     .with_path_wellformedness(Regex::new()) // regex: `Def`
-    ///     .with_data_wellformedness(|x: &usize| *x == 42) // match `42`
-    ///     .resolve(s1);
-    ///
-    /// query_result.expect("query should return result");
-    /// ```
-    pub fn close(&self, scope: Scope, label: &LABEL) {
-        self.completeness.close(scope, label)
-    }
-}
-
-impl<'sg, LABEL: Hash + Eq + Copy, DATA> ScopeGraph<'sg, LABEL, DATA, FutureCompleteness<LABEL>> {
-    // TODO: update this example to use futures
-    // TODO: fix this sentence
-    /// Closes an edge, (i.e., prohibit future new
-    ///
-    /// For example, the following program will return an error.
-    /// ```
-    /// # use scopegraphs::completeness::ExplicitClose;
-    /// # use scopegraphs::ScopeGraph;
-    /// # use scopegraphs_macros::Label;
-    /// # use scopegraphs::Storage;
-    /// # #[derive(Eq, Hash, PartialEq, Label)] enum Lbl { Def }
-    /// # use Lbl::*;
-    /// let storage = Storage::new();
-    /// let mut sg = ScopeGraph::<Lbl, usize, _>::new(&storage, ExplicitClose::default());
-    ///
-    /// let s1 = sg.add_scope_with(0, [Def]);
-    /// let s2 = sg.add_scope_closed(42);
-    ///
-    /// sg.close(s1, &Def);
-    /// sg.add_edge(s1, Def, s2).expect_err("cannot add edge after closing edge");
-    /// ```
-    ///
-    /// Closing is required to permit queries to traverse these edges:
-    /// ```
-    ///
-    /// # use scopegraphs::completeness::ExplicitClose;
-    /// # use scopegraphs::ScopeGraph;
-    /// # use scopegraphs::resolve::{DefaultDataEquivalence, DefaultLabelOrder, EdgeOrData, Resolve};
-    /// # use scopegraphs_macros::{compile_regex, Label};
-    /// # use scopegraphs::Storage;
-    /// #
-    /// # #[derive(Eq, Hash, PartialEq, Label, Debug, Copy, Clone)]
-    /// # enum Lbl { Def }
-    /// # use Lbl::*;
-    /// # type LblD = EdgeOrData<Lbl>;
-    /// #
-    /// # compile_regex!(type Regex<Lbl> = Def);
-    /// let storage = Storage::new();
-    /// let mut sg = ScopeGraph::<Lbl, usize, _>::new(&storage, ExplicitClose::default());
-    ///
-    /// let s1 = sg.add_scope_with(0, [Def]);
-    /// let s2 = sg.add_scope_closed(42);
-    ///
-    /// // Note: not calling `sg.close(s1, &Def)`
-    ///
-    /// let query_result = sg.query()
-    ///     .with_path_wellformedness(Regex::new()) // regex: `Def`
-    ///     .with_data_wellformedness(|x: &usize| *x == 42) // match `42`
-    ///     .resolve(s1);
-    ///
-    /// query_result.expect_err("require s1/Def to be closed");
-    /// ```
-    ///
-    /// Closing allows queries to resolve:
-    /// ```
-    ///
-    /// # use scopegraphs::completeness::ExplicitClose;
-    /// # use scopegraphs::ScopeGraph;
-    /// # use scopegraphs::resolve::{DefaultDataEquivalence, DefaultLabelOrder, EdgeOrData, Resolve};
-    /// # use scopegraphs_macros::{compile_regex, Label};
-    /// # use scopegraphs::Storage;
-    /// #
-    /// # #[derive(Eq, Hash, PartialEq, Label, Debug, Copy, Clone)]
-    /// # enum Lbl { Def }
-    /// # use Lbl::*;
-    /// # type LblD = EdgeOrData<Lbl>;
-    /// #
-    /// # compile_regex!(type Regex<Lbl> = Def);
-    /// let storage = Storage::new();
-    /// let mut sg = ScopeGraph::<Lbl, usize, _>::new(&storage, ExplicitClose::default());
-    ///
-    /// let s1 = sg.add_scope_with(0, [Def]);
-    /// let s2 = sg.add_scope_closed(42);
-    ///
-    /// // Note: closing the edge *after* creating all edges, *before* doing the query
-    /// sg.close(s1, &Def);
-    ///
-    /// let query_result = sg.query()
-    ///     .with_path_wellformedness(Regex::new()) // regex: `Def`
-    ///     .with_data_wellformedness(|x: &usize| *x == 42) // match `42`
-    ///     .resolve(s1);
-    ///
-    /// query_result.expect("query should return result");
-    /// ```
-    pub fn close(&self, scope: Scope, label: &LABEL) {
-        self.completeness.close(scope, label)
     }
 }

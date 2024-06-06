@@ -3,6 +3,8 @@ use crate::completeness::Completeness;
 use crate::scopegraph::{InnerScopeGraph, Scope};
 use std::hash::Hash;
 
+use super::Implicit;
+
 /// No-Op implementation of [`Completeness`].
 #[derive(Debug)]
 pub struct UncheckedCompleteness {}
@@ -63,3 +65,5 @@ impl<LABEL: Hash + Eq, DATA> Completeness<LABEL, DATA> for UncheckedCompleteness
         inner_scope_graph.get_edges(src, lbl)
     }
 }
+
+impl<LABEL: Hash + Eq, DATA> Implicit<LABEL, DATA> for UncheckedCompleteness {}
