@@ -12,3 +12,27 @@ default-members = [
     "scopegraphs-regular-expressions",
     "scopegraphs-render-docs",
 ]
+
+[workspace.package]
+version = "0.3.1"
+authors = [
+    "Aron Zwaan <A.S.Zwaan@tudelft.nl>",
+    "Jonathan Dönszelmann <J.B.Doenszelmann@tudelft.nl>"
+]
+description = "A well-documented port of scopegraphs to Rust"
+license = "MIT OR Apache-2.0"
+edition = "2021"
+rust-version = "1.75"
+repository = "https://github.com/metaborg/rust-scopegraphs"
+documentation = "https://docs.rs/scopegraphs"
+
+[workspace.dependencies]
+quote = "1"
+syn = "2"
+proc-macro2 = "1"
+thiserror = "1"
+
+scopegraphs = { path = "./scopegraphs", version = "0.3.1" }
+scopegraphs-macros = { path = "./scopegraphs-macros", version = "0.3.1" }
+scopegraphs-regular-expressions = { path = "./scopegraphs-regular-expressions", version = "0.3.1" }
+scopegraphs-render-docs = { path = "./scopegraphs-render-docs", version = "0.3.1" }
