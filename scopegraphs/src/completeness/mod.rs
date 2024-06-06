@@ -175,25 +175,26 @@ where
 
     /// Closes the edge, meaning that it cannot be extended anymore.
     /// // TODO: fix this sentence
-    /// Closes an edge, (i.e., prohibit future new
+    /// Closes an edge, (i.e., prohibit future new extensions, by losing ownership of the extends permission).
     ///
     /// For example, the following program will return an error.
-    /// ```
+    /// ```compile_fail
     /// # use scopegraphs::completeness::ExplicitClose;
     /// # use scopegraphs::Label;
     /// # use scopegraphs::Storage;
     /// # use scopegraphs::ScopeGraph;
+    /// # use scopegraphs::add_scope;
     ///
-    /// # #[derive(Eq, Hash, PartialEq, Label)] enum Lbl { Def }
+    /// # #[derive(Eq, Hash, PartialEq, Label, Clone, Copy)] enum Lbl { Def }
     /// # use Lbl::*;
     /// let storage = Storage::new();
     /// let mut sg = ScopeGraph::<Lbl, usize, _>::new(&storage, ExplicitClose::default());
     ///
-    /// let s1 = sg.add_scope_with(0, [Def]);
+    /// let (s1, s1_def) = add_scope!(&sg, 0, [Def]);
     /// let s2 = sg.add_scope_closed(42);
     ///
-    /// sg.close(s1, &Def);
-    /// sg.add_edge(s1, Def, s2).expect_err("cannot add edge after closing edge");
+    /// s1_def.close();
+    /// sg.ext_edge(&s1_def, s2).expect_err("cannot add edge after closing edge");
     /// ```
     ///
     /// Closing is required to permit queries to traverse these edges:
@@ -204,6 +205,7 @@ where
     /// # use scopegraphs::resolve::{DefaultDataEquivalence, DefaultLabelOrder, EdgeOrData, Resolve};
     /// # use scopegraphs_macros::{compile_regex, Label};
     /// # use scopegraphs::Storage;
+    /// # use scopegraphs::add_scope;
     /// #
     /// # #[derive(Eq, Hash, PartialEq, Label, Debug, Copy, Clone)]
     /// # enum Lbl { Def }
@@ -214,10 +216,10 @@ where
     /// let storage = Storage::new();
     /// let mut sg = ScopeGraph::<Lbl, usize, _>::new(&storage, ExplicitClose::default());
     ///
-    /// let s1 = sg.add_scope_with(0, [Def]);
+    /// let (s1, s1_def) = add_scope!(&sg, 0, [Def]);
     /// let s2 = sg.add_scope_closed(42);
     ///
-    /// // Note: not calling `sg.close(s1, &Def)`
+    /// // Note: not calling `s1_def.close()`
     ///
     /// let query_result = sg.query()
     ///     .with_path_wellformedness(Regex::new()) // regex: `Def`
@@ -235,6 +237,7 @@ where
     /// # use scopegraphs::resolve::{DefaultDataEquivalence, DefaultLabelOrder, EdgeOrData, Resolve};
     /// # use scopegraphs_macros::{compile_regex, Label};
     /// # use scopegraphs::Storage;
+    /// # use scopegraphs::add_scope;
     /// #
     /// # #[derive(Eq, Hash, PartialEq, Label, Debug, Copy, Clone)]
     /// # enum Lbl { Def }
@@ -245,11 +248,11 @@ where
     /// let storage = Storage::new();
     /// let mut sg = ScopeGraph::<Lbl, usize, _>::new(&storage, ExplicitClose::default());
     ///
-    /// let s1 = sg.add_scope_with(0, [Def]);
+    /// let (s1, s1_def) = add_scope!(&sg, [Def]);
     /// let s2 = sg.add_scope_closed(42);
     ///
     /// // Note: closing the edge *after* creating all edges, *before* doing the query
-    /// sg.close(s1, &Def);
+    /// s1_def.close();
     ///
     /// let query_result = sg.query()
     ///     .with_path_wellformedness(Regex::new()) // regex: `Def`
