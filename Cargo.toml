@@ -32,6 +32,9 @@ syn = "2"
 proc-macro2 = "1"
 thiserror = "1"
 
+# note this version should stay lower.
+# Scopegraphs is a dev-dependency of scopegraphs-macros, and we deploy scopegraphs macros first.
+# By that time, scopegraphs is not yet released at the right version.
 scopegraphs = { path = "./scopegraphs", version = "0.3" }
 scopegraphs-macros = { path = "./scopegraphs-macros", version = "0.3.2" }
 scopegraphs-regular-expressions = { path = "./scopegraphs-regular-expressions", version = "0.3.2" }
