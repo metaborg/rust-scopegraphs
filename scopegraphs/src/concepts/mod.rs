@@ -39,6 +39,13 @@ use scopegraphs_render_docs::render_scopegraphs;
 /// ```
 /// The scope contains two names: `a` and `b`.
 ///
+/// Other examples of scopes are
+/// * Functions
+/// * Any other block using braces like `if` and `loop`
+/// * Modules
+/// * Structs, or classes in other languages than Rust (they contain fields)
+/// * traits (they contain methods)
+///
 /// In scope graphs, every scope has some kind of associated [scope data](crate::concepts::scope_data),
 /// and any number of [connections](crate::concepts::edges) to other scopes (0 connections is also fine).
 ///
@@ -256,6 +263,7 @@ use scopegraphs_render_docs::render_scopegraphs;
 ///
 /// sg.render_to("output.mmd", RenderSettings::default()).unwrap()
 /// ```
+///
 /// And as you can see, this renders two scopes (0 and 1), not connected by any [edges](crate::concepts::edges) yet.
 ///
 /// Now that you know how to make a scope, I recommend you continue reading about [scope data](crate::concepts::scope_data)
@@ -354,8 +362,8 @@ pub mod scope {}
 ///
 /// <div class="warning">
 ///
-/// Note: if you want to have multiple variable declarations in one scope, you likely do not want to simply make the Data a [`Vec`](std::vec::Vec).
-/// Instead, it's common to make declarations their own scope. We'll look at examples of this in the chapter on [edges](crate::concepts::edges)
+/// Note: if you want to have multiple variable definitions in one scope, you likely do not want to simply make the Data a [`Vec`](std::vec::Vec).
+/// Instead, it's common to make definitions their own scope. We'll look at examples of this in the chapter on [edges](crate::concepts::edges)
 ///
 /// </div>
 ///
@@ -388,7 +396,341 @@ pub mod scope {}
 pub mod scope_data {}
 
 #[render_scopegraphs]
-/// Edges connect [`Scopes`](crate::concepts::scope)
+/// Edges connect [`Scopes`](crate::concepts::scope) together, based on the rules of the language you're trying to create.
+///
+/// By adding edges, you're really starting to use scope graphs.
+///
+/// You can think of edges as the path a name resolution can take. Edges are always directed.
+/// Let's construct a simple scope graph with some edges, and discuss it:
+///
+/// ```rust
+/// # use scopegraphs::*;
+/// # use completeness::{UncheckedCompleteness};
+/// # use resolve::{DataWellformedness, Resolve, ResolvedPath};
+/// # use render::{RenderSettings, RenderScopeData, RenderScopeLabel};
+/// #
+/// #[derive(Label, Hash, PartialEq, Eq, Debug, Clone, Copy)]
+/// enum Lbl {
+///      Lexical,
+///      Definition,
+/// }
+/// #
+/// # #[derive(Hash, PartialEq, Eq, Debug, Default, Clone)]
+/// # enum Data<'a> {
+/// #     #[default]
+/// #     NoData,
+/// #     Variable {
+/// #         name: &'a str,
+/// #     },
+/// # }
+/// #
+/// # impl RenderScopeData for Data<'_> {
+/// #     fn render_node(&self) -> Option<String> {
+/// #         match self {
+/// #             Self::Variable {..} => Some(format!("{self:?}")),
+/// #             _ => None,
+/// #         }
+/// #     }
+/// #
+/// #     fn definition(&self) -> bool {
+/// #         matches!(self, Self::Variable {..})
+/// #     }
+/// # }
+/// #
+/// # impl RenderScopeLabel for Lbl {
+/// #     fn render(&self) -> String {
+/// #         match self {
+/// #             Self::Lexical => "lexical",
+/// #             Self::Definition => "definition",
+/// #         }.to_string()
+/// #     }
+/// # }
+/// #
+/// # let storage = Storage::new();
+/// # let sg: ScopeGraph<Lbl, Data, UncheckedCompleteness> =
+/// # unsafe { ScopeGraph::raw(&storage) };
+///
+/// let global = sg.add_scope_default();
+/// let fn_foo = sg.add_scope_default();
+///
+/// // create a scope in which the variable `bar` is defined
+/// let declares_a_global = sg.add_scope(Data::Variable {name: "bar"});
+///
+/// // create another scope in which the variable `bar` is defined inside foo
+/// let declares_a_local_in_foo = sg.add_scope(Data::Variable {name: "baz"});
+///
+/// // Add some edges
+/// sg.add_edge(fn_foo, Lbl::Lexical, global);
+///
+/// sg.add_edge(global, Lbl::Definition, declares_a_global);
+/// sg.add_edge(fn_foo, Lbl::Definition, declares_a_local_in_foo);
+///
+/// sg.render_to("output.mmd", RenderSettings::default()).unwrap()
+/// ```
+///
+/// Alright, let's analyse the example!
+///
+/// In total we define 4 scopes.
+/// * A global scope, which in the visualization gets ID 0
+/// * A local scope, which in the visualization gets ID 1
+/// * A scope in which `bar` is defined
+/// * A scope in which `baz` is defined
+///
+/// Note, it's common to create new scopes for each variable definition like this.
+///
+/// A rough approximation of a program which would have such a scope structure would be:
+/// ```ignore
+/// // in the global scope
+/// let bar = 3;
+/// fn foo() {
+///     // in foo's scope
+///     let baz = 4;
+/// }
+/// ```
+///
+/// We gave the four scopes various edges between to reflect this program structure
+///
+/// * there's an edge between `foo`'s scope and the global scope labelled `Lexical`,
+///   which represents the fact that the function `foo` is *in* the global scope, and code *in*
+///   foo can access the global scope.
+/// * there are two edges labelled `Definition`, to represent that a certain name is defined in that scope.
+///     * `bar` is declared
+///     * `baz` is declared in fn `foo`
+///
+/// As you can see, edges here have *labels*.
+/// Labels can be an arbitrary type, in the example it's an enum with several options.
+/// Simply put, labels define in _what way_ two scopes are related. `Lexical` and `Definition` are common labels,
+/// but you could also imagine a `Imports`, `Inherits` or `TypeDefinition` label being useful in a programming language.
+/// These labels can later be used to give direction to [queries](crate::concepts) over the scope graph.
+///
+/// # Looking up symbols in a scope graph
+///
+/// The point of a scope graph is that after we have one, we can use it to compute name resolution.
+/// Although we won't get into [queries](crate::concepts) yet, what would such a lookup look like for the tiny
+/// example we've just constructed?
+///
+/// ## Example 1: in the local scope
+///
+/// Let's go for the simple case first. Let's say we now write the following example:
+///
+/// ```ignore
+/// // in the global scope
+/// let bar = 3;
+/// fn foo() {
+///     // in foo's scope
+///     let baz = 4;
+///
+///     println!("{}", baz);
+/// }
+/// ```
+///
+/// On the last line, we want to look up the definition of `baz` to print it.
+/// So first, we look in the current scope: `foo`'s scope. We immediately find a `Definition`
+/// edge which brings us to a variable definition with the name `baz`. So we're done!
+///
+/// ```rust
+/// # use scopegraphs::*;
+/// # use completeness::{UncheckedCompleteness};
+/// # use resolve::{DataWellformedness, Resolve, ResolvedPath};
+/// # use render::{RenderSettings, RenderScopeData, RenderScopeLabel};
+/// #
+/// # #[derive(Label, Hash, PartialEq, Eq, Debug, Clone, Copy)]
+/// # enum Lbl {
+/// #      Lexical,
+/// #      Definition,
+/// # }
+/// #
+/// # #[derive(Hash, PartialEq, Eq, Debug, Default, Clone)]
+/// # enum Data<'a> {
+/// #     #[default]
+/// #     NoData,
+/// #     Variable {
+/// #         name: &'a str,
+/// #     },
+/// # }
+/// #
+/// # impl RenderScopeData for Data<'_> {
+/// #     fn render_node(&self) -> Option<String> {
+/// #         match self {
+/// #             Self::Variable {..} => Some(format!("{self:?}")),
+/// #             _ => None,
+/// #         }
+/// #     }
+/// #
+/// #     fn definition(&self) -> bool {
+/// #         matches!(self, Self::Variable {..})
+/// #     }
+/// # }
+/// #
+/// # impl RenderScopeLabel for Lbl {
+/// #     fn render(&self) -> String {
+/// #         match self {
+/// #             Self::Lexical => "lexical",
+/// #             Self::Definition => "definition",
+/// #         }.to_string()
+/// #     }
+/// # }
+/// #
+/// # let storage = Storage::new();
+/// # let sg: ScopeGraph<Lbl, Data, UncheckedCompleteness> =
+/// # unsafe { ScopeGraph::raw(&storage) };
+/// #
+/// # let global = sg.add_scope_default();
+/// # let fn_foo = sg.add_scope_default();
+/// #
+/// # // create a scope in which the variable `bar` is defined
+/// # let declares_a_global = sg.add_scope(Data::Variable {name: "bar"});
+/// #
+/// # // create another scope in which the variable `bar` is defined inside foo
+/// # let declares_a_local_in_foo = sg.add_scope(Data::Variable {name: "baz"});
+/// #
+/// # // Add some edges
+/// # sg.add_edge(fn_foo, Lbl::Lexical, global);
+/// #
+/// # sg.add_edge(global, Lbl::Definition, declares_a_global);
+/// # sg.add_edge(fn_foo, Lbl::Definition, declares_a_local_in_foo);
+/// #
+/// # let res = sg.query()
+/// #     .with_path_wellformedness(query_regex!(Lbl: Lexical* Definition))
+/// #     .with_data_wellformedness(|a: &Data| matches!(a, Data::Variable {name: "baz"}))
+/// #     .resolve(fn_foo);
+/// #
+/// # sg.render_to("output.mmd", RenderSettings {
+/// #     path: Some(res.get_only_item().unwrap()),
+/// #     ..Default::default()
+/// # }).unwrap()
+/// ```
+///
+/// ## Example 2: in the enclosing (global) scope
+/// Alright, now for a slightly more complicated example:
+///
+/// ```ignore
+/// // in the global scope
+/// let bar = 3;
+/// fn foo() {
+///     // in foo's scope
+///     let baz = 4;
+///
+///     println!("{}", bar);
+/// }
+/// ```
+///
+/// Now, we cannot find a definition of `bar` in `foo`'s scope directly.
+/// So, we can choose to instead traverse the `Lexical` edge to look in the global scope.
+/// Now we *can* find a definition of `bar` (using a `Definition` edge), so we're done.
+///
+/// ```rust
+/// # use scopegraphs::*;
+/// # use completeness::{UncheckedCompleteness};
+/// # use resolve::{DataWellformedness, Resolve, ResolvedPath};
+/// # use render::{RenderSettings, RenderScopeData, RenderScopeLabel};
+/// #
+/// # #[derive(Label, Hash, PartialEq, Eq, Debug, Clone, Copy)]
+/// # enum Lbl {
+/// #      Lexical,
+/// #      Definition,
+/// # }
+/// #
+/// # #[derive(Hash, PartialEq, Eq, Debug, Default, Clone)]
+/// # enum Data<'a> {
+/// #     #[default]
+/// #     NoData,
+/// #     Variable {
+/// #         name: &'a str,
+/// #     },
+/// # }
+/// #
+/// # impl RenderScopeData for Data<'_> {
+/// #     fn render_node(&self) -> Option<String> {
+/// #         match self {
+/// #             Self::Variable {..} => Some(format!("{self:?}")),
+/// #             _ => None,
+/// #         }
+/// #     }
+/// #
+/// #     fn definition(&self) -> bool {
+/// #         matches!(self, Self::Variable {..})
+/// #     }
+/// # }
+/// #
+/// # impl RenderScopeLabel for Lbl {
+/// #     fn render(&self) -> String {
+/// #         match self {
+/// #             Self::Lexical => "lexical",
+/// #             Self::Definition => "definition",
+/// #         }.to_string()
+/// #     }
+/// # }
+/// #
+/// # let storage = Storage::new();
+/// # let sg: ScopeGraph<Lbl, Data, UncheckedCompleteness> =
+/// # unsafe { ScopeGraph::raw(&storage) };
+/// #
+/// # let global = sg.add_scope_default();
+/// # let fn_foo = sg.add_scope_default();
+/// #
+/// # // create a scope in which the variable `bar` is defined
+/// # let declares_a_global = sg.add_scope(Data::Variable {name: "bar"});
+/// #
+/// # // create another scope in which the variable `bar` is defined inside foo
+/// # let declares_a_local_in_foo = sg.add_scope(Data::Variable {name: "baz"});
+/// #
+/// # // Add some edges
+/// # sg.add_edge(fn_foo, Lbl::Lexical, global);
+/// #
+/// # sg.add_edge(global, Lbl::Definition, declares_a_global);
+/// # sg.add_edge(fn_foo, Lbl::Definition, declares_a_local_in_foo);
+/// #
+/// # let res = sg.query()
+/// #     .with_path_wellformedness(query_regex!(Lbl: Lexical* Definition))
+/// #     .with_data_wellformedness(|a: &Data| matches!(a, Data::Variable {name: "bar"}))
+/// #     .resolve(fn_foo);
+/// #
+/// # sg.render_to("output.mmd", RenderSettings {
+/// #     path: Some(res.get_only_item().unwrap()),
+/// #     ..Default::default()
+/// # }).unwrap()
+/// ```
+///
+/// ## Example 3: when name resolution fails
+///
+/// Finally, let's look at an example in which name resolution should obviously fail,
+/// and discuss why it does, using the scope graph we constructed.
+///
+/// ```ignore
+/// // in the global scope
+/// let bar = 3;
+/// fn foo() {
+///     // in foo's scope
+///     let baz = 4;
+/// }
+/// println!("{}", baz);
+/// ```
+/// Now, we try to access `baz` from the global scope,
+/// but we shouldn't be able to because `baz` is defined inside `foo`'s scope.
+///
+/// So what would happen when we performed name resolution here?
+/// Well, we would start in the global scope. There's only a definition of `bar` there,
+/// so we don't instantly succeed. However, we also cannot look any further.
+/// There's no `Lexical` edge from the global scope to `foo`'s scope.
+///
+/// Thus, no results are found when looking up `baz` here.
+///
+/// <div class="warning">
+///
+/// I've heard of people who are confused by the direction of the edges. They would say something like:
+/// In the example, `foo` is _inside of_ the global scope, so why is there an edge _from_ `foo` _towards_
+/// the global scope, and not the other way around?
+///
+/// Keep in mind that the edge direction specifies the direction in which we can walk the graph to find new variable names.
+/// So, if in `foo`'s scope, we want to access a global variable,
+/// we can do that by using the edge _towards_ the global scope and find all the variables there.
+///
+/// Conversely, in the global scope, we cannot access variables in `foo`'s scope,
+/// which is why there is no edge _from_ the global scope _towards_ `foo`'s scope.
+///
+/// </div>
+///
 pub mod edges {}
 
 pub mod completeness;

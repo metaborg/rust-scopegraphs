@@ -96,13 +96,20 @@ impl quote::ToTokens for Attrs {
                         .map(Attr::expect_diagram_entry_text)
                         .collect::<Vec<_>>();
 
-                    tokens.extend(quote! {#[doc = "```rust"]});
-                    for i in &diagram {
-                        tokens.extend(quote! {
-                            #[doc = #i]
-                        });
+                    if !diagram
+                        .iter()
+                        .filter(|i| !i.trim().is_empty())
+                        .all(|i| i.trim().starts_with('#'))
+                        && !diagram.is_empty()
+                    {
+                        tokens.extend(quote! {#[doc = "```rust"]});
+                        for i in &diagram {
+                            tokens.extend(quote! {
+                                #[doc = #i]
+                            });
+                        }
+                        tokens.extend(quote! {#[doc = "```"]});
                     }
-                    tokens.extend(quote! {#[doc = "```"]});
 
                     match generate_diagram_rustdoc(&diagram) {
                         Ok(i) => {
@@ -529,9 +536,9 @@ fn split_attr_body(ident: &Ident, input: &str, loc: &mut Location) -> Vec<Attr> 
 
     let flush_buffer_as_diagram_entry = |ctx: &mut Ctx| {
         let s = ctx.buffer.drain(..).join(" ");
-        if !s.trim().is_empty() {
-            ctx.attrs.push(Attr::DiagramEntry(ident.clone(), s));
-        }
+        // if !s.trim().is_empty() {
+        ctx.attrs.push(Attr::DiagramEntry(ident.clone(), s));
+        // }
     };
 
     while let Some(token) = tokens.next() {
@@ -563,13 +570,13 @@ fn split_attr_body(ident: &Ident, input: &str, loc: &mut Location) -> Vec<Attr> 
         }
     }
 
-    if !ctx.buffer.is_empty() {
-        if loc.is_inside() {
-            flush_buffer_as_diagram_entry(&mut ctx);
-        } else {
-            flush_buffer_as_doc_comment(&mut ctx);
-        };
-    }
+    // if !ctx.buffer.is_empty() {
+    if loc.is_inside() {
+        flush_buffer_as_diagram_entry(&mut ctx);
+    } else {
+        flush_buffer_as_doc_comment(&mut ctx);
+    };
+    // }
 
     ctx.attrs
 }
@@ -684,6 +691,9 @@ mod tests {
         fn check(case: TestCase) {
             let mut loc = case.location;
             let attrs = split_attr_body(&case.ident, case.input, &mut loc);
+            println!("{attrs:?}");
+            println!("---");
+            println!("{:?}", case.expect_attrs);
             assert_eq!(loc, case.expect_location);
             assert_eq!(attrs, case.expect_attrs);
         }
@@ -785,7 +795,10 @@ mod tests {
                 location: Location::InsideDiagram,
                 input: "```",
                 expect_location: Location::OutsideDiagram,
-                expect_attrs: vec![Attr::DiagramEnd(i())],
+                expect_attrs: vec![
+                    Attr::DiagramEntry(i(), "".to_string()),
+                    Attr::DiagramEnd(i()),
+                ],
             };
 
             check(case)
