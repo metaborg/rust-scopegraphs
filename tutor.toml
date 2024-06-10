@@ -1,0 +1,22 @@
+[files]
+include = ["*.rs"]
+root = "scopegraphs/src/concepts"
+
+[parsing]
+line_comment = [
+    "///",
+    "//",
+    "//!",
+]
+block_comment = [
+    [
+        "/*",
+        "*/",
+        true,
+    ],
+    [
+        "/**",
+        "*/",
+        true,
+    ],
+]
