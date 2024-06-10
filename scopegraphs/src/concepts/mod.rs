@@ -456,6 +456,15 @@ pub mod scope_data {}
 /// #     fn definition(&self) -> bool {
 /// #         matches!(self, Self::Variable {..})
 /// #     }
+// {tutor name "explicit-relabel-global"}
+/// #     fn explicit_relabel(&self, scope_id: usize) -> Option<String> {
+/// #         match scope_id {
+/// #             0 => Some("global".to_string()),
+/// #             1 => Some("foo".to_string()),
+/// #             _ => None
+/// #         }
+/// #     }
+// {tutor end name }
 /// # }
 /// #
 /// # impl RenderScopeLabel for Lbl {
@@ -581,6 +590,15 @@ pub mod scope_data {}
 /// #     fn definition(&self) -> bool {
 /// #         matches!(self, Self::Variable {..})
 /// #     }
+// {tutor inserted "explicit-relabel-global"}
+/// #     fn explicit_relabel(&self, scope_id: usize) -> Option<String> {
+/// #         match scope_id {
+/// #             0 => Some("global".to_string()),
+/// #             1 => Some("foo".to_string()),
+/// #             _ => None
+/// #         }
+/// #     }
+// {tutor end insert}
 /// # }
 /// #
 /// # impl RenderScopeLabel for Lbl {
@@ -672,6 +690,15 @@ pub mod scope_data {}
 /// #     fn definition(&self) -> bool {
 /// #         matches!(self, Self::Variable {..})
 /// #     }
+// {tutor inserted "explicit-relabel-global"}
+/// #     fn explicit_relabel(&self, scope_id: usize) -> Option<String> {
+/// #         match scope_id {
+/// #             0 => Some("global".to_string()),
+/// #             1 => Some("foo".to_string()),
+/// #             _ => None
+/// #         }
+/// #     }
+// {tutor end insert}
 /// # }
 /// #
 /// # impl RenderScopeLabel for Lbl {

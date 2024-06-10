@@ -13,10 +13,10 @@
 #![allow(clippy::empty_docs)]
 
 #[cfg(feature = "documentation")]
-pub mod concepts;
+pub mod examples;
 
 #[cfg(feature = "documentation")]
-pub mod patterns;
+pub mod concepts;
 
 #[macro_use]
 mod label;

@@ -1,6 +1,9 @@
 [files]
-include = ["*.rs"]
-root = "scopegraphs/src/concepts"
+include = [
+    "src/concepts/*.rs",
+    "examples/*.rs",
+]
+root = "scopegraphs"
 
 [parsing]
 line_comment = [
