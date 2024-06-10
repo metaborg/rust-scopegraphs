@@ -118,6 +118,10 @@ pub trait RenderScopeData {
     fn definition(&self) -> bool {
         self.render_node().is_some()
     }
+
+    fn explicit_relabel(&self, scope_id: usize) -> Option<String> {
+        None
+    }
 }
 
 fn scope_to_node_name(s: Scope) -> String {
@@ -188,8 +192,12 @@ impl<
 
             let mut attrs = Vec::new();
 
-            let label =
-                escape_text_mermaid(&data.render_node().unwrap_or_else(|| scope.0.to_string()));
+            let label = escape_text_mermaid(
+                &data
+                    .render_node()
+                    .or_else(|| data.explicit_relabel(scope.0))
+                    .unwrap_or_else(|| scope.0.to_string()),
+            );
 
             if let Some(label) = data.render_node_label() {
                 attrs.push(format!(r#"[xlabel="{}"]"#, escape_text_mermaid(&label)))
@@ -214,9 +222,9 @@ impl<
             let label = escape_text_mermaid(&edge.to.label_text);
 
             if settings.show_edge_labels {
-                writeln!(output, r#"{from_str} ==>|"{label}"| {to_str}"#)?
+                writeln!(output, r#"    {from_str} -->|"{label}"| {to_str}"#)?
             } else {
-                writeln!(output, "    {from_str} ==> {to_str}")?
+                writeln!(output, "    {from_str} --> {to_str}")?
             }
 
             if let Some(ref i) = settings.path {
@@ -235,9 +243,24 @@ impl<
                     }
                 }
 
+                let mut link_style = Vec::new();
                 if part_of_path {
-                    writeln!(output, "linkStyle {idx} stroke: red")?;
+                    link_style.push("stroke: red".to_string());
                 }
+
+                if !link_style.is_empty() {
+                    writeln!(output, "    linkStyle {idx} {}", link_style.join(","))?;
+                }
+            }
+        }
+
+        if let Some(i) = settings.path {
+            writeln!(output, r#"    path-start["start of lookup"]"#)?;
+
+            if let Some(first_scope) = i.scopes().last() {
+                let to_str = scope_to_node_name(first_scope);
+                writeln!(output, "    path-start --> {to_str}")?;
+                writeln!(output, "    linkStyle {} stroke: red", edges.len())?;
             }
         }
 
