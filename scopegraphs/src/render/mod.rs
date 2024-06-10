@@ -119,7 +119,11 @@ pub trait RenderScopeData {
         self.render_node().is_some()
     }
 
+    /// Force a scope which otherwise wouldn't get a label to get a label
+    /// based on its scope id. Mostly used in the documentation of this crate
+    /// for clarity.
     fn explicit_relabel(&self, scope_id: usize) -> Option<String> {
+        let _ = scope_id;
         None
     }
 }

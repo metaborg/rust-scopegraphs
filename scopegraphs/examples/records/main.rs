@@ -3,14 +3,13 @@ use crate::queries::{resolve_lexical_ref, resolve_member_ref, resolve_record_ref
 use async_recursion::async_recursion;
 use futures::future::{join, join_all};
 use scopegraphs::completeness::FutureCompleteness;
-use scopegraphs::RenderScopeData;
+use scopegraphs::render::{EdgeStyle, EdgeTo, RenderScopeData, RenderScopeLabel, RenderSettings};
 use scopegraphs::{Scope, ScopeGraph, Storage};
 use scopegraphs_macros::Label;
 use smol::LocalExecutor;
 use std::cell::RefCell;
 use std::error::Error;
-use std::fmt::Debug;
-use std::fs::File;
+use std::fmt::{Debug, Display, Formatter};
 use std::future::Future;
 use std::rc::Rc;
 use union_find::UnionFind;
@@ -43,12 +42,48 @@ enum SgData {
 }
 
 impl RenderScopeData for SgData {
-    fn render(&self) -> Option<String> {
+    fn render_node(&self) -> Option<String> {
         match self {
-            SgData::VarDecl { name, ty } => Some(format!("var {name}: {ty:?}")),
-            SgData::TypeDecl { name, scope } => Some(format!("record {name} -> {scope:?}")),
+            SgData::VarDecl { name, .. } | SgData::TypeDecl { name, .. } => Some(name.to_string()),
             SgData::Nothing => None,
         }
+    }
+
+    fn render_node_label(&self) -> Option<String> {
+        match self {
+            SgData::VarDecl { ty, .. } => {
+                if matches!(ty, PartialType::Variable(_)) {
+                    None
+                } else {
+                    Some(ty.to_string())
+                }
+            }
+            SgData::TypeDecl { .. } => None,
+            SgData::Nothing => None,
+        }
+    }
+
+    fn extra_edges(&self) -> Vec<EdgeTo> {
+        if let SgData::TypeDecl { scope, .. } = self {
+            vec![EdgeTo {
+                to: *scope,
+                edge_style: EdgeStyle {},
+                label_text: "fields".to_string(),
+            }]
+        } else {
+            Vec::new()
+        }
+    }
+}
+
+impl RenderScopeLabel for SgLabel {
+    fn render(&self) -> String {
+        match self {
+            SgLabel::TypeDefinition => "typ",
+            SgLabel::Definition => "def",
+            SgLabel::Lexical => "lex",
+        }
+        .to_string()
     }
 }
 
@@ -83,6 +118,16 @@ enum PartialType {
     Record { name: String, scope: Scope },
     /// A number type
     Int,
+}
+
+impl Display for PartialType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PartialType::Variable(v) => write!(f, "#{}", v.0),
+            PartialType::Record { name, .. } => write!(f, "record {name}"),
+            PartialType::Int => write!(f, "int"),
+        }
+    }
 }
 
 type RecordScopegraph<'sg> = ScopeGraph<'sg, SgLabel, SgData, FutureCompleteness<SgLabel>>;
@@ -338,7 +383,10 @@ fn typecheck(ast: &Program) -> Option<Type> {
     });
 
     tc.sg
-        .render(&mut File::create("sg.dot").unwrap(), "sg")
+        .render_to(
+            "sg.dot",
+            RenderSettings::default().with_name("example with records"),
+        )
         .unwrap();
     println!("{:?}", tc.uf.borrow());
 

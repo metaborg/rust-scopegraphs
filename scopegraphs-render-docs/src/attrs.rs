@@ -10,7 +10,7 @@ use std::io::{stderr, stdout, Write};
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
-use std::{fs, io};
+use std::{env, fs, io};
 use syn::{Attribute, Ident, MetaNameValue};
 use uuid::Uuid;
 
@@ -320,7 +320,7 @@ fn run_code(code: &str) -> Result<Vec<String>, EvalError> {
 
     // this if is so it works on docs.rs,
     // which sets a custom target and compiles in a folder called "workdir"
-    let (sg_dir, target_dir, offline) = if manifest_dir.join("..").join("workdir").exists() {
+    let (sg_dir, target_dir, offline, temp) = if manifest_dir.join("..").join("workdir").exists() {
         (
             manifest_dir
                 .join("..")
@@ -329,6 +329,7 @@ fn run_code(code: &str) -> Result<Vec<String>, EvalError> {
                 .to_string(),
             "/opt/rustwide/target".to_string(),
             true,
+            temp_dir(),
         )
     } else {
         (
@@ -337,8 +338,9 @@ fn run_code(code: &str) -> Result<Vec<String>, EvalError> {
                 .join("scopegraphs")
                 .to_string_lossy()
                 .to_string(),
-            target_dir,
+            target_dir.clone(),
             true,
+            Path::new(&env::var("HOME").unwrap()).join("sg-temp"),
         )
     };
 
@@ -357,10 +359,10 @@ fn run_code(code: &str) -> Result<Vec<String>, EvalError> {
     }
 
     let code_hash = Uuid::new_v4().to_string();
-    let out_dir = &temp_dir().join("render-docs").join(&code_hash);
+    let out_dir = &temp.join("render-docs").join(&code_hash);
     println!("testing in {out_dir:?}");
 
-    let sg_target_dir = temp_dir().join(format!("SG_TARGET-{}", code_hash));
+    let sg_target_dir = temp.join(format!("SG_TARGET-{}", code_hash));
     if sg_target_dir.exists() {
         let _ = fs::remove_dir_all(&sg_target_dir);
     }
@@ -443,8 +445,11 @@ fn documented() {{}}
     }
 
     let _ = fs::remove_dir_all(&sg_target_dir);
+    let res = find_diagrams(out_dir)?;
 
-    find_diagrams(out_dir)
+    let _ = fs::remove_dir_all(&out_dir);
+
+    Ok(res)
 }
 
 fn generate_diagram_rustdoc(parts: &[&str]) -> Result<TokenStream, EvalError> {
