@@ -96,6 +96,8 @@ impl quote::ToTokens for Attrs {
                         .map(Attr::expect_diagram_entry_text)
                         .collect::<Vec<_>>();
 
+                    let no_graph = diagram.iter().any(|i| i.contains("no-graph"));
+
                     if !diagram
                         .iter()
                         .filter(|i| !i.trim().is_empty())
@@ -103,7 +105,15 @@ impl quote::ToTokens for Attrs {
                         && !diagram.is_empty()
                     {
                         tokens.extend(quote! {#[doc = "```rust"]});
-                        for i in &diagram {
+                        let first_nonempty =
+                            diagram.iter().take_while(|i| i.trim().is_empty()).count();
+                        let last_nonempty = diagram
+                            .iter()
+                            .rev()
+                            .take_while(|i| i.trim().is_empty())
+                            .count();
+
+                        for i in &diagram[first_nonempty..diagram.len() - last_nonempty] {
                             tokens.extend(quote! {
                                 #[doc = #i]
                             });
@@ -111,36 +121,42 @@ impl quote::ToTokens for Attrs {
                         tokens.extend(quote! {#[doc = "```"]});
                     }
 
-                    match generate_diagram_rustdoc(&diagram) {
-                        Ok(i) => {
-                            tokens.extend(i);
-                        }
-                        Err(e) => match e {
-                            EvalError::CreateDir(i) => {
-                                emit_error!(
+                    if !no_graph {
+                        match generate_diagram_rustdoc(&diagram) {
+                            Ok(i) => {
+                                tokens.extend(i);
+                            }
+                            Err(e) => match e {
+                                EvalError::CreateDir(i) => {
+                                    emit_error!(
                                     Span::call_site(),
                                     "failed to create temporary directory to generate mermaid files {:?}",
                                     i,
                                 );
-                            }
-                            EvalError::WriteProject(i) => {
-                                emit_error!(
+                                }
+                                EvalError::WriteProject(i) => {
+                                    emit_error!(
                                     Span::call_site(),
                                     "failed to write project file in temporary directory to generate mermaid files {:?}",
                                     i,
                                 );
-                            }
-                            EvalError::RunCargo(i) => {
-                                emit_error!(Span::call_site(), "error while running cargo {:?}", i);
-                            }
-                            EvalError::ReadDir(i) => {
-                                emit_error!(
-                                    Span::call_site(),
-                                    "error while looking for output files {:?}",
-                                    i
-                                );
-                            }
-                        },
+                                }
+                                EvalError::RunCargo(i) => {
+                                    emit_error!(
+                                        Span::call_site(),
+                                        "error while running cargo {:?}",
+                                        i
+                                    );
+                                }
+                                EvalError::ReadDir(i) => {
+                                    emit_error!(
+                                        Span::call_site(),
+                                        "error while looking for output files {:?}",
+                                        i
+                                    );
+                                }
+                            },
+                        }
                     }
                 }
                 // If that happens, then the parsing stage is faulty: doc comments outside of
@@ -178,7 +194,19 @@ impl quote::ToTokens for Attrs {
 
 fn place_mermaid_js() -> io::Result<()> {
     let target_dir = std::env::var("CARGO_TARGET_DIR").unwrap_or("./target".to_string());
-    let docs_dir = Path::new(&target_dir).join("doc");
+    if !Path::new(&target_dir).exists() {
+        eprintln!("NO TARGET DIR");
+    }
+
+    let mut docs_dir = Path::new(&target_dir).join("doc");
+
+    for i in fs::read_dir(target_dir)?.filter_map(Result::ok) {
+        if i.path().join("doc").exists() {
+            docs_dir = i.path().join("doc");
+            break;
+        }
+    }
+
     // extract mermaid module iff rustdoc folder exists already
     if docs_dir.exists() {
         let static_files_mermaid_dir = docs_dir.join(MERMAID_JS_LOCAL_DIR);
@@ -239,7 +267,7 @@ const MERMAID_INIT_SCRIPT: &str = r#"
     // enable file acecss in browser.
     try {
        var rootPath = document
-         .getElementById(rustdocVarsId)
+         .getElementsByName(rustdocVarsId)[0]
          .attributes[dataRootPathAttr]
          .value;
        const {

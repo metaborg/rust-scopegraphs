@@ -42,6 +42,7 @@ use scopegraphs_render_docs::render_scopegraphs;
 ///
 /// In a programming language, like Rust, a scope might be represented as a set of braces:
 /// ```rust
+/// # // no-graph
 /// {
 ///     let a = 3;
 ///     let b = 4;
@@ -69,6 +70,7 @@ use scopegraphs_render_docs::render_scopegraphs;
 /// To make a scope, you first need a scope graph object, and to build a scope graph, you first need a scope graph storage object:
 ///
 /// ```rust
+/// # // no-graph
 /// # use scopegraphs::*;
 /// # use completeness::{ImplicitClose};
 /// # use resolve::{DataWellformedness, Resolve, ResolvedPath};
@@ -133,6 +135,7 @@ use scopegraphs_render_docs::render_scopegraphs;
 ///
 /// Now, we can finally create a scope by using [`add_scope_default`](crate::ScopeGraph::add_scope_default).
 /// ```rust
+/// # // no-graph
 /// # use scopegraphs::*;
 /// # use completeness::{UncheckedCompleteness};
 /// # use resolve::{DataWellformedness, Resolve, ResolvedPath};
@@ -295,6 +298,7 @@ pub mod scope {}
 /// However, often scope data will look somewhat similar to the following:
 ///
 /// ```rust
+/// # // no-graph
 /// # use scopegraphs::*;
 /// # use completeness::{UncheckedCompleteness};
 /// # use resolve::{DataWellformedness, Resolve, ResolvedPath};
@@ -390,6 +394,7 @@ pub mod scope {}
 /// In the above examples, we've used this hidden implementation of RenderScopeData:
 ///
 /// ```
+/// # // no-graph
 /// # use scopegraphs::*;
 /// # use completeness::{UncheckedCompleteness};
 /// # use resolve::{DataWellformedness, Resolve, ResolvedPath};
