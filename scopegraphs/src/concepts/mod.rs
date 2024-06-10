@@ -8,10 +8,20 @@
 //! * [A scope's data](scope_data)
 //! * [Labelled edges between scopes](edges)
 //!
-//! Once you know what a scope graph is,
-//! we can start talking about running queries over them.
-//! For a query to return the desired result, we may need to
-//! specify the following properties:
+//! If you read those three pages, you know how we can build a scope graph.
+//! At this point you might:
+//!
+//! * [Continue reading about how you can actually use such a scope graph by running queries](#queries), or
+//! * [Take a look at some small examples in a toy language, and what the scope graph for that looks like](TODO), or
+//! * [Take a look at a toy language which uses scope graphs for type checking](), though for this I recommend learning about queries first.
+//!
+//! # Queries
+//!
+//! A scope graph query really consists of two parts:
+//! * A goal, something to find in the graph.
+//! * Some constraints, that restricts in what way we can look for a goal.
+//! 
+//! However, we specify 
 //!
 //! * A [Path Well-Formedness](path_wellformedness), dictating what paths are valid for the query to take. Comes in the form of a Regular Expression.
 //! * A [Data Well-Formedness](data_wellformedness), dictating which scopes are valid for the query to return. Only if a scope's data satisfies the data well-formedness then a query can return it.
@@ -63,12 +73,9 @@ use scopegraphs_render_docs::render_scopegraphs;
 /// # use completeness::{ImplicitClose};
 /// # use resolve::{DataWellformedness, Resolve, ResolvedPath};
 /// # use render::{RenderSettings, RenderScopeData, RenderScopeLabel};
-/// #
+// {tutor name "empty-label"}
 /// # #[derive(Label, Hash, PartialEq, Eq, Debug, Clone, Copy)]
 /// # enum Lbl {}
-/// # #[derive(Hash, PartialEq, Eq, Debug, Clone)]
-/// # enum Data {}
-/// # impl RenderScopeData for Data {}
 /// #
 /// # impl RenderScopeLabel for Lbl {
 /// #     fn render(&self) -> String {
@@ -78,6 +85,12 @@ use scopegraphs_render_docs::render_scopegraphs;
 /// #     }
 /// # }
 /// #
+// {tutor end name }
+// {tutor name "empty-data"}
+/// # #[derive(Hash, PartialEq, Eq, Debug, Clone)]
+/// # enum Data {}
+/// # impl RenderScopeData for Data {}
+// {tutor end name }
 /// let storage = Storage::new();
 ///
 /// let sg: ScopeGraph<Lbl, Data, ImplicitClose<Lbl>> = ScopeGraph::new(&storage, ImplicitClose::default());
@@ -91,12 +104,9 @@ use scopegraphs_render_docs::render_scopegraphs;
 /// # use completeness::{ImplicitClose};
 /// # use resolve::{DataWellformedness, Resolve, ResolvedPath};
 /// # use render::{RenderSettings, RenderScopeData, RenderScopeLabel};
-/// #
+// {tutor inserted "empty-label"}
 /// # #[derive(Label, Hash, PartialEq, Eq, Debug, Clone, Copy)]
 /// # enum Lbl {}
-/// # #[derive(Hash, PartialEq, Eq, Debug, Clone)]
-/// # enum Data {}
-/// # impl RenderScopeData for Data {}
 /// #
 /// # impl RenderScopeLabel for Lbl {
 /// #     fn render(&self) -> String {
@@ -106,6 +116,12 @@ use scopegraphs_render_docs::render_scopegraphs;
 /// #     }
 /// # }
 /// #
+// {tutor end insert}
+// {tutor inserted "empty-data"}
+/// # #[derive(Hash, PartialEq, Eq, Debug, Clone)]
+/// # enum Data {}
+/// # impl RenderScopeData for Data {}
+// {tutor end insert}
 /// type MyScopeGraph<'s> = ScopeGraph<'s, Lbl, Data, ImplicitClose<Lbl>>;
 ///
 /// let storage = Storage::new();
