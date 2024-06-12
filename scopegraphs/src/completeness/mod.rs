@@ -34,6 +34,7 @@ mod private {
 }
 
 use crate::scopegraph::{InnerScopeGraph, Scope};
+use crate::Label;
 use private::Sealed;
 
 /*** Completeness trait ***/
@@ -61,7 +62,7 @@ use private::Sealed;
 /// You cannot define your own completeness strategies to ensure that only verified implementations are available.
 // TODO: @Aron could you document this?
 #[allow(missing_docs)]
-pub trait Completeness<LABEL, DATA>: Sealed {
+pub trait Completeness<LABEL: Label, DATA>: Sealed {
     fn cmpl_new_scope(&self, inner_scope_graph: &InnerScopeGraph<LABEL, DATA>, scope: Scope);
 
     /// Should initialize a scope without possibility to extend it with edges

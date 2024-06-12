@@ -1,5 +1,5 @@
 use crate::completeness::Completeness;
-use crate::{Scope, ScopeGraph};
+use crate::{Label, Scope, ScopeGraph};
 use std::cell::RefCell;
 use std::{collections::HashSet, hash::Hash};
 
@@ -38,7 +38,7 @@ impl<LABEL: Hash + Eq> CriticalEdgeSet<LABEL> {
 /// Provides utility function to create scopes with particular open edges.
 ///
 /// Should not be called externally, but only from utility function on [`crate::ScopeGraph`].
-pub trait CriticalEdgeBasedCompleteness<LABEL, DATA>: Completeness<LABEL, DATA> {
+pub trait CriticalEdgeBasedCompleteness<LABEL: Label, DATA>: Completeness<LABEL, DATA> {
     /// Initializes a new scope with a certain set of edges that are still considered "open".
     fn init_scope_with(&self, open_edges: HashSet<LABEL>);
 }
@@ -68,7 +68,7 @@ pub struct Delay<LABEL> {
 /// Convenience alias for the type of `Result` returned from queries using [critical edge based completion](CriticalEdgeBasedCompleteness)
 pub type EdgesOrDelay<EDGES, LABEL> = Result<EDGES, Delay<LABEL>>;
 
-impl<'sg, LABEL: Hash + Eq, DATA, CMPL> ScopeGraph<'sg, LABEL, DATA, CMPL>
+impl<'sg, LABEL: Hash + Eq + Label, DATA, CMPL> ScopeGraph<'sg, LABEL, DATA, CMPL>
 where
     CMPL: CriticalEdgeBasedCompleteness<LABEL, DATA>,
 {
@@ -91,7 +91,7 @@ where
     }
 }
 
-impl<'sg, LABEL: Hash + Eq, DATA, CMPL> ScopeGraph<'sg, LABEL, DATA, CMPL>
+impl<'sg, LABEL: Hash + Eq + Label, DATA, CMPL> ScopeGraph<'sg, LABEL, DATA, CMPL>
 where
     DATA: Default,
     CMPL: CriticalEdgeBasedCompleteness<LABEL, DATA>,

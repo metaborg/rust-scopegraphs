@@ -1,5 +1,4 @@
 use bumpalo::Bump;
-use std::fmt::{Debug, Formatter};
 
 /// Holds data for a [`ScopeGraph`](crate::ScopeGraph). Required to construct a `ScopeGraph`.
 ///
@@ -7,12 +6,6 @@ use std::fmt::{Debug, Formatter};
 /// and lifetimes of items in the scope graph will be tied to an instance of `Storage`.
 #[derive(Default)]
 pub struct Storage(pub Bump);
-
-impl Debug for Storage {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "<scopegraph storage>")
-    }
-}
 
 impl Storage {
     /// Creates a new storage object.

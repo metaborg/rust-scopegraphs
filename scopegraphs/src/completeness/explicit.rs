@@ -19,11 +19,11 @@ use std::{collections::HashSet, hash::Hash};
 /// Returns [`Delay`] when edges are retrieved (e.g. during query resolution) for an edge that is
 /// not yet closed.
 #[derive(Debug)]
-pub struct ExplicitClose<LABEL> {
+pub struct ExplicitClose<LABEL: Label> {
     critical_edges: CriticalEdgeSet<LABEL>,
 }
 
-impl<LABEL> Default for ExplicitClose<LABEL> {
+impl<LABEL: Label> Default for ExplicitClose<LABEL> {
     fn default() -> Self {
         ExplicitClose {
             critical_edges: CriticalEdgeSet::default(),
@@ -31,7 +31,7 @@ impl<LABEL> Default for ExplicitClose<LABEL> {
     }
 }
 
-impl<LABEL> Sealed for ExplicitClose<LABEL> {}
+impl<LABEL: Label> Sealed for ExplicitClose<LABEL> {}
 
 impl<LABEL: Hash + Eq + Label, DATA> Completeness<LABEL, DATA> for ExplicitClose<LABEL> {
     fn cmpl_new_scope(&self, _: &InnerScopeGraph<LABEL, DATA>, _: Scope) {
@@ -101,7 +101,7 @@ impl<LABEL: Hash + Eq + Label, DATA> CriticalEdgeBasedCompleteness<LABEL, DATA>
     }
 }
 
-impl<LABEL: Hash + Eq> ExplicitClose<LABEL> {
+impl<LABEL: Label + Hash> ExplicitClose<LABEL> {
     /// Close a scope for a certain label
     /// // TODO: link to "closing" in concepts
     pub fn close(&self, scope: Scope, label: &LABEL) {
@@ -109,7 +109,7 @@ impl<LABEL: Hash + Eq> ExplicitClose<LABEL> {
     }
 }
 
-impl<'sg, LABEL: Hash + Eq, DATA> ScopeGraph<'sg, LABEL, DATA, ExplicitClose<LABEL>> {
+impl<'sg, LABEL: Label + Hash, DATA> ScopeGraph<'sg, LABEL, DATA, ExplicitClose<LABEL>> {
     // TODO: fix this sentence
     /// Closes an edge, (i.e., prohibit future new
     ///
@@ -120,7 +120,7 @@ impl<'sg, LABEL: Hash + Eq, DATA> ScopeGraph<'sg, LABEL, DATA, ExplicitClose<LAB
     /// # use scopegraphs::Storage;
     /// # use scopegraphs::ScopeGraph;
     ///
-    /// # #[derive(Eq, Hash, PartialEq, Label)] enum Lbl { Def }
+    /// # #[derive(Eq, Hash, PartialEq, Label, Copy, Clone)] enum Lbl { Def }
     /// # use Lbl::*;
     /// let storage = Storage::new();
     /// let mut sg = ScopeGraph::<Lbl, usize, _>::new(&storage, ExplicitClose::default());
@@ -199,7 +199,7 @@ impl<'sg, LABEL: Hash + Eq, DATA> ScopeGraph<'sg, LABEL, DATA, ExplicitClose<LAB
     }
 }
 
-impl<'sg, LABEL: Hash + Eq + Copy, DATA> ScopeGraph<'sg, LABEL, DATA, FutureCompleteness<LABEL>> {
+impl<'sg, LABEL: Label + Hash, DATA> ScopeGraph<'sg, LABEL, DATA, FutureCompleteness<LABEL>> {
     // TODO: update this example to use futures
     // TODO: fix this sentence
     /// Closes an edge, (i.e., prohibit future new
@@ -210,7 +210,7 @@ impl<'sg, LABEL: Hash + Eq + Copy, DATA> ScopeGraph<'sg, LABEL, DATA, FutureComp
     /// # use scopegraphs::ScopeGraph;
     /// # use scopegraphs_macros::Label;
     /// # use scopegraphs::Storage;
-    /// # #[derive(Eq, Hash, PartialEq, Label)] enum Lbl { Def }
+    /// # #[derive(Eq, Hash, PartialEq, Label, Copy, Clone)] enum Lbl { Def }
     /// # use Lbl::*;
     /// let storage = Storage::new();
     /// let mut sg = ScopeGraph::<Lbl, usize, _>::new(&storage, ExplicitClose::default());
