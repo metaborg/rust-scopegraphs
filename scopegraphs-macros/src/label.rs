@@ -56,7 +56,7 @@ pub fn impl_label(input: DeriveInput) -> TokenStream {
             type Array<T> = [T; #num_variants];
 
             fn to_usize(&self) -> usize {
-                match self {
+                match *self {
                     #(
                         Self::#variant_names => #variant_numbers
                     ),*
