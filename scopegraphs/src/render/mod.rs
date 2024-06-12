@@ -3,7 +3,7 @@
 //! Generally, use `sg.render_to(filename, Settings::default()` for the most basic rendering.
 
 use crate::completeness::Completeness;
-use crate::{Scope, ScopeGraph};
+use crate::{Label, Scope, ScopeGraph};
 use std::fs::File;
 use std::io;
 use std::io::Write;
@@ -75,7 +75,7 @@ pub struct EdgeTo {
 }
 
 /// Modifies how an edge label is rendered.
-pub trait RenderScopeLabel {
+pub trait RenderScopeLabel: Label {
     /// Render a single label
     fn render(&self) -> String;
 }
@@ -128,7 +128,7 @@ fn escape_text_mermaid(inp: &str) -> String {
 }
 
 impl<
-        LABEL: Clone + RenderScopeLabel,
+        LABEL: Clone + RenderScopeLabel + Label,
         DATA: RenderScopeData + Clone,
         CMPL: Completeness<LABEL, DATA>,
     > ScopeGraph<'_, LABEL, DATA, CMPL>

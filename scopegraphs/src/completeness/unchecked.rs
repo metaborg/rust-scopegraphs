@@ -1,7 +1,7 @@
 use crate::completeness::private::Sealed;
 use crate::completeness::Completeness;
 use crate::scopegraph::{InnerScopeGraph, Scope};
-use std::hash::Hash;
+use crate::Label;
 
 /// No-Op implementation of [`Completeness`].
 #[derive(Debug)]
@@ -23,7 +23,7 @@ impl UncheckedCompleteness {
     }
 }
 
-impl<LABEL: Hash + Eq, DATA> Completeness<LABEL, DATA> for UncheckedCompleteness {
+impl<LABEL: Label, DATA> Completeness<LABEL, DATA> for UncheckedCompleteness {
     fn cmpl_new_scope(&self, _: &InnerScopeGraph<LABEL, DATA>, _: Scope) {}
 
     fn cmpl_new_complete_scope(

@@ -14,8 +14,10 @@ pub fn traverse<'sg, LABEL: RenderScopeLabel, DATA, CMPL: Completeness<LABEL, DA
         .flat_map(|(scope, edges)| {
             (*edges)
                 .borrow()
+                .as_ref()
                 .iter()
-                .flat_map(|(lbl, edges_with_lbl)| {
+                .zip(LABEL::iter())
+                .flat_map(|(edges_with_lbl, lbl)| {
                     edges_with_lbl
                         .iter()
                         .map(|edge| Edge {
