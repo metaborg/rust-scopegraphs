@@ -1,3 +1,4 @@
+// {tutor name "records-example-mainrs"}
 use crate::ast::{Expr, Program, RecordDef, Type};
 use crate::queries::{resolve_lexical_ref, resolve_member_ref, resolve_record_ref};
 use async_recursion::async_recursion;
@@ -470,3 +471,4 @@ in a.b.a.x;
         )
     }
 }
+// {tutor end name }

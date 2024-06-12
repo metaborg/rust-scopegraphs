@@ -1,7 +1,8 @@
 [files]
 include = [
     "src/concepts/*.rs",
-    "examples/*.rs",
+    "examples/**/*.rs",
+    "src/examples/*.rs",
 ]
 root = "scopegraphs"
 
