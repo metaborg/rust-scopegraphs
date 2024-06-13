@@ -125,7 +125,7 @@ pub trait Implicit<LABEL: Label, DATA>: Completeness<LABEL, DATA> {}
 /// Represents the permission to extend a scope with a particular label.
 ///
 /// Do not instantiate this struct manually, but use the [add_scope] macro instead.
-pub struct ScopeExt<
+pub struct ScopeExtPerm<
     'ext,
     LABEL: Hash + Label + Debug, /* <= Bound here required for Drop implementation */
     DATA,
@@ -140,7 +140,7 @@ pub struct ScopeExt<
     _data: PhantomData<DATA>, // FIXME: required for using `where CMPL: UserClosed<LABEL, DATA>` in impl blocks. Can it be removed some way?
 }
 
-impl<'ext, LABEL: Hash + Label + Debug, DATA, CMPL> Drop for ScopeExt<'ext, LABEL, DATA, CMPL>
+impl<'ext, LABEL: Hash + Label + Debug, DATA, CMPL> Drop for ScopeExtPerm<'ext, LABEL, DATA, CMPL>
 where
     CMPL: UserClosed<LABEL, DATA>,
 {
@@ -152,7 +152,7 @@ where
 }
 
 impl<'ext, LABEL: Hash + Label + Debug, DATA, CMPL: UserClosed<LABEL, DATA>>
-    ScopeExt<'ext, LABEL, DATA, CMPL>
+    ScopeExtPerm<'ext, LABEL, DATA, CMPL>
 where
     CMPL: UserClosed<LABEL, DATA>,
 {
@@ -162,8 +162,8 @@ where
         scope: Scope,
         label: LABEL,
         sg: &'ext ScopeGraph<'storage, LABEL, DATA, CMPL>,
-    ) -> ScopeExt<'ext, LABEL, DATA, CMPL> {
-        ScopeExt {
+    ) -> ScopeExtPerm<'ext, LABEL, DATA, CMPL> {
+        ScopeExtPerm {
             scope,
             label,
             sg: &sg.completeness,
@@ -279,7 +279,7 @@ macro_rules! add_scope {
         let scope = sg.add_scope_with(data, [$($lbl),*]);
 
         // return the scope, and the extension permissions
-        (scope, $(unsafe { $crate::completeness::ScopeExt::init(scope, $lbl, sg) }),*)
+        (scope, $(unsafe { $crate::completeness::ScopeExtPerm::init(scope, $lbl, sg) }),*)
     }
   };
 

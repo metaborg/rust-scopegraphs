@@ -2,7 +2,7 @@ use crate::ast::{Expr, Program, RecordDef, Type};
 use crate::queries::{resolve_lexical_ref, resolve_member_ref, resolve_record_ref};
 use async_recursion::async_recursion;
 use futures::future::join;
-use scopegraphs::completeness::{FutureCompleteness, ScopeExt};
+use scopegraphs::completeness::{FutureCompleteness, ScopeExtPerm};
 use scopegraphs::render::{RenderScopeData, RenderScopeLabel, RenderSettings};
 use scopegraphs::{add_scope, Scope, ScopeGraph, Storage};
 use scopegraphs_macros::Label;
@@ -95,7 +95,7 @@ enum PartialType {
 }
 
 type RecordScopegraph<'sg> = ScopeGraph<'sg, SgLabel, SgData, FutureCompleteness<SgLabel>>;
-type SgScopeExt<'sg> = ScopeExt<'sg, SgLabel, SgData, FutureCompleteness<SgLabel>>;
+type SgScopeExt<'sg> = ScopeExtPerm<'sg, SgLabel, SgData, FutureCompleteness<SgLabel>>;
 
 struct TypeChecker<'sg, 'ex> {
     sg: &'sg RecordScopegraph<'sg>,

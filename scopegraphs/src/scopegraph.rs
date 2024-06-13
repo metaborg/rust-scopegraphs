@@ -5,7 +5,7 @@ use std::{
     hash::Hash,
 };
 
-use crate::completeness::{Completeness, Implicit, ScopeExt, UncheckedCompleteness, UserClosed};
+use crate::completeness::{Completeness, Implicit, ScopeExtPerm, UncheckedCompleteness, UserClosed};
 use crate::label::ArrayInit;
 use crate::storage::Storage;
 use crate::Label;
@@ -228,7 +228,7 @@ where
     /// Permission for this is checked by `CMPL`.
     pub fn ext_edge<'ext>(
         &'ext self,
-        ext: &ScopeExt<'ext, LABEL, DATA, CMPL>,
+        ext: &ScopeExtPerm<'ext, LABEL, DATA, CMPL>,
         dst: Scope,
     ) -> CMPL::NewEdgeResult {
         self.completeness
@@ -247,7 +247,7 @@ where
     /// ```
     pub fn ext_decl<'ext>(
         &'ext self,
-        ext: &ScopeExt<'ext, LABEL, DATA, CMPL>,
+        ext: &ScopeExtPerm<'ext, LABEL, DATA, CMPL>,
         data: DATA,
     ) -> CMPL::NewEdgeResult {
         // Create scope with no open edges.
