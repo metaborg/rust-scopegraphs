@@ -16,16 +16,9 @@ Cargo.lock
 .vscode/
 .idea/
 
-<<<<<<< HEAD
 *.dot
 *.mmd
 
 .direnv
 
 **/render-docs
-||||||| e498f11
-*.dot
-=======
-*.dot
-.direnv
->>>>>>> record-example-tests
