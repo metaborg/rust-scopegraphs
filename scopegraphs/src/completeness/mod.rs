@@ -130,11 +130,11 @@ struct ScopeExtPermInner<
     CMPL: UserClosed<LABEL, DATA>, // Bound required for Drop implementation
 > {
     /// Scope for which this object witnesses the permission to extend.
-    pub(super) scope: Scope,
+    scope: Scope,
     /// Label with which [scope] may be extended
-    pub(super) label: LABEL,
+    label: LABEL,
     /// Scope graph in which the scope may be extended.
-    pub(super) sg: &'ext CMPL,
+    sg: &'ext CMPL,
     _data: PhantomData<DATA>, // FIXME: required for using `where CMPL: UserClosed<LABEL, DATA>` in impl blocks. Can it be removed some way?
 }
 
@@ -171,11 +171,11 @@ impl<'ext, LABEL: Hash + Label + Debug, DATA, CMPL: UserClosed<LABEL, DATA>>
 where
     CMPL: UserClosed<LABEL, DATA>,
 {
-    pub(crate) fn scope(&self) -> &Scope {
+    pub(super) fn scope(&self) -> &Scope {
         &self.0.scope
     }
 
-    pub(crate) fn label(&self) -> &LABEL {
+    pub(super) fn label(&self) -> &LABEL {
         &self.0.label
     }
 
