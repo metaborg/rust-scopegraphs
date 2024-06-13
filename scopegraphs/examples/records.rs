@@ -2,8 +2,8 @@ use crate::ast::{Expr, Program, RecordDef, Type};
 use crate::resolve::{resolve_lexical_ref, resolve_member_ref, resolve_record_ref};
 use async_recursion::async_recursion;
 use futures::future::{join, join_all};
-use scopegraphs::completeness::FutureCompleteness;
-use scopegraphs::RenderScopeData;
+use scopegraphs::completeness::{FutureCompleteness, ScopeExt};
+use scopegraphs::{add_scope, RenderScopeData};
 use scopegraphs::{Scope, ScopeGraph, Storage};
 use scopegraphs_macros::Label;
 use smol::channel::{bounded, Sender};
@@ -272,6 +272,7 @@ mod ast {
 }
 
 type RecordScopegraph<'sg> = ScopeGraph<'sg, SgLabel, SgData, FutureCompleteness<SgLabel>>;
+type SgScopeExt<'sg> = ScopeExt<'sg, SgLabel, SgData, FutureCompleteness<SgLabel>>;
 
 struct TypeChecker<'sg, 'ex> {
     sg: RecordScopegraph<'sg>,
@@ -345,27 +346,22 @@ where
                 value,
                 in_expr,
             } => {
-                let new_scope = self
-                    .sg
-                    .add_scope_default_with([SgLabel::Lexical, SgLabel::Definition]);
-                self.sg
-                    .add_edge(new_scope, SgLabel::Lexical, scope)
-                    .expect("already closed");
-                self.sg.close(new_scope, &SgLabel::Lexical);
+                let (new_scope, ext_lex, ext_def) =
+                    add_scope!(&self.sg, [SgLabel::Lexical, SgLabel::Definition]);
+                self.sg.ext_edge(&ext_lex, scope).expect("already closed");
+                ext_lex.close(); // optional
 
                 let ty_var = PartialType::Variable(self.uf.borrow_mut().fresh());
                 self.sg
-                    .add_decl(
-                        new_scope,
-                        SgLabel::Definition,
+                    .ext_decl(
+                        &ext_def,
                         SgData::VarDecl {
                             name: name.clone(),
                             ty: ty_var.clone(),
                         },
                     )
                     .expect("already closed");
-
-                self.sg.close(new_scope, &SgLabel::Definition);
+                ext_def.close(); // optional
 
                 self.spawn(|this| async move {
                     let ty = this.clone().typecheck_expr(value, scope).await;
@@ -376,20 +372,16 @@ where
                 self.clone().typecheck_expr(in_expr, new_scope).await
             }
             Expr::LetRec { values, in_expr } => {
-                let new_scope = self
-                    .sg
-                    .add_scope_default_with([SgLabel::Lexical, SgLabel::Definition]);
-                self.sg
-                    .add_edge(new_scope, SgLabel::Lexical, scope)
-                    .expect("already closed");
-                self.sg.close(new_scope, &SgLabel::Lexical);
+                let (new_scope, ext_lex, ext_def) =
+                    add_scope!(&self.sg, [SgLabel::Lexical, SgLabel::Definition]);
+                self.sg.ext_edge(&ext_lex, scope).expect("already closed");
+                ext_lex.close(); // optional
 
                 for (name, initializer_expr) in values {
                     let ty = PartialType::Variable(self.uf.borrow_mut().fresh());
                     self.sg
-                        .add_decl(
-                            new_scope,
-                            SgLabel::Definition,
+                        .ext_decl(
+                            &ext_def,
                             SgData::VarDecl {
                                 name: name.clone(),
                                 ty: ty.clone(),
@@ -405,7 +397,7 @@ where
                         this.uf.borrow_mut().unify(ty, init_ty)
                     });
                 }
-                self.sg.close(new_scope, &SgLabel::Definition);
+                ext_def.close(); // optional
 
                 // compute type of the result expression
                 self.typecheck_expr(in_expr, new_scope).await
@@ -432,32 +424,35 @@ where
         }
     }
 
-    fn init_record_def(&self, record_def: &RecordDef, scope: Scope) -> Scope {
-        let field_scope = self.sg.add_scope_default_with([SgLabel::Definition]);
+    fn init_record_def<'tc, 'ast, 'ext>(
+        &'tc self,
+        record_def: &'ast RecordDef,
+        decl_ext: &'ext SgScopeExt<'sg>,
+    ) -> SgScopeExt {
+        let (field_scope, ext_def) = add_scope!(&self.sg, [SgLabel::Definition]);
         self.sg
-            .add_decl(
-                scope,
-                SgLabel::TypeDefinition,
+            .ext_decl(
+                decl_ext,
                 SgData::TypeDecl {
                     name: record_def.name.clone(),
                     scope: field_scope,
                 },
             )
             .expect("already closed");
-        self.sg.close(scope, &SgLabel::Definition);
 
-        field_scope
+        ext_def // return permission to extend field scope with definitions
     }
 
     async fn typecheck_record_def(
         self: Rc<Self>,
-        record_def: &RecordDef,
+        record_def: &'ex RecordDef,
         scope: Scope,
-        field_scope: Scope,
+        field_def_ext: SgScopeExt<'ex>,
     ) {
+        let field_def_ext = Rc::new(field_def_ext);
         let fld_decl_futures = record_def.fields.iter().map(|(fld_name, fld_ty)| {
-            let this = self.clone();
-            async move {
+            let field_def_ext = field_def_ext.clone();
+            self.spawn(|this| async move {
                 let ty = match fld_ty {
                     Type::StructRef(n) => {
                         let record_scope = resolve_record_ref(&this.sg, scope, n).await;
@@ -470,20 +465,16 @@ where
                 };
 
                 this.sg
-                    .add_decl(
-                        field_scope,
-                        SgLabel::Definition,
+                    .ext_decl(
+                        &field_def_ext,
                         SgData::VarDecl {
                             name: fld_name.clone(),
                             ty,
                         },
                     )
                     .expect("unexpected close");
-            }
+            });
         });
-
-        join_all(fld_decl_futures).await;
-        self.sg.close(field_scope, &SgLabel::Definition);
     }
 }
 
@@ -572,19 +563,27 @@ fn typecheck(ast: &Program) -> Option<Type> {
 
     let tc = Rc::new(TypeChecker { sg, uf, ex: local });
 
-    let global_scope = tc.sg.add_scope_default_with([SgLabel::TypeDefinition]);
+    // INLINED add_scope!(...) macro for debugging purposes
+    let (global_scope, ext_type_def) = {
+        let data = (Default::default());
+        let scope = tc.sg.add_scope_with(data, [(SgLabel::TypeDefinition)]);
+        (scope, unsafe {
+            SgScopeExt::init(scope, (SgLabel::TypeDefinition), &tc.sg)
+        })
+    };
 
     // typecheck all the type definitions somewhere in the future
     for item in &ast.record_types {
         // synchronously init record decl
-        let field_scope = tc.init_record_def(item, global_scope);
+        let field_scope = tc.init_record_def(item, &ext_type_def);
         tc.spawn(|this| this.typecheck_record_def(item, global_scope, field_scope));
     }
 
     // We can close for type definitions since the scopes for this are synchronously
     // made even before the future is returned and spawned. so, at this point,
     // no new type definitions are made.
-    tc.sg.close(global_scope, &SgLabel::TypeDefinition);
+
+    // ext_type_def.close(); // optional
 
     // typecheck the main expression
     let res = tc
