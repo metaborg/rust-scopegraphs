@@ -3,6 +3,8 @@ use crate::completeness::Completeness;
 use crate::scopegraph::{InnerScopeGraph, Scope};
 use crate::Label;
 
+use super::Implicit;
+
 /// No-Op implementation of [`Completeness`].
 #[derive(Debug)]
 pub struct UncheckedCompleteness {}
@@ -63,3 +65,5 @@ impl<LABEL: Label, DATA> Completeness<LABEL, DATA> for UncheckedCompleteness {
         inner_scope_graph.get_edges(src, lbl)
     }
 }
+
+impl<LABEL: Label, DATA> Implicit<LABEL, DATA> for UncheckedCompleteness {}

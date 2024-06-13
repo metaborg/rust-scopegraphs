@@ -5,7 +5,9 @@ use std::{
     hash::Hash,
 };
 
-use crate::completeness::{Completeness, UncheckedCompleteness};
+use crate::completeness::{
+    Completeness, Implicit, ScopeExtPerm, UncheckedCompleteness, UserClosed,
+};
 use crate::label::ArrayInit;
 use crate::storage::Storage;
 use crate::Label;
@@ -172,13 +174,7 @@ where
         scope
     }
 
-    /// Add a new edge in the scope graph.
-    ///
-    /// Permission for this is checked by `CMPL`.
-    pub fn add_edge(&self, src: Scope, lbl: LABEL, dst: Scope) -> CMPL::NewEdgeResult {
-        self.completeness
-            .cmpl_new_edge(&self.inner_scope_graph, src, lbl, dst)
-    }
+    // add_edge defined below, based on completeness type
 
     /// Get the data associated with a scope.
     pub fn get_data(&self, scope: Scope) -> &DATA {
@@ -191,6 +187,19 @@ where
     pub fn get_edges(&self, src: Scope, lbl: LABEL) -> CMPL::GetEdgesResult<'_> {
         self.completeness
             .cmpl_get_edges(&self.inner_scope_graph, src, lbl)
+    }
+}
+
+impl<'sg, LABEL: Label, DATA, CMPL> ScopeGraph<'sg, LABEL, DATA, CMPL>
+where
+    CMPL: Implicit<LABEL, DATA>,
+{
+    /// Add a new edge in the scope graph.
+    ///
+    /// Permission for this is checked by `CMPL`.
+    pub fn add_edge(&self, src: Scope, lbl: LABEL, dst: Scope) -> CMPL::NewEdgeResult {
+        self.completeness
+            .cmpl_new_edge(&self.inner_scope_graph, src, lbl, dst)
     }
 
     /// Utility function to add declarations (i.e., scopes with data, without any outgoing edges).
@@ -209,6 +218,45 @@ where
         self.completeness
             .cmpl_new_complete_scope(&self.inner_scope_graph, s_data);
         self.add_edge(src, lbl, s_data)
+    }
+}
+
+impl<'sg, LABEL: Hash + Label + Copy + Debug, DATA, CMPL> ScopeGraph<'sg, LABEL, DATA, CMPL>
+where
+    CMPL: UserClosed<LABEL, DATA>,
+{
+    /// Add a new edge in the scope graph.
+    ///
+    /// Permission for this is checked by `CMPL`.
+    pub fn ext_edge<'ext>(
+        &'ext self,
+        ext: &ScopeExtPerm<'ext, LABEL, DATA, CMPL>,
+        dst: Scope,
+    ) -> CMPL::NewEdgeResult {
+        self.completeness
+            .cmpl_new_edge(&self.inner_scope_graph, *ext.scope(), *ext.label(), dst)
+    }
+
+    /// Utility function to add declarations (i.e., scopes with data, without any outgoing edges).
+    ///
+    /// It performs (roughly) the following operation:
+    ///
+    /// ```ignore
+    /// fn ext_decl(&self, src: Scope, lbl: LABEL, data: DATA) -> CMPL::NewEdgeResult {
+    ///     let s_data = self.add_scope(data);
+    ///     self.ext_edge(src, lbl, s_data);
+    /// }
+    /// ```
+    pub fn ext_decl<'ext>(
+        &'ext self,
+        ext: &ScopeExtPerm<'ext, LABEL, DATA, CMPL>,
+        data: DATA,
+    ) -> CMPL::NewEdgeResult {
+        // Create scope with no open edges.
+        let s_data = self.inner_scope_graph.add_scope(data);
+        self.completeness
+            .cmpl_new_complete_scope(&self.inner_scope_graph, s_data);
+        self.ext_edge(ext, s_data)
     }
 }
 

@@ -9,6 +9,8 @@ use std::future::poll_fn;
 use std::hash::Hash;
 use std::task::{Poll, Waker};
 
+use super::{UserClosed, Witness};
+
 /// A completeness strategy that makes queries return a [`Future`](std::future::Future)
 /// in case one of the scopes that the query runs over was not yet closed.
 /// The future resolves once all such scopes *are* closed.
@@ -36,9 +38,7 @@ impl<LABEL: Label> Default for FutureCompleteness<LABEL> {
 
 impl<LABEL: Label> Sealed for FutureCompleteness<LABEL> {}
 
-impl<LABEL: Hash + Eq + Label + Copy, DATA> Completeness<LABEL, DATA>
-    for FutureCompleteness<LABEL>
-{
+impl<LABEL: Hash + Label + Copy, DATA> Completeness<LABEL, DATA> for FutureCompleteness<LABEL> {
     fn cmpl_new_scope(&self, inner_scope_graph: &InnerScopeGraph<LABEL, DATA>, scope: Scope) {
         self.explicit_close.cmpl_new_scope(inner_scope_graph, scope)
     }
@@ -94,9 +94,22 @@ impl<LABEL: Hash + Eq + Label + Copy, DATA> Completeness<LABEL, DATA>
     }
 }
 
-impl<LABEL: Label + Hash> FutureCompleteness<LABEL> {
-    pub(crate) fn close(&self, scope: Scope, label: &LABEL) {
-        self.explicit_close.close(scope, label);
+impl<LABEL: Hash + Label + Copy, DATA> CriticalEdgeBasedCompleteness<LABEL, DATA>
+    for FutureCompleteness<LABEL>
+{
+    fn init_scope_with(&self, open_edges: HashSet<LABEL>) {
+        <ExplicitClose<LABEL> as CriticalEdgeBasedCompleteness<LABEL, DATA>>::init_scope_with(
+            &self.explicit_close,
+            open_edges,
+        );
+    }
+}
+
+impl<LABEL: Hash + Label + Copy, DATA> UserClosed<LABEL, DATA> for FutureCompleteness<LABEL> {
+    /// Close a scope for a certain label
+    /// // TODO: link to "closing" in concepts
+    fn close(&self, scope: Scope, label: &LABEL, _witness: Witness) {
+        UserClosed::<_, DATA>::close(&self.explicit_close, scope, label, _witness);
         for waker in self
             .wakers
             .borrow()
@@ -109,16 +122,5 @@ impl<LABEL: Label + Hash> FutureCompleteness<LABEL> {
         {
             waker.wake_by_ref()
         }
-    }
-}
-
-impl<LABEL: Hash + Eq + Label + Copy, DATA> CriticalEdgeBasedCompleteness<LABEL, DATA>
-    for FutureCompleteness<LABEL>
-{
-    fn init_scope_with(&self, open_edges: HashSet<LABEL>) {
-        <ExplicitClose<LABEL> as CriticalEdgeBasedCompleteness<LABEL, DATA>>::init_scope_with(
-            &self.explicit_close,
-            open_edges,
-        );
     }
 }

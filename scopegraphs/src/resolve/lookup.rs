@@ -25,7 +25,7 @@ impl<'sg: 'rslv, 'storage, 'rslv, LABEL, DATA, CMPL, PWF, DWF, LO, DEq> Resolve<
     for Query<'storage, 'sg, 'rslv, LABEL, DATA, CMPL, PWF, DWF, LO, DEq>
 where
     'storage: 'sg,
-    LABEL: Label + Copy + Debug + Hash + Eq,
+    LABEL: Label + Copy + Debug + Hash,
     DATA: Debug,
     CMPL: Completeness<LABEL, DATA>,
     CMPL::GetEdgesResult<'rslv>: ScopeContainer<LABEL>,
@@ -350,6 +350,7 @@ mod tests {
     use scopegraphs_macros::label_order;
 
     use crate::{
+        add_scope,
         completeness::{ExplicitClose, FutureCompleteness, ImplicitClose, UncheckedCompleteness},
         query_regex,
         resolve::{DataWellformedness, Resolve, ResolvedPath},
@@ -411,32 +412,33 @@ mod tests {
                 ScopeGraph::new(&storage, FutureCompleteness::default());
 
             let s0 = scope_graph.add_scope_default_closed();
-            let s_with = scope_graph.add_scope_default_with([Lex, Imp]);
-            let s_rec = scope_graph.add_scope_default_with([Def]);
-            let s_let = scope_graph.add_scope_default_with([Lex, Def]);
+            let (s_with, with_lex, with_imp) = add_scope!(&scope_graph, [Lex, Imp]);
+            let (s_rec, rec_def) = add_scope!(&scope_graph, [Def]);
+            let (s_let, let_lex, let_def) = add_scope!(&scope_graph, [Lex, Def]);
 
             scope_graph
-                .add_edge(s_with, Lex, s0)
+                .ext_edge(&with_lex, s0)
                 .expect("edge closed unexpectedly");
             scope_graph
-                .add_edge(s_with, Imp, s_rec)
+                .ext_edge(&with_imp, s_rec)
                 .expect("edge closed unexpectedly");
             scope_graph
-                .add_edge(s_let, Lex, s_with)
+                .ext_edge(&let_lex, s_with)
                 .expect("edge closed unexpectedly");
 
             scope_graph
-                .add_decl(s_rec, Def, Data { name: "x", data: 1 })
+                .ext_decl(&rec_def, Data { name: "x", data: 1 })
                 .expect("edge closed unexpectedly");
             scope_graph
-                .add_decl(s_let, Def, Data { name: "x", data: 2 })
+                .ext_decl(&let_def, Data { name: "x", data: 2 })
                 .expect("edge closed unexpectedly");
 
-            scope_graph.close(s_with, &Lex);
-            scope_graph.close(s_with, &Imp);
-            scope_graph.close(s_rec, &Def);
-            scope_graph.close(s_let, &Lex);
-            scope_graph.close(s_let, &Def);
+            // close edges
+            with_lex.close();
+            with_imp.close();
+            rec_def.close();
+            let_lex.close();
+            let_def.close();
 
             let env = scope_graph
                 .query()
@@ -653,33 +655,33 @@ mod tests {
         let scope_graph: ScopeGraph<Lbl, TData, ExplicitClose<Lbl>> =
             ScopeGraph::new(&storage, ExplicitClose::default());
 
-        let s0 = scope_graph.add_scope_default_closed();
-        let s_with = scope_graph.add_scope_default_with([Lex, Imp]);
-        let s_rec = scope_graph.add_scope_default_with([Def]);
-        let s_let = scope_graph.add_scope_default_with([Lex, Def]);
+        let s0 = add_scope!(&scope_graph);
+        let (s_with, with_lex, with_imp) = add_scope!(&scope_graph, [Lex, Imp]);
+        let (s_rec, rec_def) = add_scope!(&scope_graph, [Def]);
+        let (s_let, let_lex, let_def) = add_scope!(&scope_graph, [Lex, Def]);
 
         scope_graph
-            .add_edge(s_with, Lex, s0)
+            .ext_edge(&with_lex, s0)
             .expect("edge closed unexpectedly");
         scope_graph
-            .add_edge(s_with, Imp, s_rec)
+            .ext_edge(&with_imp, s_rec)
             .expect("edge closed unexpectedly");
         scope_graph
-            .add_edge(s_let, Lex, s_with)
+            .ext_edge(&let_lex, s_with)
             .expect("edge closed unexpectedly");
 
         scope_graph
-            .add_decl(s_rec, Def, Data { name: "x", data: 1 })
+            .ext_decl(&rec_def, Data { name: "x", data: 1 })
             .expect("edge closed unexpectedly");
         scope_graph
-            .add_decl(s_let, Def, Data { name: "x", data: 2 })
+            .ext_decl(&let_def, Data { name: "x", data: 2 })
             .expect("edge closed unexpectedly");
 
-        scope_graph.close(s_with, &Lex);
-        scope_graph.close(s_with, &Imp);
-        scope_graph.close(s_rec, &Def);
-        scope_graph.close(s_let, &Lex);
-        scope_graph.close(s_let, &Def);
+        with_lex.close();
+        with_imp.close();
+        rec_def.close();
+        let_lex.close();
+        let_def.close();
 
         let env = scope_graph
             .query()
