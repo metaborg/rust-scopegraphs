@@ -28,8 +28,9 @@ pub fn impl_label(input: DeriveInput) -> TokenStream {
     }
 
     let mut variant_names = Vec::new();
+    let mut variant_numbers = Vec::new();
 
-    for variant in variants {
+    for (num, variant) in variants.into_iter().enumerate() {
         if !variant.fields.is_empty() {
             return quote_spanned!(
                 variant.span() => compile_error!("cannot derive Label for an enum with fields on variants");
@@ -37,12 +38,31 @@ pub fn impl_label(input: DeriveInput) -> TokenStream {
             .into();
         }
 
+        if variant.discriminant.is_some() {
+            return quote_spanned!(
+                variant.span() => compile_error!("cannot derive Label for an enum with custom discriminated variants. Use `Label::to_usize()`");
+            )
+                .into();
+        }
+
         variant_names.push(variant.ident);
+        variant_numbers.push(num);
     }
+    let num_variants = variant_numbers.len();
 
     let name = input.ident;
     quote! {
-        impl scopegraphs::Label for #name {
+        unsafe impl scopegraphs::Label for #name {
+            type Array<T> = [T; #num_variants];
+
+            fn to_usize(&self) -> usize {
+                match *self {
+                    #(
+                        Self::#variant_names => #variant_numbers
+                    ),*
+                }
+            }
+
             fn iter() -> impl Iterator<Item = Self> {
                 [
                     #(

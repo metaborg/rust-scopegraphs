@@ -21,11 +21,11 @@ use super::{UserClosed, Witness};
 /// Returns [`Delay`] when edges are retrieved (e.g. during query resolution) for an edge that is
 /// not yet closed.
 #[derive(Debug)]
-pub struct ExplicitClose<LABEL> {
+pub struct ExplicitClose<LABEL: Label> {
     critical_edges: CriticalEdgeSet<LABEL>,
 }
 
-impl<LABEL> Default for ExplicitClose<LABEL> {
+impl<LABEL: Label> Default for ExplicitClose<LABEL> {
     fn default() -> Self {
         ExplicitClose {
             critical_edges: CriticalEdgeSet::default(),
@@ -33,7 +33,7 @@ impl<LABEL> Default for ExplicitClose<LABEL> {
     }
 }
 
-impl<LABEL> Sealed for ExplicitClose<LABEL> {}
+impl<LABEL: Label> Sealed for ExplicitClose<LABEL> {}
 
 impl<LABEL: Hash + Eq + Label, DATA> Completeness<LABEL, DATA> for ExplicitClose<LABEL> {
     fn cmpl_new_scope(&self, _: &InnerScopeGraph<LABEL, DATA>, _: Scope) {
@@ -103,7 +103,7 @@ impl<LABEL: Hash + Eq + Label, DATA> CriticalEdgeBasedCompleteness<LABEL, DATA>
     }
 }
 
-impl<LABEL: Hash + Eq + Label, DATA> UserClosed<LABEL, DATA> for ExplicitClose<LABEL> {
+impl<LABEL: Hash + Label, DATA> UserClosed<LABEL, DATA> for ExplicitClose<LABEL> {
     /// Close a scope for a certain label
     /// // TODO: link to "closing" in concepts
     fn close(&self, scope: Scope, label: &LABEL, _witness: Witness) {

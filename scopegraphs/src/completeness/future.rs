@@ -22,12 +22,12 @@ use super::{UserClosed, Witness};
 ///
 /// Extends, and contains an instance of, [`ExplicitClose`].
 #[derive(Debug)]
-pub struct FutureCompleteness<LABEL> {
+pub struct FutureCompleteness<LABEL: Label> {
     explicit_close: ExplicitClose<LABEL>,
     wakers: RefCell<HashMap<Delay<LABEL>, Vec<Waker>>>,
 }
 
-impl<LABEL> Default for FutureCompleteness<LABEL> {
+impl<LABEL: Label> Default for FutureCompleteness<LABEL> {
     fn default() -> Self {
         Self {
             explicit_close: ExplicitClose::<LABEL>::default(),
@@ -36,7 +36,7 @@ impl<LABEL> Default for FutureCompleteness<LABEL> {
     }
 }
 
-impl<LABEL> Sealed for FutureCompleteness<LABEL> {}
+impl<LABEL: Label> Sealed for FutureCompleteness<LABEL> {}
 
 impl<LABEL: Hash + Eq + Label + Copy, DATA> Completeness<LABEL, DATA>
     for FutureCompleteness<LABEL>

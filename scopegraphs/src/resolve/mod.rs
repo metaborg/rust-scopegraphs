@@ -8,7 +8,7 @@ use std::marker::PhantomData;
 use std::rc::Rc;
 
 mod params;
-use crate::{Scope, ScopeGraph};
+use crate::{Label, Scope, ScopeGraph};
 pub use params::*;
 use scopegraphs_regular_expressions::RegexMatcher;
 
@@ -412,7 +412,7 @@ pub trait Resolve<'sg, 'rslv> {
 }
 
 /// A query over a scope graph. Read more [here](crate::concepts)
-pub struct Query<'storage, 'sg, 'rslv, LABEL, DATA, CMPL, PWF, DWF, LO, DEq> {
+pub struct Query<'storage, 'sg, 'rslv, LABEL: Label, DATA, CMPL, PWF, DWF, LO, DEq> {
     _phantom: PhantomData<&'rslv ()>,
     scope_graph: &'sg ScopeGraph<'storage, LABEL, DATA, CMPL>,
     path_wellformedness: PWF,
@@ -421,7 +421,7 @@ pub struct Query<'storage, 'sg, 'rslv, LABEL, DATA, CMPL, PWF, DWF, LO, DEq> {
     data_equivalence: DEq,
 }
 
-impl<'sg, 'storage, 'rslv, LABEL, DATA, CMPL, PWF, DWF, LO, DEq>
+impl<'sg, 'storage, 'rslv, LABEL: Label, DATA, CMPL, PWF, DWF, LO, DEq>
     Query<'sg, 'storage, 'rslv, LABEL, DATA, CMPL, PWF, DWF, LO, DEq>
 {
     /// Add a [path well-formedness](crate::concepts::path_wellformedness) to this query.
@@ -436,7 +436,7 @@ impl<'sg, 'storage, 'rslv, LABEL, DATA, CMPL, PWF, DWF, LO, DEq>
     /// # let storage = Storage::new();
     /// # let scopegraph = ScopeGraph::<Lbl, (), _>::new(&storage, unsafe{UncheckedCompleteness::new()});
     ///
-    /// #[derive(Label)]
+    /// #[derive(Label, Eq, PartialEq, Copy, Clone)]
     /// pub enum Lbl {
     ///     Lexical,
     ///     Definition
@@ -547,7 +547,7 @@ impl<'sg, 'storage, 'rslv, LABEL, DATA, CMPL, PWF, DWF, LO, DEq>
     /// # let scopegraph = ScopeGraph::<Lbl, (), _>::new(&storage, unsafe{UncheckedCompleteness::new()});
     /// use scopegraphs_macros::label_order;
     ///
-    /// #[derive(Label, Copy, Clone)]
+    /// #[derive(Label, Copy, Clone, PartialEq, Eq)]
     /// pub enum Lbl {
     ///     Lexical,
     ///     Definition
@@ -596,7 +596,7 @@ impl<'sg, 'storage, 'rslv, LABEL, DATA, CMPL, PWF, DWF, LO, DEq>
     }
 }
 
-impl<'storage, LABEL, DATA, CMPL> ScopeGraph<'storage, LABEL, DATA, CMPL> {
+impl<'storage, LABEL: Label, DATA, CMPL> ScopeGraph<'storage, LABEL, DATA, CMPL> {
     /// Build a query over the scope graph.
     pub fn query<'sg>(
         &'sg self,

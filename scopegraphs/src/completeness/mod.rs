@@ -33,10 +33,8 @@ mod private {
     pub trait Sealed {}
 }
 
-use crate::{
-    scopegraph::{InnerScopeGraph, Scope},
-    Label, ScopeGraph,
-};
+use crate::scopegraph::{InnerScopeGraph, Scope};
+use crate::{Label, ScopeGraph};
 use private::Sealed;
 use std::{fmt::Debug, hash::Hash, marker::PhantomData};
 
@@ -65,7 +63,7 @@ use std::{fmt::Debug, hash::Hash, marker::PhantomData};
 /// You cannot define your own completeness strategies to ensure that only verified implementations are available.
 // TODO: @Aron could you document this?
 #[allow(missing_docs)]
-pub trait Completeness<LABEL, DATA>: Sealed {
+pub trait Completeness<LABEL: Label, DATA>: Sealed {
     fn cmpl_new_scope(&self, inner_scope_graph: &InnerScopeGraph<LABEL, DATA>, scope: Scope);
 
     /// Should initialize a scope without possibility to extend it with edges
@@ -112,7 +110,7 @@ pub trait Completeness<LABEL, DATA>: Sealed {
 pub struct Witness(pub(crate) ());
 
 /// Marker trait for completeness strategies that require edges to be closed explicitly.
-pub trait UserClosed<LABEL, DATA>: Completeness<LABEL, DATA> {
+pub trait UserClosed<LABEL: Label, DATA>: Completeness<LABEL, DATA> {
     #[doc(hidden)]
     fn close(&self, scope: Scope, label: &LABEL, witness: Witness);
 }
@@ -120,7 +118,7 @@ pub trait UserClosed<LABEL, DATA>: Completeness<LABEL, DATA> {
 /// Marker trait for completeness strategies that do not require edges to be closed explicitly.
 ///
 /// Used to make the correct API's available on scope graphs.
-pub trait Implicit<LABEL, DATA>: Completeness<LABEL, DATA> {}
+pub trait Implicit<LABEL: Label, DATA>: Completeness<LABEL, DATA> {}
 
 // Edge extension permissions for UserClosed Completenesses
 
@@ -149,7 +147,6 @@ where
     /// This is the trick! When the permission is dropped, we know for sure that no future extensions will be made (otherwise, [self] should have been kept alive)
     /// Thus, we can close the critical edge.
     fn drop(&mut self) {
-        println!("Closing {:?}/{:?}", self.scope, self.label);
         self.sg.close(self.scope, &self.label, Witness(()))
     }
 }

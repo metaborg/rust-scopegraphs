@@ -23,9 +23,7 @@ mod label;
 pub use label::Label;
 
 #[cfg(feature = "dot")]
-mod render;
-#[cfg(feature = "dot")]
-pub use render::RenderScopeData;
+pub mod render;
 
 pub use scopegraphs_regular_expressions::*;
 
@@ -48,7 +46,7 @@ pub use storage::Storage;
 /// use scopegraphs::*;
 /// use scopegraphs::Label;
 ///
-/// #[derive(Label, Debug, PartialEq, Eq)]
+/// #[derive(Label, Debug, PartialEq, Eq, Copy, Clone)]
 /// pub enum Alphabet {
 ///     A,
 ///     B,

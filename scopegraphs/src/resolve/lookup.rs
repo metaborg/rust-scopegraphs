@@ -89,7 +89,7 @@ where
     }
 }
 
-struct ResolutionContext<'storage, 'sg: 'rslv, 'rslv, LABEL, DATA, CMPL, DWF, LO, DEq> {
+struct ResolutionContext<'storage, 'sg: 'rslv, 'rslv, LABEL: Label, DATA, CMPL, DWF, LO, DEq> {
     all_edges: Vec<EdgeOrData<LABEL>>,
     sg: &'sg ScopeGraph<'storage, LABEL, DATA, CMPL>,
     data_wellformedness: &'rslv DWF,
@@ -106,7 +106,7 @@ type EnvCache<LABEL, ENVC> = RefCell<HashMap<EdgeOrData<LABEL>, Rc<ENVC>>>;
 impl<'storage, 'sg: 'rslv, 'rslv, LABEL, DATA, CMPL, DWF, LO, DEq>
     ResolutionContext<'storage, 'sg, 'rslv, LABEL, DATA, CMPL, DWF, LO, DEq>
 where
-    LABEL: Copy + Debug + Hash + Eq,
+    LABEL: Label + Debug + Hash,
     DATA: Debug,
     ResolvedPath<'sg, LABEL, DATA>: Hash + Eq,
     CMPL: Completeness<LABEL, DATA>,
