@@ -275,7 +275,7 @@ type RecordScopegraph<'sg> = ScopeGraph<'sg, SgLabel, SgData, FutureCompleteness
 type SgScopeExt<'sg> = ScopeExt<'sg, SgLabel, SgData, FutureCompleteness<SgLabel>>;
 
 struct TypeChecker<'sg, 'ex> {
-    sg: RecordScopegraph<'sg>,
+    sg: &'sg RecordScopegraph<'sg>,
     uf: RefCell<UnionFind>,
     ex: LocalExecutor<'ex>,
 }
@@ -425,10 +425,10 @@ where
     }
 
     fn init_record_def<'tc, 'ast, 'ext>(
-        &'tc self,
+        &self,
         record_def: &'ast RecordDef,
-        decl_ext: &'ext SgScopeExt<'sg>,
-    ) -> SgScopeExt {
+        decl_ext: &'ext SgScopeExt<'ext>,
+    ) -> SgScopeExt<'sg> {
         let (field_scope, ext_def) = add_scope!(&self.sg, [SgLabel::Definition]);
         self.sg
             .ext_decl(
@@ -561,7 +561,7 @@ fn typecheck(ast: &Program) -> Option<Type> {
     let uf = RefCell::new(UnionFind::default());
     let local = LocalExecutor::new();
 
-    let tc = Rc::new(TypeChecker { sg, uf, ex: local });
+    let tc = Rc::new(TypeChecker { sg: &sg, uf, ex: local });
 
     // INLINED add_scope!(...) macro for debugging purposes
     let (global_scope, ext_type_def) = {
