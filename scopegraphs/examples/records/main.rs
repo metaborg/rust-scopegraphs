@@ -276,7 +276,6 @@ where
         scope: Scope,
         field_def_ext: SgScopeExt<'ex>,
     ) {
-        let field_def_ext = Rc::new(field_def_ext);
         record_def.fields.iter().for_each(|(fld_name, fld_ty)| {
             let field_def_ext = field_def_ext.clone();
             self.spawn(|this| async move {

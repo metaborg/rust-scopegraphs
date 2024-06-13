@@ -5,7 +5,9 @@ use std::{
     hash::Hash,
 };
 
-use crate::completeness::{Completeness, Implicit, ScopeExtPerm, UncheckedCompleteness, UserClosed};
+use crate::completeness::{
+    Completeness, Implicit, ScopeExtPerm, UncheckedCompleteness, UserClosed,
+};
 use crate::label::ArrayInit;
 use crate::storage::Storage;
 use crate::Label;
@@ -232,7 +234,7 @@ where
         dst: Scope,
     ) -> CMPL::NewEdgeResult {
         self.completeness
-            .cmpl_new_edge(&self.inner_scope_graph, ext.scope, ext.label, dst)
+            .cmpl_new_edge(&self.inner_scope_graph, *ext.scope(), *ext.label(), dst)
     }
 
     /// Utility function to add declarations (i.e., scopes with data, without any outgoing edges).

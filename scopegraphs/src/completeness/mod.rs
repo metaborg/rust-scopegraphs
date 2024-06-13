@@ -36,6 +36,7 @@ mod private {
 use crate::scopegraph::{InnerScopeGraph, Scope};
 use crate::{Label, ScopeGraph};
 use private::Sealed;
+use std::rc::Rc;
 use std::{fmt::Debug, hash::Hash, marker::PhantomData};
 
 /*** Completeness trait ***/
@@ -121,11 +122,8 @@ pub trait UserClosed<LABEL: Label, DATA>: Completeness<LABEL, DATA> {
 pub trait Implicit<LABEL: Label, DATA>: Completeness<LABEL, DATA> {}
 
 // Edge extension permissions for UserClosed Completenesses
-
-/// Represents the permission to extend a scope with a particular label.
-///
-/// Do not instantiate this struct manually, but use the [add_scope] macro instead.
-pub struct ScopeExtPerm<
+#[derive(Debug)]
+struct ScopeExtPermInner<
     'ext,
     LABEL: Hash + Label + Debug, /* <= Bound here required for Drop implementation */
     DATA,
@@ -140,7 +138,8 @@ pub struct ScopeExtPerm<
     _data: PhantomData<DATA>, // FIXME: required for using `where CMPL: UserClosed<LABEL, DATA>` in impl blocks. Can it be removed some way?
 }
 
-impl<'ext, LABEL: Hash + Label + Debug, DATA, CMPL> Drop for ScopeExtPerm<'ext, LABEL, DATA, CMPL>
+impl<'ext, LABEL: Hash + Label + Debug, DATA, CMPL> Drop
+    for ScopeExtPermInner<'ext, LABEL, DATA, CMPL>
 where
     CMPL: UserClosed<LABEL, DATA>,
 {
@@ -151,11 +150,35 @@ where
     }
 }
 
+/// Represents the permission to extend a scope with a particular label.
+///
+/// Do not instantiate this struct manually, but use the [add_scope] macro instead.
+#[derive(Debug)]
+pub struct ScopeExtPerm<'ext, LABEL: Hash + Label + Debug, DATA, CMPL: UserClosed<LABEL, DATA>>(
+    Rc<ScopeExtPermInner<'ext, LABEL, DATA, CMPL>>,
+);
+
+impl<'ext, LABEL: Hash + Label + Debug, DATA, CMPL: UserClosed<LABEL, DATA>> Clone
+    for ScopeExtPerm<'ext, LABEL, DATA, CMPL>
+{
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
+}
+
 impl<'ext, LABEL: Hash + Label + Debug, DATA, CMPL: UserClosed<LABEL, DATA>>
     ScopeExtPerm<'ext, LABEL, DATA, CMPL>
 where
     CMPL: UserClosed<LABEL, DATA>,
 {
+    pub(crate) fn scope(&self) -> &Scope {
+        &self.0.scope
+    }
+
+    pub(crate) fn label(&self) -> &LABEL {
+        &self.0.label
+    }
+
     /// This is an implementation detail of the [add_scope!] macro and should not be called directly!
     #[doc(hidden)]
     pub unsafe fn init<'storage>(
@@ -163,12 +186,12 @@ where
         label: LABEL,
         sg: &'ext ScopeGraph<'storage, LABEL, DATA, CMPL>,
     ) -> ScopeExtPerm<'ext, LABEL, DATA, CMPL> {
-        ScopeExtPerm {
+        ScopeExtPerm(Rc::new(ScopeExtPermInner {
             scope,
             label,
             sg: &sg.completeness,
-            _data: PhantomData {},
-        }
+            _data: PhantomData,
+        }))
     }
 
     /// Closes the edge, meaning that it cannot be extended anymore.
