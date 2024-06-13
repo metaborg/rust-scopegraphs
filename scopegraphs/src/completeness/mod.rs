@@ -290,8 +290,38 @@ where
 /// Creates a scope (with some data if specified), and permission to extend it for each label specified in the label list argument.
 ///
 /// TODO: Better documentation, examples.
+///
+/// ```
+/// # use scopegraphs::completeness::ExplicitClose;
+/// # use scopegraphs::ScopeGraph;
+/// # use scopegraphs::resolve::{DefaultDataEquivalence, DefaultLabelOrder, EdgeOrData, Resolve};
+/// # use scopegraphs_macros::{compile_regex, Label};
+/// # use scopegraphs::Storage;
+/// # use scopegraphs::add_scope;
+///
+/// # let storage = Storage::new();
+/// # let scope_graph: ScopeGraph<(), (), ExplicitClose<()>> = ScopeGraph::new(&storage, ExplicitClose::default());
+///
+/// add_scope!(sg<let s = ()> with open labels: ());
+/// println!("{:?}", s);
+/// ```
 #[macro_export]
 macro_rules! add_scope {
+  ($sg:ident[let $s:ident |-> $data:expr] with open labels: $($lbl:expr),*) => {
+    let $s: $crate::scopegraph::Scope;
+    {
+        // put initialized code in block
+        let sg = &$sg;       // evaluate scope graph expression
+        let data = $data;   // evaluate data expression
+
+        // create new scope
+        $s = sg.add_scope_with(data, [$($lbl),*]);
+
+        // return the scope, and the extension permissions
+        ($(unsafe { $crate::completeness::ScopeExtPerm::init($s, $lbl, sg) }),*)
+    }
+  };
+
   ($sg:expr, $data:expr, [ $($lbl:expr),* ]) => {
     {
         // put initialized code in block
@@ -329,3 +359,22 @@ macro_rules! add_edge {
 }
 
 // TODO: Residual-query-based Completeness requires access to query resolution
+
+#[cfg(test)]
+mod tests {
+
+    #[test]
+    pub fn test_new_add_macro() {
+        use crate::completeness::ExplicitClose;
+        use crate::ScopeGraph;
+
+        use crate::Storage;
+
+        let storage = Storage::new();
+        let scope_graph: ScopeGraph<(), (), ExplicitClose<()>> =
+            ScopeGraph::new(&storage, ExplicitClose::default());
+
+        let ext_unit = add_scope!(scope_graph[let s |-> ()] with open labels: ()).0;
+        println!("{:?}", s);
+    }
+}
