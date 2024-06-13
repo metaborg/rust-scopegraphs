@@ -20,7 +20,7 @@ pub trait EnvContainer<'sg, 'rslv, LABEL: 'sg, DATA: 'sg>:
 
 impl<'sg: 'rslv, 'rslv, LABEL, DATA> EnvContainer<'sg, 'rslv, LABEL, DATA> for Env<'sg, LABEL, DATA>
 where
-    ResolvedPath<'sg, LABEL, DATA>: Hash + Eq,
+    ResolvedPath<'sg, LABEL, DATA>: Hash,
 {
     fn empty() -> Self {
         Self::new()
@@ -37,7 +37,7 @@ where
 impl<'sg: 'rslv, 'rslv, LABEL: 'sg, DATA: 'sg> EnvContainer<'sg, 'rslv, LABEL, DATA>
     for Rc<Env<'sg, LABEL, DATA>>
 where
-    ResolvedPath<'sg, LABEL, DATA>: Hash + Eq,
+    ResolvedPath<'sg, LABEL, DATA>: Hash,
 {
     fn empty() -> Self {
         Self::new(Env::empty())
@@ -63,7 +63,7 @@ impl<'sg, LABEL: 'sg, DATA: 'sg, E> From<Env<'sg, LABEL, DATA>>
 impl<'sg: 'rslv, 'rslv, LABEL: 'sg, DATA: 'sg, E: 'rslv> EnvContainer<'sg, 'rslv, LABEL, DATA>
     for Result<Env<'sg, LABEL, DATA>, E>
 where
-    ResolvedPath<'sg, LABEL, DATA>: Hash + Eq,
+    ResolvedPath<'sg, LABEL, DATA>: Hash,
     E: Clone,
 {
     fn empty() -> Self {
@@ -81,7 +81,7 @@ where
 impl<'sg: 'rslv, 'rslv, LABEL: 'sg, DATA: 'sg> EnvContainer<'sg, 'rslv, LABEL, DATA>
     for FutureWrapper<'rslv, Env<'sg, LABEL, DATA>>
 where
-    ResolvedPath<'sg, LABEL, DATA>: Hash + Eq,
+    ResolvedPath<'sg, LABEL, DATA>: Hash,
     LABEL: Clone,
 {
     fn empty() -> Self {

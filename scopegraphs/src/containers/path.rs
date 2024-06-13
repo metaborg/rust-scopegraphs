@@ -34,7 +34,7 @@ impl<'rslv, 'sg, LABEL: 'sg, DATA: 'sg, E: 'rslv> PathContainer<'sg, 'rslv, LABE
     for Result<Vec<Path<LABEL>>, E>
 where
     Self: 'rslv,
-    LABEL: Clone + Hash + Eq,
+    LABEL: Clone + Hash,
     DATA: Hash,
     for<'a> ResolvedPath<'a, LABEL, DATA>: Hash + Eq,
 {
@@ -53,7 +53,7 @@ impl<'sg, 'rslv, LABEL: 'sg, DATA: 'sg> PathContainer<'sg, 'rslv, LABEL, DATA>
     for FutureWrapper<'rslv, Vec<Path<LABEL>>>
 where
     Self: 'rslv,
-    LABEL: Clone + Hash + Eq,
+    LABEL: Clone + Hash,
     DATA: Hash,
     for<'a> ResolvedPath<'a, LABEL, DATA>: Hash + Eq,
 {

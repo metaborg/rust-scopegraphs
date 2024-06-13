@@ -35,7 +35,7 @@ impl<LABEL: Label> Default for ExplicitClose<LABEL> {
 
 impl<LABEL: Label> Sealed for ExplicitClose<LABEL> {}
 
-impl<LABEL: Hash + Eq + Label, DATA> Completeness<LABEL, DATA> for ExplicitClose<LABEL> {
+impl<LABEL: Hash + Label, DATA> Completeness<LABEL, DATA> for ExplicitClose<LABEL> {
     fn cmpl_new_scope(&self, _: &InnerScopeGraph<LABEL, DATA>, _: Scope) {
         <ExplicitClose<LABEL> as CriticalEdgeBasedCompleteness<LABEL, DATA>>::init_scope_with(
             self,
@@ -95,7 +95,7 @@ impl<LABEL: Hash + Eq + Label, DATA> Completeness<LABEL, DATA> for ExplicitClose
     }
 }
 
-impl<LABEL: Hash + Eq + Label, DATA> CriticalEdgeBasedCompleteness<LABEL, DATA>
+impl<LABEL: Hash + Label, DATA> CriticalEdgeBasedCompleteness<LABEL, DATA>
     for ExplicitClose<LABEL>
 {
     fn init_scope_with(&self, open_labels: HashSet<LABEL>) {

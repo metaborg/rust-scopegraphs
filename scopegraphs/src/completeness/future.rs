@@ -38,9 +38,7 @@ impl<LABEL: Label> Default for FutureCompleteness<LABEL> {
 
 impl<LABEL: Label> Sealed for FutureCompleteness<LABEL> {}
 
-impl<LABEL: Hash + Eq + Label + Copy, DATA> Completeness<LABEL, DATA>
-    for FutureCompleteness<LABEL>
-{
+impl<LABEL: Hash + Label + Copy, DATA> Completeness<LABEL, DATA> for FutureCompleteness<LABEL> {
     fn cmpl_new_scope(&self, inner_scope_graph: &InnerScopeGraph<LABEL, DATA>, scope: Scope) {
         self.explicit_close.cmpl_new_scope(inner_scope_graph, scope)
     }
@@ -96,7 +94,7 @@ impl<LABEL: Hash + Eq + Label + Copy, DATA> Completeness<LABEL, DATA>
     }
 }
 
-impl<LABEL: Hash + Eq + Label + Copy, DATA> CriticalEdgeBasedCompleteness<LABEL, DATA>
+impl<LABEL: Hash + Label + Copy, DATA> CriticalEdgeBasedCompleteness<LABEL, DATA>
     for FutureCompleteness<LABEL>
 {
     fn init_scope_with(&self, open_edges: HashSet<LABEL>) {
@@ -107,7 +105,7 @@ impl<LABEL: Hash + Eq + Label + Copy, DATA> CriticalEdgeBasedCompleteness<LABEL,
     }
 }
 
-impl<LABEL: Hash + Eq + Label + Copy, DATA> UserClosed<LABEL, DATA> for FutureCompleteness<LABEL> {
+impl<LABEL: Hash + Label + Copy, DATA> UserClosed<LABEL, DATA> for FutureCompleteness<LABEL> {
     /// Close a scope for a certain label
     /// // TODO: link to "closing" in concepts
     fn close(&self, scope: Scope, label: &LABEL, _witness: Witness) {

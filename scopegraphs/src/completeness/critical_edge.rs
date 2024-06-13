@@ -68,7 +68,7 @@ pub struct Delay<LABEL> {
 /// Convenience alias for the type of `Result` returned from queries using [critical edge based completion](CriticalEdgeBasedCompleteness)
 pub type EdgesOrDelay<EDGES, LABEL> = Result<EDGES, Delay<LABEL>>;
 
-impl<'sg, LABEL: Hash + Eq + Label, DATA, CMPL> ScopeGraph<'sg, LABEL, DATA, CMPL>
+impl<'sg, LABEL: Hash + Label, DATA, CMPL> ScopeGraph<'sg, LABEL, DATA, CMPL>
 where
     CMPL: CriticalEdgeBasedCompleteness<LABEL, DATA>,
 {
@@ -91,7 +91,7 @@ where
     }
 }
 
-impl<'sg, LABEL: Hash + Eq + Label, DATA, CMPL> ScopeGraph<'sg, LABEL, DATA, CMPL>
+impl<'sg, LABEL: Hash + Label, DATA, CMPL> ScopeGraph<'sg, LABEL, DATA, CMPL>
 where
     DATA: Default,
     CMPL: CriticalEdgeBasedCompleteness<LABEL, DATA>,

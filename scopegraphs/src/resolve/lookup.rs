@@ -25,7 +25,7 @@ impl<'sg: 'rslv, 'storage, 'rslv, LABEL, DATA, CMPL, PWF, DWF, LO, DEq> Resolve<
     for Query<'storage, 'sg, 'rslv, LABEL, DATA, CMPL, PWF, DWF, LO, DEq>
 where
     'storage: 'sg,
-    LABEL: Label + Copy + Debug + Hash + Eq,
+    LABEL: Label + Copy + Debug + Hash,
     DATA: Debug,
     CMPL: Completeness<LABEL, DATA>,
     CMPL::GetEdgesResult<'rslv>: ScopeContainer<LABEL>,

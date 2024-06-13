@@ -127,7 +127,7 @@ pub trait Implicit<LABEL: Label, DATA>: Completeness<LABEL, DATA> {}
 /// Do not instantiate this struct manually, but use the [add_scope] macro instead.
 pub struct ScopeExt<
     'ext,
-    LABEL: Hash + Eq + Label + Debug, /* <= Bound here required for Drop implementation */
+    LABEL: Hash + Label + Debug, /* <= Bound here required for Drop implementation */
     DATA,
     CMPL: UserClosed<LABEL, DATA>, // Bound required for Drop implementation
 > {
@@ -140,7 +140,7 @@ pub struct ScopeExt<
     _data: PhantomData<DATA>, // FIXME: required for using `where CMPL: UserClosed<LABEL, DATA>` in impl blocks. Can it be removed some way?
 }
 
-impl<'ext, LABEL: Hash + Eq + Label + Debug, DATA, CMPL> Drop for ScopeExt<'ext, LABEL, DATA, CMPL>
+impl<'ext, LABEL: Hash + Label + Debug, DATA, CMPL> Drop for ScopeExt<'ext, LABEL, DATA, CMPL>
 where
     CMPL: UserClosed<LABEL, DATA>,
 {
@@ -151,7 +151,7 @@ where
     }
 }
 
-impl<'ext, LABEL: Hash + Eq + Label + Debug, DATA, CMPL: UserClosed<LABEL, DATA>>
+impl<'ext, LABEL: Hash + Label + Debug, DATA, CMPL: UserClosed<LABEL, DATA>>
     ScopeExt<'ext, LABEL, DATA, CMPL>
 where
     CMPL: UserClosed<LABEL, DATA>,
