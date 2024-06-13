@@ -4,7 +4,7 @@ use async_recursion::async_recursion;
 use futures::future::join;
 use scopegraphs::completeness::{FutureCompleteness, ScopeExt};
 use scopegraphs::render::{EdgeStyle, EdgeTo, RenderScopeData, RenderScopeLabel, RenderSettings};
-use scopegraphs::{Scope, ScopeGraph, Storage, add_scope};
+use scopegraphs::{add_scope, Scope, ScopeGraph, Storage};
 use scopegraphs_macros::Label;
 use smol::channel::{bounded, Sender};
 use smol::LocalExecutor;
@@ -394,7 +394,6 @@ where
                 let (new_scope, ext_lex, ext_def) =
                     add_scope!(&self.sg, [SgLabel::Lexical, SgLabel::Definition]);
                 self.sg.ext_edge(&ext_lex, scope).expect("already closed");
-                ext_lex.close(); // optional
 
                 let ty_var = PartialType::Variable(self.uf.borrow_mut().fresh());
                 self.sg
@@ -406,12 +405,15 @@ where
                         },
                     )
                     .expect("already closed");
-                ext_def.close(); // optional
 
                 self.spawn(|this| async move {
                     let ty = this.clone().typecheck_expr(value, scope).await;
                     this.uf.borrow_mut().unify(ty_var, ty);
                 });
+
+                // required: otherwise type-checking in_expr is blocked
+                ext_lex.close();
+                ext_def.close();
 
                 // compute type of the result expression
                 self.clone().typecheck_expr(in_expr, new_scope).await
@@ -420,7 +422,6 @@ where
                 let (new_scope, ext_lex, ext_def) =
                     add_scope!(&self.sg, [SgLabel::Lexical, SgLabel::Definition]);
                 self.sg.ext_edge(&ext_lex, scope).expect("already closed");
-                ext_lex.close(); // optional
 
                 for (name, initializer_expr) in values {
                     let ty = PartialType::Variable(self.uf.borrow_mut().fresh());
@@ -442,7 +443,10 @@ where
                         this.uf.borrow_mut().unify(ty, init_ty)
                     });
                 }
-                ext_def.close(); // optional
+
+                // required: otherwise tyoe-checking of the in-expr is blocked.
+                ext_lex.close();
+                ext_def.close();
 
                 // compute type of the result expression
                 self.typecheck_expr(in_expr, new_scope).await
