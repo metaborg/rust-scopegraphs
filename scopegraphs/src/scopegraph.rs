@@ -193,7 +193,7 @@ where
     }
 }
 
-impl<'sg, LABEL: Hash + Eq + Label + Copy, DATA, CMPL> ScopeGraph<'sg, LABEL, DATA, CMPL>
+impl<'sg, LABEL: Hash + Eq + Label + Copy + Debug, DATA, CMPL> ScopeGraph<'sg, LABEL, DATA, CMPL>
 where
     CMPL: UserClosed<LABEL, DATA>,
 {

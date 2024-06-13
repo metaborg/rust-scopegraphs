@@ -1,7 +1,7 @@
 use crate::ast::{Expr, Program, RecordDef, Type};
 use crate::resolve::{resolve_lexical_ref, resolve_member_ref, resolve_record_ref};
 use async_recursion::async_recursion;
-use futures::future::{join, join_all};
+use futures::future::join;
 use scopegraphs::completeness::{FutureCompleteness, ScopeExt};
 use scopegraphs::{add_scope, RenderScopeData};
 use scopegraphs::{Scope, ScopeGraph, Storage};
@@ -296,13 +296,13 @@ where
     async fn typecheck_expr<'a>(self: Rc<Self>, ast: &'ex Expr, scope: Scope) -> PartialType {
         match ast {
             Expr::StructInit { name, fields } => {
-                let record_scope = resolve_record_ref(&self.sg, scope, name).await;
+                let record_scope = resolve_record_ref(self.sg, scope, name).await;
 
                 // defer typechecking of all the fields..
                 for (field_name, field_initializer) in fields {
                     self.spawn(|this| async move {
                         let (decl_type, init_type) = join(
-                            resolve_member_ref(&this.sg, record_scope, field_name),
+                            resolve_member_ref(this.sg, record_scope, field_name),
                             this.clone().typecheck_expr(field_initializer, scope),
                         )
                         .await;
@@ -335,7 +335,7 @@ where
                 PartialType::Int
             }
             Expr::Number(_) => PartialType::Int,
-            Expr::Ident(var_name) => resolve_lexical_ref(&self.sg, scope, var_name).await,
+            Expr::Ident(var_name) => resolve_lexical_ref(self.sg, scope, var_name).await,
             Expr::FieldAccess(inner, field) => {
                 let res = self.clone().typecheck_expr(inner, scope).await;
                 let inner_expr_type = self.uf.borrow_mut().find_partial_type(res);
@@ -417,16 +417,16 @@ where
                     inner_expr_type = fut.await;
                 }
                 PartialType::Record { scope, .. } => {
-                    break resolve_member_ref(&self.sg, scope, field).await
+                    break resolve_member_ref(self.sg, scope, field).await
                 }
                 PartialType::Int => panic!("number has no field {field}"),
             }
         }
     }
 
-    fn init_record_def<'tc, 'ast, 'ext>(
+    fn init_record_def<'ext>(
         &self,
-        record_def: &'ast RecordDef,
+        record_def: &RecordDef,
         decl_ext: &'ext SgScopeExt<'ext>,
     ) -> SgScopeExt<'sg> {
         let (field_scope, ext_def) = add_scope!(&self.sg, [SgLabel::Definition]);
@@ -443,19 +443,19 @@ where
         ext_def // return permission to extend field scope with definitions
     }
 
-    async fn typecheck_record_def(
-        self: Rc<Self>,
+    fn typecheck_record_def(
+        self: &Rc<Self>,
         record_def: &'ex RecordDef,
         scope: Scope,
         field_def_ext: SgScopeExt<'ex>,
     ) {
         let field_def_ext = Rc::new(field_def_ext);
-        let fld_decl_futures = record_def.fields.iter().map(|(fld_name, fld_ty)| {
+        record_def.fields.iter().for_each(|(fld_name, fld_ty)| {
             let field_def_ext = field_def_ext.clone();
             self.spawn(|this| async move {
                 let ty = match fld_ty {
                     Type::StructRef(n) => {
-                        let record_scope = resolve_record_ref(&this.sg, scope, n).await;
+                        let record_scope = resolve_record_ref(this.sg, scope, n).await;
                         PartialType::Record {
                             name: n.clone(),
                             scope: record_scope,
@@ -561,29 +561,26 @@ fn typecheck(ast: &Program) -> Option<Type> {
     let uf = RefCell::new(UnionFind::default());
     let local = LocalExecutor::new();
 
-    let tc = Rc::new(TypeChecker { sg: &sg, uf, ex: local });
+    let tc = Rc::new(TypeChecker {
+        sg: &sg,
+        uf,
+        ex: local,
+    });
 
     // INLINED add_scope!(...) macro for debugging purposes
-    let (global_scope, ext_type_def) = {
-        let data = (Default::default());
-        let scope = tc.sg.add_scope_with(data, [(SgLabel::TypeDefinition)]);
-        (scope, unsafe {
-            SgScopeExt::init(scope, (SgLabel::TypeDefinition), &tc.sg)
-        })
-    };
+    let (global_scope, ext_type_def) = add_scope!(&tc.sg, [SgLabel::TypeDefinition]);
 
     // typecheck all the type definitions somewhere in the future
     for item in &ast.record_types {
         // synchronously init record decl
         let field_scope = tc.init_record_def(item, &ext_type_def);
-        tc.spawn(|this| this.typecheck_record_def(item, global_scope, field_scope));
+        tc.typecheck_record_def(item, global_scope, field_scope);
     }
 
     // We can close for type definitions since the scopes for this are synchronously
     // made even before the future is returned and spawned. so, at this point,
     // no new type definitions are made.
-
-    // ext_type_def.close(); // optional
+    ext_type_def.close(); // required, otherwise it will be dropped only after the type checking process is finished, which is too late
 
     // typecheck the main expression
     let res = tc

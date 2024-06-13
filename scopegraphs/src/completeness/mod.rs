@@ -38,7 +38,7 @@ use crate::{
     Label, ScopeGraph,
 };
 use private::Sealed;
-use std::{hash::Hash, marker::PhantomData};
+use std::{fmt::Debug, hash::Hash, marker::PhantomData};
 
 /*** Completeness trait ***/
 
@@ -129,7 +129,7 @@ pub trait Implicit<LABEL, DATA>: Completeness<LABEL, DATA> {}
 /// Do not instantiate this struct manually, but use the [add_scope] macro instead.
 pub struct ScopeExt<
     'ext,
-    LABEL: Hash + Eq + Label, /* <= Bound here required for Drop implementation */
+    LABEL: Hash + Eq + Label + Debug, /* <= Bound here required for Drop implementation */
     DATA,
     CMPL: UserClosed<LABEL, DATA>, // Bound required for Drop implementation
 > {
@@ -142,18 +142,19 @@ pub struct ScopeExt<
     _data: PhantomData<DATA>, // FIXME: required for using `where CMPL: UserClosed<LABEL, DATA>` in impl blocks. Can it be removed some way?
 }
 
-impl<'ext, LABEL: Hash + Eq + Label, DATA, CMPL> Drop for ScopeExt<'ext, LABEL, DATA, CMPL>
+impl<'ext, LABEL: Hash + Eq + Label + Debug, DATA, CMPL> Drop for ScopeExt<'ext, LABEL, DATA, CMPL>
 where
     CMPL: UserClosed<LABEL, DATA>,
 {
     /// This is the trick! When the permission is dropped, we know for sure that no future extensions will be made (otherwise, [self] should have been kept alive)
     /// Thus, we can close the critical edge.
     fn drop(&mut self) {
+        println!("Closing {:?}/{:?}", self.scope, self.label);
         self.sg.close(self.scope, &self.label, Witness(()))
     }
 }
 
-impl<'ext, LABEL: Hash + Eq + Label, DATA, CMPL: UserClosed<LABEL, DATA>>
+impl<'ext, LABEL: Hash + Eq + Label + Debug, DATA, CMPL: UserClosed<LABEL, DATA>>
     ScopeExt<'ext, LABEL, DATA, CMPL>
 where
     CMPL: UserClosed<LABEL, DATA>,
