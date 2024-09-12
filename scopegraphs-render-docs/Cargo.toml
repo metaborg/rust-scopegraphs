@@ -1,7 +1,11 @@
 [package]
 name = "scopegraphs-render-docs"
 version.workspace = true
-authors = ["Mike Lubinets <git@mkl.dev>", "Frank Rehberger <frehberg@gmail.com>", "Jonathan Dönszelmann <jonathan@donsz.nl>"]
+authors = [
+    "Mike Lubinets <git@mkl.dev>",
+    "Frank Rehberger <frehberg@gmail.com>",
+    "Jonathan Dönszelmann <jonathan@donsz.nl>",
+]
 description = "Derived from Aquamarine, a mermaid.js integration for rustdoc, renders scopegraphs by executing doctests to generate mermaid"
 keywords = ["proc_macro", "docs", "rustdoc", "mermaid", "diagram"]
 categories = ["visualization", "development-tools::build-utils"]
