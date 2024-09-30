@@ -299,8 +299,12 @@ fn normalize_or(l: &Rc<Regex>, r: &Rc<Regex>, ab: &AlphabetOrder) -> Rc<Regex> {
         // ~0 | a => ~0
         (Regex::Complement(c), _) if c.deref() == &Regex::EmptySet => l,
         // (a | (b | c)) => (b | (a | c)) if b < a
-        (_, Regex::Or(il, ir)) if l.compare(il, ab) > 0 => {
-            normalize_or(il, &normalize_or(&l, ir, ab), ab)
+        (_, Regex::Or(il, ir)) => {
+            if l.compare(il, ab) > 0 {
+                normalize_or(il, &normalize_or(&l, ir, ab), ab)
+            } else {
+                Regex::Or(l, r).into()
+            }
         }
         // a | b => b | a if b < a
         _ if l.compare(&r, ab) > 0 => normalize_or(&r, &l, ab),

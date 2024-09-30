@@ -86,6 +86,29 @@ fn test_or_3() {
 }
 
 #[test]
+fn test_repeat_or_2() {
+    use Alphabet::*;
+
+    compile_regex!(type Machine<Alphabet> = A* (A | B));
+
+    assert!(!Machine::new().accepts([A; 0]));
+    assert!(Machine::new().accepts([A]));
+    assert!(Machine::new().accepts([B]));
+}
+
+#[test]
+fn test_repeat_or_3() {
+    use Alphabet::*;
+
+    compile_regex!(type Machine<Alphabet> = A* (A | B | C));
+
+    assert!(!Machine::new().accepts([A; 0]));
+    assert!(Machine::new().accepts([A]));
+    assert!(Machine::new().accepts([B]));
+    assert!(Machine::new().accepts([C]));
+}
+
+#[test]
 fn test_negate() {
     use Alphabet::*;
 
