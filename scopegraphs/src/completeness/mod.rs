@@ -307,19 +307,18 @@ where
 /// ```
 #[macro_export]
 macro_rules! add_scope {
-  ($sg:ident[let $s:ident |-> $data:expr] with open labels: $($lbl:expr),*) => {
-    let $s: $crate::scopegraph::Scope;
-    {
-        // put initialized code in block
-        let sg = &$sg;       // evaluate scope graph expression
-        let data = $data;   // evaluate data expression
+  ($sg:ident[let $s:ident |-> $data:expr] request open: $(- $lbl:expr => let $lbl_id:ident)*) => {
+    // put initialized code in block
+    let sg = &$sg;       // evaluate scope graph expression
+    let data = $data;   // evaluate data expression
 
-        // create new scope
-        $s = sg.add_scope_with(data, [$($lbl),*]);
+    // create new scope
+    let $s = sg.add_scope_with(data, [$($lbl),*]);
 
-        // return the scope, and the extension permissions
-        ($(unsafe { $crate::completeness::ScopeExtPerm::init($s, $lbl, sg) }),*)
-    }
+    // return the scope, and the extension permissions
+    $(
+        let $lbl_id = unsafe { $crate::completeness::ScopeExtPerm::init($s, $lbl, sg) };
+    )*
   };
 
   ($sg:expr, $data:expr, [ $($lbl:expr),* ]) => {
@@ -362,19 +361,35 @@ macro_rules! add_edge {
 
 #[cfg(test)]
 mod tests {
+    use crate::Label;
+    use std::fmt::Debug;
 
     #[test]
     pub fn test_new_add_macro() {
-        use crate::completeness::ExplicitClose;
+        #[derive(Label, Debug, PartialEq, Eq, Clone, Copy, Hash)]
+        enum Lbl {
+            L1,
+            L2,
+        }
+
+        pub mod scopegraphs {
+            pub use crate::*;
+        }
+
+        use crate::completeness::ImplicitClose;
         use crate::ScopeGraph;
 
         use crate::Storage;
 
         let storage = Storage::new();
-        let scope_graph: ScopeGraph<(), (), ExplicitClose<()>> =
-            ScopeGraph::new(&storage, ExplicitClose::default());
+        let scope_graph: ScopeGraph<Lbl, (), ImplicitClose<Lbl>> =
+            ScopeGraph::new(&storage, ImplicitClose::default());
 
-        let ext_unit = add_scope!(scope_graph[let s |-> ()] with open labels: ()).0;
+        add_scope!(
+            scope_graph[let s |-> ()] request open:
+            - Lbl::L1 => let ext_l1
+            - Lbl::L2 => let ext_l2
+        );
         println!("{:?}", s);
     }
 }
