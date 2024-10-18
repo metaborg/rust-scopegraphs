@@ -513,12 +513,12 @@ impl<'sg, 'storage, 'rslv, LABEL: Label, DATA, CMPL, PWF, DWF, LO, DEq>
     ///     .with_data_wellformedness(|data: &MyData| data.is_good);
     ///
     /// ```
-    pub fn with_data_wellformedness<NDWF>(
+    pub fn with_data_wellformedness<NDWF, DWFO>(
         self,
         new_data_wellformedness: NDWF,
     ) -> Query<'sg, 'storage, 'rslv, LABEL, DATA, CMPL, PWF, NDWF, LO, DEq>
     where
-        NDWF: DataWellformedness<DATA> + 'rslv,
+        NDWF: DataWellformedness<DATA, DWFO> + 'rslv,
     {
         Query {
             _phantom: PhantomData,

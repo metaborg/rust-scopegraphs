@@ -1,15 +1,18 @@
 use crate::future_wrapper::FutureWrapper;
 use crate::resolve::{Env, ResolvedPath};
 use futures::future::Shared;
+use futures::io::empty;
 use std::hash::Hash;
 use std::rc::Rc;
 
 /// Interface for environment containers that support the operations required for query resolution.
-pub trait EnvContainer<'sg, 'rslv, LABEL: 'sg, DATA: 'sg>:
+pub trait EnvContainer<'sg, 'rslv, LABEL: 'sg, DATA: 'sg, DWFO>:
     From<Env<'sg, LABEL, DATA>> + 'rslv
 {
     /// Creates a new, container with an empty environment.
     fn empty() -> Self;
+
+    fn inject_if(data_ok: DWFO, path: ResolvedPath<LABEL, DATA>) -> Self;
 
     /// Maps the current container to a new one, based a provided mapping of the underlying environment.
     fn flat_map(
@@ -18,12 +21,21 @@ pub trait EnvContainer<'sg, 'rslv, LABEL: 'sg, DATA: 'sg>:
     ) -> Self;
 }
 
-impl<'sg: 'rslv, 'rslv, LABEL, DATA> EnvContainer<'sg, 'rslv, LABEL, DATA> for Env<'sg, LABEL, DATA>
+impl<'sg: 'rslv, 'rslv, LABEL, DATA> EnvContainer<'sg, 'rslv, LABEL, DATA, bool>
+    for Env<'sg, LABEL, DATA>
 where
     ResolvedPath<'sg, LABEL, DATA>: Hash,
 {
     fn empty() -> Self {
         Self::new()
+    }
+
+    fn inject_if(data_ok: bool, path: ResolvedPath<LABEL, DATA>) -> Self {
+        if data_ok {
+            return Env::single(path).into();
+        } else {
+            return empty();
+        }
     }
 
     fn flat_map(
@@ -34,13 +46,21 @@ where
     }
 }
 
-impl<'sg: 'rslv, 'rslv, LABEL: 'sg, DATA: 'sg> EnvContainer<'sg, 'rslv, LABEL, DATA>
+impl<'sg: 'rslv, 'rslv, LABEL: 'sg, DATA: 'sg> EnvContainer<'sg, 'rslv, LABEL, DATA, bool>
     for Rc<Env<'sg, LABEL, DATA>>
 where
     ResolvedPath<'sg, LABEL, DATA>: Hash,
 {
     fn empty() -> Self {
         Self::new(Env::empty())
+    }
+
+    fn inject_if(data_ok: bool, path: ResolvedPath<LABEL, DATA>) -> Self {
+        if data_ok {
+            return Env::single(path).into();
+        } else {
+            return empty();
+        }
     }
 
     fn flat_map(
@@ -60,14 +80,24 @@ impl<'sg, LABEL: 'sg, DATA: 'sg, E> From<Env<'sg, LABEL, DATA>>
     }
 }
 
-impl<'sg: 'rslv, 'rslv, LABEL: 'sg, DATA: 'sg, E: 'rslv> EnvContainer<'sg, 'rslv, LABEL, DATA>
-    for Result<Env<'sg, LABEL, DATA>, E>
+impl<'sg: 'rslv, 'rslv, LABEL: 'sg, DATA: 'sg, E: 'rslv>
+    EnvContainer<'sg, 'rslv, LABEL, DATA, Result<bool, E>> for Result<Env<'sg, LABEL, DATA>, E>
 where
     ResolvedPath<'sg, LABEL, DATA>: Hash,
     E: Clone,
 {
     fn empty() -> Self {
         Ok(Env::empty())
+    }
+
+    fn inject_if(data_ok: Result<bool, E>, path: ResolvedPath<LABEL, DATA>) -> Self {
+        data_ok.map(|ok| {
+            if ok {
+                return Env::single(path).into();
+            } else {
+                return empty();
+            }
+        })
     }
 
     fn flat_map(&self, map: impl for<'short> FnOnce(&Env<'sg, LABEL, DATA>) -> Self) -> Self {
@@ -78,7 +108,8 @@ where
     }
 }
 
-impl<'sg: 'rslv, 'rslv, LABEL: 'sg, DATA: 'sg> EnvContainer<'sg, 'rslv, LABEL, DATA>
+impl<'sg: 'rslv, 'rslv, LABEL: 'sg, DATA: 'sg>
+    EnvContainer<'sg, 'rslv, LABEL, DATA, FutureWrapper<'rslv, bool>>
     for FutureWrapper<'rslv, Env<'sg, LABEL, DATA>>
 where
     ResolvedPath<'sg, LABEL, DATA>: Hash,
@@ -86,6 +117,16 @@ where
 {
     fn empty() -> Self {
         FutureWrapper::new(std::future::ready(Env::empty()))
+    }
+
+    fn inject_if(data_ok: FutureWrapper<'rslv, bool>, path: ResolvedPath<LABEL, DATA>) -> Self {
+        data_ok.map(|ok| {
+            if ok {
+                return Env::single(path).into();
+            } else {
+                return empty();
+            }
+        })
     }
 
     fn flat_map(

@@ -3,16 +3,21 @@ use crate::resolve::EdgeOrData;
 /// Unary predicate over `DATA`.
 ///
 /// Used to select declarations that a query can resolve to.
-pub trait DataWellformedness<DATA> {
+///
+/// `O` is the output of applying the function to some data.
+/// When executing the query, needs to be compatible with
+/// the completeness strategy for the underlying scope graph.
+///
+pub trait DataWellformedness<DATA, O> {
     /// returns true if the data is well-formed.
-    fn data_wf(&self, data: &DATA) -> bool;
+    fn data_wf(&self, data: &DATA) -> O;
 }
 
-impl<DATA, T> DataWellformedness<DATA> for T
+impl<DATA, T, O> DataWellformedness<DATA, O> for T
 where
-    for<'sg> T: Fn(&'sg DATA) -> bool,
+    for<'sg> T: Fn(&'sg DATA) -> O,
 {
-    fn data_wf(&self, data: &DATA) -> bool {
+    fn data_wf(&self, data: &DATA) -> O {
         self(data)
     }
 }
@@ -22,9 +27,9 @@ where
 #[derive(Default)]
 pub struct DefaultDataWellformedness {}
 
-impl<DATA> DataWellformedness<DATA> for DefaultDataWellformedness {
-    fn data_wf(&self, _data: &DATA) -> bool {
-        true // match all data by default
+impl<DATA, O: From<bool>> DataWellformedness<DATA, O> for DefaultDataWellformedness {
+    fn data_wf(&self, _data: &DATA) -> O {
+        From::from(true) // match all data by default
     }
 }
 
