@@ -21,7 +21,7 @@ use crate::resolve::{
 use crate::{Label, Scope, ScopeGraph};
 use scopegraphs_regular_expressions::RegexMatcher;
 
-impl<'sg: 'rslv, 'storage, 'rslv, LABEL, DATA, CMPL, PWF, DWF, DWFO, LO, DEq> Resolve<'sg, 'rslv>
+impl<'sg: 'rslv, 'storage, 'rslv, LABEL, DATA, CMPL, PWF, DWF, LO, DEq> Resolve<'sg, 'rslv>
     for Query<'storage, 'sg, 'rslv, LABEL, DATA, CMPL, PWF, DWF, LO, DEq>
 where
     'storage: 'sg,
@@ -36,9 +36,10 @@ where
         'rslv,
         LABEL,
         DATA,
-    >>::EnvContainer: EnvContainer<'sg, 'rslv, LABEL, DATA, DWFO> + Debug,
+    >>::EnvContainer:
+        EnvContainer<'sg, 'rslv, LABEL, DATA, <DWF as DataWellformedness<DATA>>::Output> + Debug,
     PWF: for<'a> RegexMatcher<&'a LABEL> + 'rslv,
-    DWF: DataWellformedness<DATA, DWFO> + 'rslv,
+    DWF: DataWellformedness<DATA> + 'rslv,
 
     // DWF : DataWellFormedNess<DATA, Completeness::DWF>
     LO: LabelOrder<LABEL> + 'rslv,
@@ -105,7 +106,7 @@ type EnvC<'sg, 'rslv, CMPL, LABEL, DATA> = <<<CMPL as Completeness<LABEL, DATA>>
 
 type EnvCache<LABEL, ENVC> = RefCell<HashMap<EdgeOrData<LABEL>, Rc<ENVC>>>;
 
-impl<'storage, 'sg: 'rslv, 'rslv, LABEL, DATA, CMPL, DWF, LO, DEq, DWFO>
+impl<'storage, 'sg: 'rslv, 'rslv, LABEL, DATA, CMPL, DWF, LO, DEq>
     ResolutionContext<'storage, 'sg, 'rslv, LABEL, DATA, CMPL, DWF, LO, DEq>
 where
     LABEL: Label + Debug + Hash,
@@ -120,9 +121,10 @@ where
         'rslv,
         LABEL,
         DATA,
-    >>::EnvContainer: EnvContainer<'sg, 'rslv, LABEL, DATA, DWFO> + Debug,
+    >>::EnvContainer:
+        EnvContainer<'sg, 'rslv, LABEL, DATA, <DWF as DataWellformedness<DATA>>::Output> + Debug,
     DEq: DataEquivalence<DATA>,
-    DWF: DataWellformedness<DATA, DWFO>,
+    DWF: DataWellformedness<DATA>,
     LO: LabelOrder<LABEL>,
     Path<LABEL>: Clone,
 {
@@ -308,8 +310,13 @@ where
         let path = path.clone().resolve(data);
         let data_ok = self.data_wellformedness.data_wf(data);
 
-        return <EnvC<'sg, 'rslv, CMPL, LABEL, DATA> as EnvContainer<'sg, 'rslv, LABEL, DATA>>
-            ::inject_if(data_ok, path);
+        return <EnvC<'sg, 'rslv, CMPL, LABEL, DATA> as EnvContainer<
+            'sg,
+            'rslv,
+            LABEL,
+            DATA,
+            <DWF as DataWellformedness<DATA>>::Output,
+        >>::inject_if(data_ok, path);
     }
 
     /// Computes the edges in `edges` for which no 'greater' edge exists.
@@ -339,6 +346,16 @@ where
         log::info!("smaller({:?}, {:?}) = {:?}", edge, edges, smaller);
         smaller
     }
+
+    fn empty_env_container() -> EnvC<'sg, 'rslv, CMPL, LABEL, DATA> {
+        <EnvC<'sg, 'rslv, CMPL, LABEL, DATA> as EnvContainer<
+            'sg,
+            'rslv,
+            LABEL,
+            DATA,
+            <DWF as DataWellformedness<DATA>>::Output,
+        >>::empty()
+    }
 }
 
 #[cfg(test)]
@@ -348,6 +365,7 @@ mod tests {
     use crate::{
         add_scope,
         completeness::{ExplicitClose, FutureCompleteness, ImplicitClose, UncheckedCompleteness},
+        future_wrapper::FutureWrapper,
         query_regex,
         resolve::{DataWellformedness, Resolve, ResolvedPath},
         storage::Storage,
@@ -386,8 +404,11 @@ mod tests {
             }
         }
 
-        fn matcher(n: &'a str) -> impl DataWellformedness<Self, bool> {
-            |data: &Self| data.matches(n)
+        fn matcher(n: &'a str) -> impl DataWellformedness<Self> {
+            |data: &Self| {
+                let matches = data.matches(n);
+                return FutureWrapper::new(async move { return matches });
+            }
         }
 
         fn from_default(name: &'a str) -> Self {

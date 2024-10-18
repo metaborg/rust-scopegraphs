@@ -8,28 +8,31 @@ use crate::resolve::EdgeOrData;
 /// When executing the query, needs to be compatible with
 /// the completeness strategy for the underlying scope graph.
 ///
-pub trait DataWellformedness<DATA, O> {
+pub trait DataWellformedness<DATA> {
+    type Output;
     /// returns true if the data is well-formed.
-    fn data_wf(&self, data: &DATA) -> O;
+    fn data_wf(&self, data: &DATA) -> Self::Output;
 }
 
-impl<DATA, T, O> DataWellformedness<DATA, O> for T
+impl<DATA, T, O> DataWellformedness<DATA> for T
 where
     for<'sg> T: Fn(&'sg DATA) -> O,
 {
+    type Output = O;
+
     fn data_wf(&self, data: &DATA) -> O {
         self(data)
     }
 }
 
-/// When you don't specify the data well-formedness, this is the default.
-/// It considers all data well-formed.
 #[derive(Default)]
 pub struct DefaultDataWellformedness {}
 
-impl<DATA, O: From<bool>> DataWellformedness<DATA, O> for DefaultDataWellformedness {
-    fn data_wf(&self, _data: &DATA) -> O {
-        From::from(true) // match all data by default
+impl<DATA> DataWellformedness<DATA> for DefaultDataWellformedness {
+    type Output = bool;
+
+    fn data_wf(&self, _data: &DATA) -> bool {
+        true // match all data by default
     }
 }
 

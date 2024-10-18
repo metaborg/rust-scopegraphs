@@ -1,7 +1,6 @@
 use crate::future_wrapper::FutureWrapper;
 use crate::resolve::{Env, ResolvedPath};
 use futures::future::Shared;
-use futures::io::empty;
 use std::hash::Hash;
 use std::rc::Rc;
 
@@ -12,7 +11,7 @@ pub trait EnvContainer<'sg, 'rslv, LABEL: 'sg, DATA: 'sg, DWFO>:
     /// Creates a new, container with an empty environment.
     fn empty() -> Self;
 
-    fn inject_if(data_ok: DWFO, path: ResolvedPath<LABEL, DATA>) -> Self;
+    fn inject_if(data_ok: DWFO, path: ResolvedPath<'sg, LABEL, DATA>) -> Self;
 
     /// Maps the current container to a new one, based a provided mapping of the underlying environment.
     fn flat_map(
@@ -21,20 +20,20 @@ pub trait EnvContainer<'sg, 'rslv, LABEL: 'sg, DATA: 'sg, DWFO>:
     ) -> Self;
 }
 
-impl<'sg: 'rslv, 'rslv, LABEL, DATA> EnvContainer<'sg, 'rslv, LABEL, DATA, bool>
+impl<'sg: 'rslv, 'rslv, LABEL: Eq, DATA: Eq> EnvContainer<'sg, 'rslv, LABEL, DATA, bool>
     for Env<'sg, LABEL, DATA>
 where
-    ResolvedPath<'sg, LABEL, DATA>: Hash,
+    ResolvedPath<'sg, LABEL, DATA>: Hash + Clone,
 {
     fn empty() -> Self {
         Self::new()
     }
 
-    fn inject_if(data_ok: bool, path: ResolvedPath<LABEL, DATA>) -> Self {
+    fn inject_if(data_ok: bool, path: ResolvedPath<'sg, LABEL, DATA>) -> Self {
         if data_ok {
             return Env::single(path).into();
         } else {
-            return empty();
+            return Env::empty();
         }
     }
 
@@ -46,20 +45,22 @@ where
     }
 }
 
-impl<'sg: 'rslv, 'rslv, LABEL: 'sg, DATA: 'sg> EnvContainer<'sg, 'rslv, LABEL, DATA, bool>
+impl<'sg: 'rslv, 'rslv, LABEL, DATA> EnvContainer<'sg, 'rslv, LABEL, DATA, bool>
     for Rc<Env<'sg, LABEL, DATA>>
 where
     ResolvedPath<'sg, LABEL, DATA>: Hash,
+    LABEL: 'sg + Eq + Clone,
+    DATA: 'sg + Eq,
 {
     fn empty() -> Self {
         Self::new(Env::empty())
     }
 
-    fn inject_if(data_ok: bool, path: ResolvedPath<LABEL, DATA>) -> Self {
+    fn inject_if(data_ok: bool, path: ResolvedPath<'sg, LABEL, DATA>) -> Self {
         if data_ok {
             return Env::single(path).into();
         } else {
-            return empty();
+            return Env::empty().into();
         }
     }
 
@@ -80,22 +81,22 @@ impl<'sg, LABEL: 'sg, DATA: 'sg, E> From<Env<'sg, LABEL, DATA>>
     }
 }
 
-impl<'sg: 'rslv, 'rslv, LABEL: 'sg, DATA: 'sg, E: 'rslv>
+impl<'sg: 'rslv, 'rslv, LABEL: 'sg + Eq, DATA: 'sg + Eq, E: 'rslv>
     EnvContainer<'sg, 'rslv, LABEL, DATA, Result<bool, E>> for Result<Env<'sg, LABEL, DATA>, E>
 where
-    ResolvedPath<'sg, LABEL, DATA>: Hash,
+    ResolvedPath<'sg, LABEL, DATA>: Hash + Clone,
     E: Clone,
 {
     fn empty() -> Self {
         Ok(Env::empty())
     }
 
-    fn inject_if(data_ok: Result<bool, E>, path: ResolvedPath<LABEL, DATA>) -> Self {
+    fn inject_if(data_ok: Result<bool, E>, path: ResolvedPath<'sg, LABEL, DATA>) -> Self {
         data_ok.map(|ok| {
             if ok {
                 return Env::single(path).into();
             } else {
-                return empty();
+                return Env::empty();
             }
         })
     }
@@ -108,25 +109,29 @@ where
     }
 }
 
-impl<'sg: 'rslv, 'rslv, LABEL: 'sg, DATA: 'sg>
+impl<'sg: 'rslv, 'rslv, LABEL: 'sg + Eq, DATA: 'sg + Eq>
     EnvContainer<'sg, 'rslv, LABEL, DATA, FutureWrapper<'rslv, bool>>
     for FutureWrapper<'rslv, Env<'sg, LABEL, DATA>>
 where
-    ResolvedPath<'sg, LABEL, DATA>: Hash,
+    ResolvedPath<'sg, LABEL, DATA>: Hash + Clone,
     LABEL: Clone,
 {
     fn empty() -> Self {
         FutureWrapper::new(std::future::ready(Env::empty()))
     }
 
-    fn inject_if(data_ok: FutureWrapper<'rslv, bool>, path: ResolvedPath<LABEL, DATA>) -> Self {
-        data_ok.map(|ok| {
+    fn inject_if(
+        data_ok: FutureWrapper<'rslv, bool>,
+        path: ResolvedPath<'sg, LABEL, DATA>,
+    ) -> Self {
+        return FutureWrapper::new(async move {
+            let ok = data_ok.await;
             if ok {
                 return Env::single(path).into();
             } else {
-                return empty();
+                return Env::empty();
             }
-        })
+        });
     }
 
     fn flat_map(

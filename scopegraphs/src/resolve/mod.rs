@@ -518,7 +518,7 @@ impl<'sg, 'storage, 'rslv, LABEL: Label, DATA, CMPL, PWF, DWF, LO, DEq>
         new_data_wellformedness: NDWF,
     ) -> Query<'sg, 'storage, 'rslv, LABEL, DATA, CMPL, PWF, NDWF, LO, DEq>
     where
-        NDWF: DataWellformedness<DATA, DWFO> + 'rslv,
+        NDWF: DataWellformedness<DATA> + 'rslv,
     {
         Query {
             _phantom: PhantomData,
