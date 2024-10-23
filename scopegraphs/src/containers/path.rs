@@ -1,12 +1,16 @@
 use crate::future_wrapper::FutureWrapper;
-use crate::resolve::{Env, Path, ResolvedPath};
+use crate::resolve::{DataEquivalence, Env, Path, ResolvedPath};
 use futures::future::join_all;
 use std::hash::Hash;
+use std::fmt::Debug;
+
+use super::EnvContainer;
 
 /// Interface for path containers that support the operations required for query resolution.
-pub trait PathContainer<'sg, 'rslv, LABEL: 'sg, DATA: 'sg>: 'rslv {
+pub trait PathContainer<'sg, 'rslv, LABEL: 'sg, DATA: 'sg, DWFO>: Debug + 'rslv 
+{
     /// Type returned by resolving a path to its sub-environment.
-    type EnvContainer;
+    type EnvContainer: EnvContainer<'sg, 'rslv, LABEL, DATA, DWFO>;
 
     /// Computes sub-environments for each path in the container.
     fn map_into_env<F: 'rslv + FnMut(Path<LABEL>) -> Self::EnvContainer>(
@@ -15,11 +19,12 @@ pub trait PathContainer<'sg, 'rslv, LABEL: 'sg, DATA: 'sg>: 'rslv {
     ) -> Self::EnvContainer;
 }
 
-impl<'rslv, 'sg, LABEL: 'sg, DATA: 'sg> PathContainer<'sg, 'rslv, LABEL, DATA> for Vec<Path<LABEL>>
+impl<'rslv, 'sg, LABEL: Debug + 'sg, DATA: 'sg, DWFO> PathContainer<'sg, 'rslv, LABEL, DATA, DWFO> for Vec<Path<LABEL>>
 where
     Self: 'rslv,
     LABEL: Clone + Hash + Eq,
     DATA: Hash + Eq,
+    Env<'sg, LABEL, DATA>: EnvContainer<'sg, 'rslv, LABEL, DATA, DWFO>
 {
     type EnvContainer = Env<'sg, LABEL, DATA>;
 
@@ -30,13 +35,14 @@ where
 
 // TODO: can this be generalized to arbitrary results of PathContainers?
 // (challenge is converting between the different `::EnvContainer`s.)
-impl<'rslv, 'sg, LABEL: 'sg, DATA: 'sg, E: 'rslv> PathContainer<'sg, 'rslv, LABEL, DATA>
+impl<'rslv, 'sg, LABEL: Debug + 'sg, DATA: 'sg, E: Debug + 'rslv, DWFO> PathContainer<'sg, 'rslv, LABEL, DATA, DWFO>
     for Result<Vec<Path<LABEL>>, E>
 where
     Self: 'rslv,
     LABEL: Clone + Hash,
     DATA: Hash,
     for<'a> ResolvedPath<'a, LABEL, DATA>: Hash + Eq,
+    Result<Env<'sg, LABEL, DATA>, E>: EnvContainer<'sg, 'rslv, LABEL, DATA, DWFO>
 {
     type EnvContainer = Result<Env<'sg, LABEL, DATA>, E>;
 
@@ -49,12 +55,13 @@ where
         })
     }
 }
-impl<'sg, 'rslv, LABEL: 'sg, DATA: 'sg> PathContainer<'sg, 'rslv, LABEL, DATA>
+impl<'sg, 'rslv, LABEL: 'sg, DATA: 'sg, DWFO> PathContainer<'sg, 'rslv, LABEL, DATA, DWFO>
     for FutureWrapper<'rslv, Vec<Path<LABEL>>>
 where
     Self: 'rslv,
     LABEL: Clone + Hash,
     DATA: Hash,
+    FutureWrapper<'rslv, Env<'sg, LABEL, DATA>>: EnvContainer<'sg, 'rslv, LABEL, DATA, DWFO>,
     for<'a> ResolvedPath<'a, LABEL, DATA>: Hash + Eq,
 {
     type EnvContainer = FutureWrapper<'rslv, Env<'sg, LABEL, DATA>>;
