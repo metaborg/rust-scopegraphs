@@ -485,8 +485,9 @@ impl<'sg, 'storage, 'rslv, LABEL: Label, DATA, CMPL, PWF, DWF, LO, DEq>
     ///     is_good: bool
     /// }
     /// struct MyDataWellformedness;
-    /// impl DataWellformedness<MyData> for MyDataWellformedness {
-    ///     fn data_wf(&self, data: &MyData) -> bool {
+    /// impl<'sg> DataWellformedness<'sg, MyData> for MyDataWellformedness {
+    ///     type Output = bool;
+    ///     fn data_wf(&self, data: &'sg MyData) -> bool {
     ///         data.is_good
     ///     }
     /// }
@@ -513,12 +514,12 @@ impl<'sg, 'storage, 'rslv, LABEL: Label, DATA, CMPL, PWF, DWF, LO, DEq>
     ///     .with_data_wellformedness(|data: &MyData| data.is_good);
     ///
     /// ```
-    pub fn with_data_wellformedness<NDWF, DWFO>(
+    pub fn with_data_wellformedness<NDWF>(
         self,
         new_data_wellformedness: NDWF,
     ) -> Query<'sg, 'storage, 'rslv, LABEL, DATA, CMPL, PWF, NDWF, LO, DEq>
     where
-        NDWF: DataWellformedness<DATA> + 'rslv,
+        NDWF: DataWellformedness<'sg, DATA> + 'rslv,
     {
         Query {
             _phantom: PhantomData,

@@ -33,6 +33,7 @@ mod private {
     pub trait Sealed {}
 }
 
+use crate::resolve::DataWellformedness;
 use crate::scopegraph::{InnerScopeGraph, Scope};
 use crate::{Label, ScopeGraph};
 use private::Sealed;
@@ -275,9 +276,12 @@ where
     /// // Note: closing the edge *after* creating all edges, *before* doing the query
     /// s1_def.close();
     ///
+    /// let dwf = |x: &usize| *x == 42;
+    /// scopegraphs::completeness::type_helper(dwf);
+    ///
     /// let query_result = sg.query()
     ///     .with_path_wellformedness(Regex::new()) // regex: `Def`
-    ///     .with_data_wellformedness(|x: &usize| *x == 42) // match `42`
+    ///     .with_data_wellformedness(dwf) // match `42`
     ///     .resolve(s1);
     ///
     /// query_result.expect("query should return result");
@@ -286,6 +290,8 @@ where
         // self dropped at the end of this block
     }
 }
+
+pub fn type_helper<'sg, DATA>(arg: impl DataWellformedness<'sg, DATA>) {}
 
 /// Creates a scope (with some data if specified), and permission to extend it for each label specified in the label list argument.
 ///

@@ -36,10 +36,10 @@ where
         'rslv,
         LABEL,
         DATA,
-    >>::EnvContainer:
-        EnvContainer<'sg, 'rslv, LABEL, DATA, <DWF as DataWellformedness<DATA>>::Output> + Debug,
+    >>::EnvContainer: EnvContainer<'sg, 'rslv, LABEL, DATA, <DWF as DataWellformedness<'sg, DATA>>::Output>
+        + Debug,
     PWF: for<'a> RegexMatcher<&'a LABEL> + 'rslv,
-    DWF: DataWellformedness<DATA> + 'rslv,
+    DWF: DataWellformedness<'sg, DATA> + 'rslv,
 
     // DWF : DataWellFormedNess<DATA, Completeness::DWF>
     LO: LabelOrder<LABEL> + 'rslv,
@@ -121,10 +121,10 @@ where
         'rslv,
         LABEL,
         DATA,
-    >>::EnvContainer:
-        EnvContainer<'sg, 'rslv, LABEL, DATA, <DWF as DataWellformedness<DATA>>::Output> + Debug,
+    >>::EnvContainer: EnvContainer<'sg, 'rslv, LABEL, DATA, <DWF as DataWellformedness<'sg, DATA>>::Output>
+        + Debug,
     DEq: DataEquivalence<DATA>,
-    DWF: DataWellformedness<DATA>,
+    DWF: DataWellformedness<'sg, DATA>,
     LO: LabelOrder<LABEL>,
     Path<LABEL>: Clone,
 {
@@ -367,8 +367,8 @@ mod tests {
     use crate::{
         add_scope,
         completeness::{
-            self, Completeness, EdgeClosedError, ExplicitClose, FutureCompleteness, ImplicitClose,
-            UncheckedCompleteness,
+            self, Completeness, Delay, EdgeClosedError, ExplicitClose, FutureCompleteness,
+            ImplicitClose, UncheckedCompleteness,
         },
         containers::{EnvContainer, PathContainer, ScopeContainer},
         future_wrapper::FutureWrapper,
@@ -415,10 +415,8 @@ mod tests {
             |data: &Self| data.matches(n)
         }
 
-        fn matcher_res(
-            n: &'a str,
-        ) -> impl (for<'b> Fn(&'b Self) -> Result<bool, EdgeClosedError<Lbl>>) {
-            |data: &Self| Result::Ok(data.matches(n))
+        fn matcher_res(n: &'a str) -> impl (for<'b> Fn(&'b Self) -> Result<bool, Delay<Lbl>>) {
+            |data: &Self| Ok(data.matches(n))
         }
 
         fn matcher_fut(n: &'a str) -> impl (for<'b> Fn(&'b Self) -> FutureWrapper<bool>) {
@@ -475,13 +473,13 @@ mod tests {
             let_lex.close();
             let_def.close();
 
-            let env = scope_graph
+            let query = scope_graph
                 .query()
                 .with_path_wellformedness(query_regex!(Lbl: Lex* Imp? Def))
-                .with_data_wellformedness::<_, FutureWrapper<bool>>(TData::matcher_fut("x"))
-                .with_label_order(label_order!(Lbl: Def < Imp < Lex))
-                .resolve(s_let)
-                .await;
+                .with_data_wellformedness(TData::matcher_fut("x"))
+                .with_label_order(label_order!(Lbl: Def < Imp < Lex));
+            let env_fut = query.resolve(s_let);
+            let env = env_fut.await;
 
             let env_vec = env.into_iter().collect::<Vec<_>>();
             assert_eq!(1, env_vec.len());
@@ -505,7 +503,7 @@ mod tests {
         let env = scope_graph.query();
         let query = env
             .with_path_wellformedness(query_regex!(Lbl: Def))
-            .with_data_wellformedness::<_, bool>(TData::matcher("x"));
+            .with_data_wellformedness(TData::matcher("x"));
         let env = query.resolve(s0);
 
         let env_vec = env.into_iter().collect::<Vec<_>>();
@@ -527,7 +525,7 @@ mod tests {
         let env = scope_graph
             .query()
             .with_path_wellformedness(query_regex!(Lbl: Def))
-            .with_data_wellformedness::<_, bool>(TData::matcher("y"))
+            .with_data_wellformedness(TData::matcher("y"))
             .resolve(s0);
 
         let env_vec = env.into_iter().collect::<Vec<_>>();
@@ -549,7 +547,7 @@ mod tests {
         let env = scope_graph
             .query()
             .with_path_wellformedness(query_regex!(Lbl: Lex Def))
-            .with_data_wellformedness::<_, bool>(TData::matcher("x"))
+            .with_data_wellformedness(TData::matcher("x"))
             .resolve(s0);
 
         let env_vec = env.into_iter().collect::<Vec<_>>();
@@ -573,7 +571,7 @@ mod tests {
         let env = scope_graph
             .query()
             .with_path_wellformedness(query_regex!(Lbl: Lex Def))
-            .with_data_wellformedness::<_, bool>(TData::matcher("x"))
+            .with_data_wellformedness(TData::matcher("x"))
             .resolve(s0);
 
         let env_vec = env.into_iter().collect::<Vec<_>>();
@@ -597,7 +595,7 @@ mod tests {
         let env = scope_graph
             .query()
             .with_path_wellformedness(query_regex!(Lbl: Lex Def))
-            .with_data_wellformedness::<_, bool>(TData::matcher("x"))
+            .with_data_wellformedness(TData::matcher("x"))
             .with_label_order(label_order!(Lbl: Lex < Imp))
             .resolve(s0);
 
@@ -629,7 +627,7 @@ mod tests {
         let env = scope_graph
             .query()
             .with_path_wellformedness(query_regex!(Lbl: Lex* Imp? Def))
-            .with_data_wellformedness::<_, bool>(TData::matcher("x"))
+            .with_data_wellformedness(TData::matcher("x"))
             .with_label_order(label_order!(Lbl: Def < Imp < Lex))
             .resolve(s_let);
 
@@ -671,7 +669,7 @@ mod tests {
         let env = scope_graph
             .query()
             .with_path_wellformedness(query_regex!(Lbl: Lex* Imp? Def))
-            .with_data_wellformedness::<_, bool>(TData::matcher("x"))
+            .with_data_wellformedness(TData::matcher("x"))
             .with_label_order(label_order!(Lbl: Def < Imp < Lex))
             .resolve(s_let);
 
@@ -721,9 +719,7 @@ mod tests {
         let env = scope_graph
             .query()
             .with_path_wellformedness(query_regex!(Lbl: Lex* Imp? Def))
-            .with_data_wellformedness::<_, Result<bool, EdgeClosedError<Lbl>>>(TData::matcher_res(
-                "x",
-            ))
+            .with_data_wellformedness(TData::matcher_res("x"))
             .with_label_order(label_order!(Lbl: Def < Imp < Lex))
             .resolve(s_let)
             .unwrap();
@@ -758,7 +754,7 @@ mod tests {
         let env = scope_graph
             .query()
             .with_path_wellformedness(query_regex!(Lbl: Lex* Imp? Def))
-            .with_data_wellformedness::<_, bool>(TData::matcher("x"))
+            .with_data_wellformedness(TData::matcher("x"))
             // Because of the label order, `Def` will be in the smaller set of both Lex and Imp
             // Due to the caching, it will be reused rather than recomputed.
             // This can be seen when running this test with RUST_LOG=info.
