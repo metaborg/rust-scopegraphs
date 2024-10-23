@@ -119,13 +119,7 @@ where
     }
 
     fn inject_if(data_ok: Result<bool, E>, path: ResolvedPath<'sg, LABEL, DATA>) -> Self {
-        data_ok.map(|ok| {
-            if ok {
-                Env::single(path)
-            } else {
-                Env::empty()
-            }
-        })
+        data_ok.map(|ok| if ok { Env::single(path) } else { Env::empty() })
     }
 
     fn flat_map(&self, map: impl for<'short> FnOnce(&Env<'sg, LABEL, DATA>) -> Self) -> Self {

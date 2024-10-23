@@ -26,7 +26,7 @@ where
 }
 
 /// Default Data wellformedness implementation
-/// 
+///
 /// Matches all data by default.
 #[derive(Default)]
 pub struct DefaultDataWellformedness {}

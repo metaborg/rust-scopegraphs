@@ -364,15 +364,13 @@ where
 
 #[cfg(test)]
 mod tests {
-    
 
     use scopegraphs_macros::label_order;
 
     use crate::{
         add_scope,
         completeness::{
-            Delay, ExplicitClose, FutureCompleteness,
-            ImplicitClose, UncheckedCompleteness,
+            Delay, ExplicitClose, FutureCompleteness, ImplicitClose, UncheckedCompleteness,
         },
         future_wrapper::FutureWrapper,
         query_regex,
@@ -475,13 +473,13 @@ mod tests {
             let_lex.close();
             let_def.close();
 
-            let query = scope_graph
+            let env = scope_graph
                 .query()
                 .with_path_wellformedness(query_regex!(Lbl: Lex* Imp? Def))
                 .with_data_wellformedness(TData::matcher_fut("x"))
-                .with_label_order(label_order!(Lbl: Def < Imp < Lex));
-            let env_fut = query.resolve(s_let);
-            let env = env_fut.await;
+                .with_label_order(label_order!(Lbl: Def < Imp < Lex))
+                .resolve(s_let)
+                .await;
 
             let env_vec = env.into_iter().collect::<Vec<_>>();
             assert_eq!(1, env_vec.len());
@@ -489,7 +487,7 @@ mod tests {
             let path: &ResolvedPath<Lbl, TData> = &env_vec[0];
             assert!(matches!(path.data(), &Data { name: "x", data: 2 }));
 
-            // todo!("assert the correct edges are closed!") */
+            // todo!("assert the correct edges are closed!")
         });
     }
 
