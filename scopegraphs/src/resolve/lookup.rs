@@ -473,13 +473,12 @@ mod tests {
             let_lex.close();
             let_def.close();
 
-            let env = scope_graph
+            let query = scope_graph
                 .query()
                 .with_path_wellformedness(query_regex!(Lbl: Lex* Imp? Def))
                 .with_data_wellformedness(TData::matcher_fut("x"))
-                .with_label_order(label_order!(Lbl: Def < Imp < Lex))
-                .resolve(s_let)
-                .await;
+                .with_label_order(label_order!(Lbl: Def < Imp < Lex));
+            let env = query.resolve(s_let).await;
 
             let env_vec = env.into_iter().collect::<Vec<_>>();
             assert_eq!(1, env_vec.len());
