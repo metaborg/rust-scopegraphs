@@ -118,7 +118,8 @@ pub trait RenderScopeData {
         self.render_node().is_some()
     }
 
-    fn explicit_relabel(&self, scope_id: usize) -> Option<String> {
+    /// Allows you to relabel specific scope IDs, can be useful for documentation purposes.
+    fn explicit_relabel(&self, _scope_id: usize) -> Option<String> {
         None
     }
 }

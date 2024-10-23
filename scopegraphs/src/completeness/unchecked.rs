@@ -46,9 +46,12 @@ impl<LABEL: Hash + Eq, DATA> Completeness<LABEL, DATA> for UncheckedCompleteness
         inner_scope_graph.add_edge(src, lbl, dst)
     }
 
-    type GetEdgesResult<'rslv> = Vec<Scope>
-        where
-            Self: 'rslv, LABEL: 'rslv, DATA: 'rslv;
+    type GetEdgesResult<'rslv>
+        = Vec<Scope>
+    where
+        Self: 'rslv,
+        LABEL: 'rslv,
+        DATA: 'rslv;
 
     fn cmpl_get_edges<'rslv>(
         &self,

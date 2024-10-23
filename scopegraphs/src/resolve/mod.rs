@@ -639,12 +639,12 @@ impl<'sg, 'storage, 'rslv, LABEL, DATA, CMPL, PWF, DWF, LO, DEq>
 
 impl<'storage, LABEL, DATA, CMPL> ScopeGraph<'storage, LABEL, DATA, CMPL> {
     /// Build a query over the scope graph.
-    pub fn query<'sg>(
-        &'sg self,
+    pub fn query<'rslv>(
+        &'rslv self,
     ) -> Query<
         'storage,
-        'sg,
-        '_,
+        'rslv,
+        'rslv,
         LABEL,
         DATA,
         CMPL,
@@ -654,7 +654,7 @@ impl<'storage, LABEL, DATA, CMPL> ScopeGraph<'storage, LABEL, DATA, CMPL> {
         DefaultDataEquivalence,
     >
     where
-        'storage: 'sg,
+        'storage: 'rslv,
     {
         Query {
             _phantom: PhantomData,

@@ -44,7 +44,11 @@ where
     ResolvedPath<'sg, LABEL, DATA>: Hash + Eq,
     Path<LABEL>: Clone,
 {
-    type EnvContainer = EnvC<'sg, 'rslv, CMPL, LABEL, DATA> where 'sg: 'rslv, Self: 'rslv;
+    type EnvContainer
+        = EnvC<'sg, 'rslv, CMPL, LABEL, DATA>
+    where
+        'sg: 'rslv,
+        Self: 'rslv;
 
     /// Entry point of lookup-based query resolution. Performs a traversal of the scope graph that
     /// results in an environment containing all declarations matching a reference.
