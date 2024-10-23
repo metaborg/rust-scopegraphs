@@ -69,9 +69,12 @@ impl<LABEL: Hash + Label, DATA> Completeness<LABEL, DATA> for ImplicitClose<LABE
         }
     }
 
-    type GetEdgesResult<'rslv> = Vec<Scope>
-        where
-            Self: 'rslv, LABEL: 'rslv, DATA: 'rslv;
+    type GetEdgesResult<'rslv>
+        = Vec<Scope>
+    where
+        Self: 'rslv,
+        LABEL: 'rslv,
+        DATA: 'rslv;
 
     fn cmpl_get_edges<'rslv>(
         &self,

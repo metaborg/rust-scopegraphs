@@ -3,27 +3,38 @@ use crate::resolve::EdgeOrData;
 /// Unary predicate over `DATA`.
 ///
 /// Used to select declarations that a query can resolve to.
-pub trait DataWellformedness<DATA> {
+///
+/// `O` is the output of applying the function to some data.
+/// When executing the query, needs to be compatible with
+/// the completeness strategy for the underlying scope graph.
+pub trait DataWellformedness<'sg, DATA> {
+    /// Type of the well-formedness result. Should be a wrapper around a boolean.
+    type Output;
     /// returns true if the data is well-formed.
-    fn data_wf(&self, data: &DATA) -> bool;
+    fn data_wf(&self, data: &'sg DATA) -> Self::Output;
 }
 
-impl<DATA, T> DataWellformedness<DATA> for T
+impl<'sg, DATA: 'sg, T, O: 'sg> DataWellformedness<'sg, DATA> for T
 where
-    for<'sg> T: Fn(&'sg DATA) -> bool,
+    T: Fn(&'sg DATA) -> O,
 {
-    fn data_wf(&self, data: &DATA) -> bool {
+    type Output = O;
+
+    fn data_wf(&self, data: &'sg DATA) -> O {
         self(data)
     }
 }
 
-/// When you don't specify the data well-formedness, this is the default.
-/// It considers all data well-formed.
+/// Default Data wellformedness implementation
+///
+/// Matches all data by default.
 #[derive(Default)]
 pub struct DefaultDataWellformedness {}
 
-impl<DATA> DataWellformedness<DATA> for DefaultDataWellformedness {
-    fn data_wf(&self, _data: &DATA) -> bool {
+impl<'sg, DATA> DataWellformedness<'sg, DATA> for DefaultDataWellformedness {
+    type Output = bool;
+
+    fn data_wf(&self, _data: &'sg DATA) -> bool {
         true // match all data by default
     }
 }

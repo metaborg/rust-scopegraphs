@@ -138,8 +138,7 @@ struct ScopeExtPermInner<
     _data: PhantomData<DATA>, // FIXME: required for using `where CMPL: UserClosed<LABEL, DATA>` in impl blocks. Can it be removed some way?
 }
 
-impl<'ext, LABEL: Hash + Label + Debug, DATA, CMPL> Drop
-    for ScopeExtPermInner<'ext, LABEL, DATA, CMPL>
+impl<LABEL: Hash + Label + Debug, DATA, CMPL> Drop for ScopeExtPermInner<'_, LABEL, DATA, CMPL>
 where
     CMPL: UserClosed<LABEL, DATA>,
 {
@@ -158,8 +157,8 @@ pub struct ScopeExtPerm<'ext, LABEL: Hash + Label + Debug, DATA, CMPL: UserClose
     Rc<ScopeExtPermInner<'ext, LABEL, DATA, CMPL>>,
 );
 
-impl<'ext, LABEL: Hash + Label + Debug, DATA, CMPL: UserClosed<LABEL, DATA>> Clone
-    for ScopeExtPerm<'ext, LABEL, DATA, CMPL>
+impl<LABEL: Hash + Label + Debug, DATA, CMPL: UserClosed<LABEL, DATA>> Clone
+    for ScopeExtPerm<'_, LABEL, DATA, CMPL>
 {
     fn clone(&self) -> Self {
         Self(self.0.clone())

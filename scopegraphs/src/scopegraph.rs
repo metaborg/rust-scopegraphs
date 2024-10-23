@@ -89,7 +89,7 @@ impl<'sg, LABEL: Label, DATA> InnerScopeGraph<'sg, LABEL, DATA> {
     }
 }
 
-impl<'sg, LABEL: Label, DATA> InnerScopeGraph<'sg, LABEL, DATA> {
+impl<LABEL: Label, DATA> InnerScopeGraph<'_, LABEL, DATA> {
     /// Adds a new edge from `src`, to `dst`, with label `lbl` to the scope graph.
     /// After this operation, all future calls to [`InnerScopeGraph::get_edges`] on the source will contain the destination.
     pub fn add_edge(&self, src: Scope, lbl: LABEL, dst: Scope) {
@@ -162,7 +162,7 @@ impl<'sg, LABEL: Label, DATA> ScopeGraph<'sg, LABEL, DATA, UncheckedCompleteness
     }
 }
 
-impl<'sg, LABEL: Label, DATA, CMPL> ScopeGraph<'sg, LABEL, DATA, CMPL>
+impl<LABEL: Label, DATA, CMPL> ScopeGraph<'_, LABEL, DATA, CMPL>
 where
     CMPL: Completeness<LABEL, DATA>,
 {
@@ -190,7 +190,7 @@ where
     }
 }
 
-impl<'sg, LABEL: Label, DATA, CMPL> ScopeGraph<'sg, LABEL, DATA, CMPL>
+impl<LABEL: Label, DATA, CMPL> ScopeGraph<'_, LABEL, DATA, CMPL>
 where
     CMPL: Implicit<LABEL, DATA>,
 {
@@ -221,7 +221,7 @@ where
     }
 }
 
-impl<'sg, LABEL: Hash + Label + Copy + Debug, DATA, CMPL> ScopeGraph<'sg, LABEL, DATA, CMPL>
+impl<LABEL: Hash + Label + Copy + Debug, DATA, CMPL> ScopeGraph<'_, LABEL, DATA, CMPL>
 where
     CMPL: UserClosed<LABEL, DATA>,
 {
@@ -260,7 +260,7 @@ where
     }
 }
 
-impl<'sg, LABEL: Label, DATA, CMPL> ScopeGraph<'sg, LABEL, DATA, CMPL>
+impl<LABEL: Label, DATA, CMPL> ScopeGraph<'_, LABEL, DATA, CMPL>
 where
     DATA: Default,
     CMPL: Completeness<LABEL, DATA>,

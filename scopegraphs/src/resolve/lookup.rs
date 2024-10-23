@@ -36,15 +36,22 @@ where
         'rslv,
         LABEL,
         DATA,
-    >>::EnvContainer: EnvContainer<'sg, 'rslv, LABEL, DATA> + Debug,
+    >>::EnvContainer: EnvContainer<'sg, 'rslv, LABEL, DATA, <DWF as DataWellformedness<'sg, DATA>>::Output>
+        + Debug,
     PWF: for<'a> RegexMatcher<&'a LABEL> + 'rslv,
-    DWF: DataWellformedness<DATA> + 'rslv,
+    DWF: DataWellformedness<'sg, DATA> + 'rslv,
+
+    // DWF : DataWellFormedNess<DATA, Completeness::DWF>
     LO: LabelOrder<LABEL> + 'rslv,
     DEq: DataEquivalence<DATA> + 'rslv,
     ResolvedPath<'sg, LABEL, DATA>: Hash + Eq,
     Path<LABEL>: Clone,
 {
-    type EnvContainer = EnvC<'sg, 'rslv, CMPL, LABEL, DATA> where 'sg: 'rslv, Self: 'rslv;
+    type EnvContainer
+        = EnvC<'sg, 'rslv, CMPL, LABEL, DATA>
+    where
+        'sg: 'rslv,
+        Self: 'rslv;
 
     /// Entry point of lookup-based query resolution. Performs a traversal of the scope graph that
     /// results in an environment containing all declarations matching a reference.
@@ -103,8 +110,8 @@ type EnvC<'sg, 'rslv, CMPL, LABEL, DATA> = <<<CMPL as Completeness<LABEL, DATA>>
 
 type EnvCache<LABEL, ENVC> = RefCell<HashMap<EdgeOrData<LABEL>, Rc<ENVC>>>;
 
-impl<'storage, 'sg: 'rslv, 'rslv, LABEL, DATA, CMPL, DWF, LO, DEq>
-    ResolutionContext<'storage, 'sg, 'rslv, LABEL, DATA, CMPL, DWF, LO, DEq>
+impl<'sg: 'rslv, 'rslv, LABEL, DATA, CMPL, DWF, LO, DEq>
+    ResolutionContext<'_, 'sg, 'rslv, LABEL, DATA, CMPL, DWF, LO, DEq>
 where
     LABEL: Label + Debug + Hash,
     DATA: Debug,
@@ -118,9 +125,10 @@ where
         'rslv,
         LABEL,
         DATA,
-    >>::EnvContainer: EnvContainer<'sg, 'rslv, LABEL, DATA> + Debug,
+    >>::EnvContainer: EnvContainer<'sg, 'rslv, LABEL, DATA, <DWF as DataWellformedness<'sg, DATA>>::Output>
+        + Debug,
     DEq: DataEquivalence<DATA>,
-    DWF: DataWellformedness<DATA>,
+    DWF: DataWellformedness<'sg, DATA>,
     LO: LabelOrder<LABEL>,
     Path<LABEL>: Clone,
 {
@@ -303,13 +311,16 @@ where
     /// Creates single-path environment if the data `path.target()` is matching, or an empty environment otherwise.
     fn resolve_data(&self, path: Path<LABEL>) -> EnvC<'sg, 'rslv, CMPL, LABEL, DATA> {
         let data = self.sg.get_data(path.target());
-        if self.data_wellformedness.data_wf(data) {
-            log::info!("{:?} matched: return singleton env.", data);
-            Env::single(path.clone().resolve(data)).into()
-        } else {
-            log::info!("{:?} not matched: return empty env.", data);
-            Self::empty_env_container()
-        }
+        let path = path.clone().resolve(data);
+        let data_ok = self.data_wellformedness.data_wf(data);
+
+        <EnvC<'sg, 'rslv, CMPL, LABEL, DATA> as EnvContainer<
+            'sg,
+            'rslv,
+            LABEL,
+            DATA,
+            <DWF as DataWellformedness<DATA>>::Output,
+        >>::inject_if(data_ok, path)
     }
 
     /// Computes the edges in `edges` for which no 'greater' edge exists.
@@ -341,19 +352,29 @@ where
     }
 
     fn empty_env_container() -> EnvC<'sg, 'rslv, CMPL, LABEL, DATA> {
-        <EnvC<'sg, 'rslv, CMPL, LABEL, DATA> as EnvContainer<'sg, 'rslv, LABEL, DATA>>::empty()
+        <EnvC<'sg, 'rslv, CMPL, LABEL, DATA> as EnvContainer<
+            'sg,
+            'rslv,
+            LABEL,
+            DATA,
+            <DWF as DataWellformedness<DATA>>::Output,
+        >>::empty()
     }
 }
 
 #[cfg(test)]
 mod tests {
+
     use scopegraphs_macros::label_order;
 
     use crate::{
         add_scope,
-        completeness::{ExplicitClose, FutureCompleteness, ImplicitClose, UncheckedCompleteness},
+        completeness::{
+            Delay, ExplicitClose, FutureCompleteness, ImplicitClose, UncheckedCompleteness,
+        },
+        future_wrapper::FutureWrapper,
         query_regex,
-        resolve::{DataWellformedness, Resolve, ResolvedPath},
+        resolve::{Resolve, ResolvedPath},
         storage::Storage,
         Label, ScopeGraph,
     };
@@ -390,8 +411,19 @@ mod tests {
             }
         }
 
-        fn matcher(n: &'a str) -> impl DataWellformedness<Self> {
+        fn matcher(n: &'a str) -> impl (for<'b> Fn(&'b Self) -> bool) {
             |data: &Self| data.matches(n)
+        }
+
+        fn matcher_res(n: &'a str) -> impl (for<'b> Fn(&'b Self) -> Result<bool, Delay<Lbl>>) {
+            |data: &Self| Ok(data.matches(n))
+        }
+
+        fn matcher_fut(n: &'a str) -> impl (for<'b> Fn(&'b Self) -> FutureWrapper<'b, bool>) {
+            |data: &Self| {
+                let matches = data.matches(n);
+                FutureWrapper::new(async move { matches })
+            }
         }
 
         fn from_default(name: &'a str) -> Self {
@@ -408,8 +440,9 @@ mod tests {
     fn test_label_order_async() {
         futures::executor::block_on(async {
             let storage = Storage::new();
+            let completeness = FutureCompleteness::default();
             let scope_graph: ScopeGraph<Lbl, TData, FutureCompleteness<Lbl>> =
-                ScopeGraph::new(&storage, FutureCompleteness::default());
+                ScopeGraph::new(&storage, completeness);
 
             let s0 = scope_graph.add_scope_default_closed();
             let (s_with, with_lex, with_imp) = add_scope!(&scope_graph, [Lex, Imp]);
@@ -443,7 +476,7 @@ mod tests {
             let env = scope_graph
                 .query()
                 .with_path_wellformedness(query_regex!(Lbl: Lex* Imp? Def))
-                .with_data_wellformedness(TData::matcher("x"))
+                .with_data_wellformedness(TData::matcher_fut("x"))
                 .with_label_order(label_order!(Lbl: Def < Imp < Lex))
                 .resolve(s_let)
                 .await;
@@ -686,7 +719,7 @@ mod tests {
         let env = scope_graph
             .query()
             .with_path_wellformedness(query_regex!(Lbl: Lex* Imp? Def))
-            .with_data_wellformedness(TData::matcher("x"))
+            .with_data_wellformedness(TData::matcher_res("x"))
             .with_label_order(label_order!(Lbl: Def < Imp < Lex))
             .resolve(s_let)
             .unwrap();

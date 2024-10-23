@@ -11,7 +11,7 @@ use std::{
 //       ?Sized inner type (this should be possible)
 pub struct FutureWrapper<'fut, T>(pub Shared<Pin<Box<dyn Future<Output = T> + 'fut>>>);
 
-impl<'fut, T> Clone for FutureWrapper<'fut, T> {
+impl<T> Clone for FutureWrapper<'_, T> {
     fn clone(&self) -> Self {
         Self(Shared::clone(&self.0))
     }
@@ -30,7 +30,7 @@ impl<T> Debug for FutureWrapper<'_, T> {
     }
 }
 
-impl<'fut, T: Clone> Future for FutureWrapper<'fut, T> {
+impl<T: Clone> Future for FutureWrapper<'_, T> {
     type Output = T;
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {

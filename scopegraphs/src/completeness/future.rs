@@ -63,7 +63,12 @@ impl<LABEL: Hash + Label + Copy, DATA> Completeness<LABEL, DATA> for FutureCompl
             .cmpl_new_edge(inner_scope_graph, src, lbl, dst)
     }
 
-    type GetEdgesResult<'rslv> = FutureWrapper<'rslv, Vec<Scope>> where Self: 'rslv, LABEL: 'rslv, DATA: 'rslv;
+    type GetEdgesResult<'rslv>
+        = FutureWrapper<'rslv, Vec<Scope>>
+    where
+        Self: 'rslv,
+        LABEL: 'rslv,
+        DATA: 'rslv;
 
     fn cmpl_get_edges<'rslv>(
         &'rslv self,
