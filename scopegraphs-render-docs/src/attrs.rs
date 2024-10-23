@@ -342,41 +342,9 @@ fn run_code(code: &str) -> Result<Vec<String>, EvalError> {
         )
     };
 
-    fn copy_dir_all(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> io::Result<()> {
-        fs::create_dir_all(&dst)?;
-        for entry in fs::read_dir(src)? {
-            let entry = entry?;
-            let ty = entry.file_type()?;
-            if ty.is_dir() {
-                copy_dir_all(entry.path(), dst.as_ref().join(entry.file_name()))?;
-            } else {
-                fs::copy(entry.path(), dst.as_ref().join(entry.file_name()))?;
-            }
-        }
-        Ok(())
-    }
-
     let code_hash = Uuid::new_v4().to_string();
     let out_dir = &temp_dir().join("render-docs").join(&code_hash);
     println!("testing in {out_dir:?}");
-
-    let sg_target_dir = temp_dir().join(format!("SG_TARGET-{}", code_hash));
-    if sg_target_dir.exists() {
-        let _ = fs::remove_dir_all(&sg_target_dir);
-    }
-    let _ = copy_dir_all(target_dir, &sg_target_dir);
-    if sg_target_dir.join("debug").exists() {
-        let _ = fs::remove_file(sg_target_dir.join("debug").join(".cargo-lock"));
-        let _ = fs::remove_file(sg_target_dir.join("debug").join(".fingerprint"));
-        let _ = fs::remove_file(sg_target_dir.join("debug").join("tmp"));
-        let _ = fs::remove_file(sg_target_dir.join("debug").join("incremental"));
-    }
-    if sg_target_dir.join("release").exists() {
-        let _ = fs::remove_file(sg_target_dir.join("release").join(".cargo-lock"));
-        let _ = fs::remove_file(sg_target_dir.join("release").join(".fingerprint"));
-        let _ = fs::remove_file(sg_target_dir.join("release").join("tmp"));
-        let _ = fs::remove_file(sg_target_dir.join("release").join("incremental"));
-    }
 
     let cargo = PathBuf::from(std::env::var("CARGO").expect("$CARGO is set during compilation"));
 
@@ -420,7 +388,7 @@ fn documented() {{}}
     let mut command = Command::new(cargo);
     let command = command
         .current_dir(out_dir)
-        .env("CARGO_TARGET_DIR", &sg_target_dir)
+        .env("CARGO_TARGET_DIR", &target_dir)
         .env_remove("CARGO_MAKEFLAGS")
         .arg("test");
 
@@ -442,7 +410,7 @@ fn documented() {{}}
         panic!("build docs didn't work")
     }
 
-    let _ = fs::remove_dir_all(&sg_target_dir);
+    // let _ = fs::remove_dir_all(&sg_target_dir);
 
     find_diagrams(out_dir)
 }
