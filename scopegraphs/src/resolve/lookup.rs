@@ -47,7 +47,11 @@ where
     ResolvedPath<'sg, LABEL, DATA>: Hash + Eq,
     Path<LABEL>: Clone,
 {
-    type EnvContainer = EnvC<'sg, 'rslv, CMPL, LABEL, DATA> where 'sg: 'rslv, Self: 'rslv;
+    type EnvContainer
+        = EnvC<'sg, 'rslv, CMPL, LABEL, DATA>
+    where
+        'sg: 'rslv,
+        Self: 'rslv;
 
     /// Entry point of lookup-based query resolution. Performs a traversal of the scope graph that
     /// results in an environment containing all declarations matching a reference.
@@ -106,8 +110,8 @@ type EnvC<'sg, 'rslv, CMPL, LABEL, DATA> = <<<CMPL as Completeness<LABEL, DATA>>
 
 type EnvCache<LABEL, ENVC> = RefCell<HashMap<EdgeOrData<LABEL>, Rc<ENVC>>>;
 
-impl<'storage, 'sg: 'rslv, 'rslv, LABEL, DATA, CMPL, DWF, LO, DEq>
-    ResolutionContext<'storage, 'sg, 'rslv, LABEL, DATA, CMPL, DWF, LO, DEq>
+impl<'sg: 'rslv, 'rslv, LABEL, DATA, CMPL, DWF, LO, DEq>
+    ResolutionContext<'_, 'sg, 'rslv, LABEL, DATA, CMPL, DWF, LO, DEq>
 where
     LABEL: Label + Debug + Hash,
     DATA: Debug,
@@ -310,13 +314,13 @@ where
         let path = path.clone().resolve(data);
         let data_ok = self.data_wellformedness.data_wf(data);
 
-        return <EnvC<'sg, 'rslv, CMPL, LABEL, DATA> as EnvContainer<
+        <EnvC<'sg, 'rslv, CMPL, LABEL, DATA> as EnvContainer<
             'sg,
             'rslv,
             LABEL,
             DATA,
             <DWF as DataWellformedness<DATA>>::Output,
-        >>::inject_if(data_ok, path);
+        >>::inject_if(data_ok, path)
     }
 
     /// Computes the edges in `edges` for which no 'greater' edge exists.
@@ -360,21 +364,19 @@ where
 
 #[cfg(test)]
 mod tests {
-    use std::future::Future;
+    
 
     use scopegraphs_macros::label_order;
 
     use crate::{
         add_scope,
         completeness::{
-            self, Completeness, Delay, EdgeClosedError, ExplicitClose, FutureCompleteness,
+            Delay, ExplicitClose, FutureCompleteness,
             ImplicitClose, UncheckedCompleteness,
         },
-        containers::{EnvContainer, PathContainer, ScopeContainer},
         future_wrapper::FutureWrapper,
         query_regex,
-        render::Edge,
-        resolve::{DataWellformedness, Resolve, ResolvedPath},
+        resolve::{Resolve, ResolvedPath},
         storage::Storage,
         Label, ScopeGraph,
     };
@@ -419,10 +421,10 @@ mod tests {
             |data: &Self| Ok(data.matches(n))
         }
 
-        fn matcher_fut(n: &'a str) -> impl (for<'b> Fn(&'b Self) -> FutureWrapper<bool>) {
+        fn matcher_fut(n: &'a str) -> impl (for<'b> Fn(&'b Self) -> FutureWrapper<'b, bool>) {
             |data: &Self| {
                 let matches = data.matches(n);
-                return FutureWrapper::new(async move { return matches });
+                FutureWrapper::new(async move { matches })
             }
         }
 

@@ -122,7 +122,7 @@ pub struct ResolvedPath<'sg, LABEL, DATA> {
     data: &'sg DATA,
 }
 
-impl<'sg, LABEL: Clone, DATA> Clone for ResolvedPath<'sg, LABEL, DATA> {
+impl<LABEL: Clone, DATA> Clone for ResolvedPath<'_, LABEL, DATA> {
     fn clone(&self) -> Self {
         Self {
             path: self.path.clone(),
@@ -131,7 +131,7 @@ impl<'sg, LABEL: Clone, DATA> Clone for ResolvedPath<'sg, LABEL, DATA> {
     }
 }
 
-impl<'sg, LABEL, DATA> ResolvedPath<'sg, LABEL, DATA> {
+impl<LABEL, DATA> ResolvedPath<'_, LABEL, DATA> {
     /// Get the full path of scopes leading to this target scope
     pub fn path(&self) -> &Path<LABEL> {
         &self.path
@@ -333,6 +333,7 @@ where
     }
 
     /// Returns `Ok(value)` if the environment only has a single resolved path, or an error otherwise.
+    #[allow(clippy::type_complexity)]
     pub fn get_only_item<'a>(
         &'a self,
     ) -> Result<
@@ -599,12 +600,12 @@ impl<'sg, 'storage, 'rslv, LABEL: Label, DATA, CMPL, PWF, DWF, LO, DEq>
 
 impl<'storage, LABEL: Label, DATA, CMPL> ScopeGraph<'storage, LABEL, DATA, CMPL> {
     /// Build a query over the scope graph.
-    pub fn query<'sg>(
-        &'sg self,
+    pub fn query<'rslv>(
+        &'rslv self,
     ) -> Query<
         'storage,
-        'sg,
-        '_,
+        'rslv,
+        'rslv, // TODO: remove(???)
         LABEL,
         DATA,
         CMPL,
@@ -614,7 +615,7 @@ impl<'storage, LABEL: Label, DATA, CMPL> ScopeGraph<'storage, LABEL, DATA, CMPL>
         DefaultDataEquivalence,
     >
     where
-        'storage: 'sg,
+        'storage: 'rslv,
     {
         Query {
             _phantom: PhantomData,

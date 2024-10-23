@@ -11,6 +11,7 @@ pub trait EnvContainer<'sg, 'rslv, LABEL: 'sg, DATA: 'sg, DWFO>:
     /// Creates a new, container with an empty environment.
     fn empty() -> Self;
 
+    /// Creates a new environment that contains path when `data_ok` is `true`, and is empty otherwise.
     fn inject_if(data_ok: DWFO, path: ResolvedPath<'sg, LABEL, DATA>) -> Self;
 
     /// Maps the current container to a new one, based a provided mapping of the underlying environment.
@@ -31,9 +32,9 @@ where
 
     fn inject_if(data_ok: bool, path: ResolvedPath<'sg, LABEL, DATA>) -> Self {
         if data_ok {
-            return Env::single(path).into();
+            Self::single(path)
         } else {
-            return Env::empty();
+            Self::empty()
         }
     }
 
@@ -58,9 +59,9 @@ where
 
     fn inject_if(data_ok: bool, path: ResolvedPath<'sg, LABEL, DATA>) -> Self {
         if data_ok {
-            return Env::single(path).into();
+            Env::single(path).into()
         } else {
-            return Env::empty().into();
+            Self::empty()
         }
     }
 
@@ -82,6 +83,32 @@ impl<'sg, LABEL: 'sg, DATA: 'sg, E> From<Env<'sg, LABEL, DATA>>
 }
 
 impl<'sg: 'rslv, 'rslv, LABEL: 'sg + Eq, DATA: 'sg + Eq, E: 'rslv>
+    EnvContainer<'sg, 'rslv, LABEL, DATA, bool> for Result<Env<'sg, LABEL, DATA>, E>
+where
+    ResolvedPath<'sg, LABEL, DATA>: Hash + Clone,
+    E: Clone,
+{
+    fn empty() -> Self {
+        Ok(Env::empty())
+    }
+
+    fn inject_if(data_ok: bool, path: ResolvedPath<'sg, LABEL, DATA>) -> Self {
+        if data_ok {
+            Env::single(path).into()
+        } else {
+            Env::empty().into()
+        }
+    }
+
+    fn flat_map(&self, map: impl for<'short> FnOnce(&Env<'sg, LABEL, DATA>) -> Self) -> Self {
+        match self {
+            Ok(env) => map(env),
+            Err(err) => Err(err.clone()),
+        }
+    }
+}
+
+impl<'sg: 'rslv, 'rslv, LABEL: 'sg + Eq, DATA: 'sg + Eq, E: 'rslv>
     EnvContainer<'sg, 'rslv, LABEL, DATA, Result<bool, E>> for Result<Env<'sg, LABEL, DATA>, E>
 where
     ResolvedPath<'sg, LABEL, DATA>: Hash + Clone,
@@ -94,9 +121,9 @@ where
     fn inject_if(data_ok: Result<bool, E>, path: ResolvedPath<'sg, LABEL, DATA>) -> Self {
         data_ok.map(|ok| {
             if ok {
-                return Env::single(path).into();
+                Env::single(path)
             } else {
-                return Env::empty();
+                Env::empty()
             }
         })
     }
@@ -106,6 +133,35 @@ where
             Ok(env) => map(env),
             Err(err) => Err(err.clone()),
         }
+    }
+}
+impl<'sg: 'rslv, 'rslv, LABEL: 'sg + Eq, DATA: 'sg + Eq> EnvContainer<'sg, 'rslv, LABEL, DATA, bool>
+    for FutureWrapper<'rslv, Env<'sg, LABEL, DATA>>
+where
+    ResolvedPath<'sg, LABEL, DATA>: Hash + Clone,
+    LABEL: Clone,
+{
+    fn empty() -> Self {
+        FutureWrapper::new(std::future::ready(Env::empty()))
+    }
+
+    fn inject_if(data_ok: bool, path: ResolvedPath<'sg, LABEL, DATA>) -> Self {
+        if data_ok {
+            Env::single(path).into()
+        } else {
+            Env::empty().into()
+        }
+    }
+
+    fn flat_map(
+        &self,
+        map: impl 'rslv + for<'short> FnOnce(&'short Env<'sg, LABEL, DATA>) -> Self,
+    ) -> Self {
+        let fut = Shared::clone(&self.0);
+        FutureWrapper::new(async move {
+            let env = fut.await;
+            map(&env).0.await
+        })
     }
 }
 
@@ -124,14 +180,14 @@ where
         data_ok: FutureWrapper<'rslv, bool>,
         path: ResolvedPath<'sg, LABEL, DATA>,
     ) -> Self {
-        return FutureWrapper::new(async move {
+        FutureWrapper::new(async move {
             let ok = data_ok.await;
             if ok {
-                return Env::single(path).into();
+                Env::single(path)
             } else {
-                return Env::empty();
+                Env::empty()
             }
-        });
+        })
     }
 
     fn flat_map(

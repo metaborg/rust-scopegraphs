@@ -7,8 +7,8 @@ use crate::resolve::EdgeOrData;
 /// `O` is the output of applying the function to some data.
 /// When executing the query, needs to be compatible with
 /// the completeness strategy for the underlying scope graph.
-///
 pub trait DataWellformedness<'sg, DATA> {
+    /// Type of the well-formedness result. Should be a wrapper around a boolean.
     type Output;
     /// returns true if the data is well-formed.
     fn data_wf(&self, data: &'sg DATA) -> Self::Output;
@@ -25,6 +25,9 @@ where
     }
 }
 
+/// Default Data wellformedness implementation
+/// 
+/// Matches all data by default.
 #[derive(Default)]
 pub struct DefaultDataWellformedness {}
 

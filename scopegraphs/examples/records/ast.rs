@@ -18,6 +18,7 @@ pub enum Expr {
     },
     #[allow(unused)]
     Add(Box<Expr>, Box<Expr>),
+    #[allow(unused)]
     Number(u64),
     Ident(String),
     FieldAccess(Box<Expr>, String),

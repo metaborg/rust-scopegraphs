@@ -33,7 +33,6 @@ mod private {
     pub trait Sealed {}
 }
 
-use crate::resolve::DataWellformedness;
 use crate::scopegraph::{InnerScopeGraph, Scope};
 use crate::{Label, ScopeGraph};
 use private::Sealed;
@@ -139,8 +138,8 @@ struct ScopeExtPermInner<
     _data: PhantomData<DATA>, // FIXME: required for using `where CMPL: UserClosed<LABEL, DATA>` in impl blocks. Can it be removed some way?
 }
 
-impl<'ext, LABEL: Hash + Label + Debug, DATA, CMPL> Drop
-    for ScopeExtPermInner<'ext, LABEL, DATA, CMPL>
+impl<LABEL: Hash + Label + Debug, DATA, CMPL> Drop
+    for ScopeExtPermInner<'_, LABEL, DATA, CMPL>
 where
     CMPL: UserClosed<LABEL, DATA>,
 {
@@ -159,8 +158,8 @@ pub struct ScopeExtPerm<'ext, LABEL: Hash + Label + Debug, DATA, CMPL: UserClose
     Rc<ScopeExtPermInner<'ext, LABEL, DATA, CMPL>>,
 );
 
-impl<'ext, LABEL: Hash + Label + Debug, DATA, CMPL: UserClosed<LABEL, DATA>> Clone
-    for ScopeExtPerm<'ext, LABEL, DATA, CMPL>
+impl<LABEL: Hash + Label + Debug, DATA, CMPL: UserClosed<LABEL, DATA>> Clone
+    for ScopeExtPerm<'_, LABEL, DATA, CMPL>
 {
     fn clone(&self) -> Self {
         Self(self.0.clone())
@@ -276,12 +275,9 @@ where
     /// // Note: closing the edge *after* creating all edges, *before* doing the query
     /// s1_def.close();
     ///
-    /// let dwf = |x: &usize| *x == 42;
-    /// scopegraphs::completeness::type_helper(dwf);
-    ///
     /// let query_result = sg.query()
     ///     .with_path_wellformedness(Regex::new()) // regex: `Def`
-    ///     .with_data_wellformedness(dwf) // match `42`
+    ///     .with_data_wellformedness(|x: &usize| *x == 42) // match `42`
     ///     .resolve(s1);
     ///
     /// query_result.expect("query should return result");
@@ -290,8 +286,6 @@ where
         // self dropped at the end of this block
     }
 }
-
-pub fn type_helper<'sg, DATA>(arg: impl DataWellformedness<'sg, DATA>) {}
 
 /// Creates a scope (with some data if specified), and permission to extend it for each label specified in the label list argument.
 ///
