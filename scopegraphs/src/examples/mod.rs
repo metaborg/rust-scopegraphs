@@ -8,9 +8,7 @@ pub mod patterns;
 #[render_scopegraphs]
 /// An example of a small language with records (structs) and name resolution of fields.
 ///
-// {tutor name "records-example-full"}
 /// ```
 /// #
 /// ```
-// {tutor end name}
 pub mod records {}

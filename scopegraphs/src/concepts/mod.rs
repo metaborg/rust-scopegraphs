@@ -75,7 +75,6 @@ use scopegraphs_render_docs::render_scopegraphs;
 /// # use completeness::{ImplicitClose};
 /// # use resolve::{DataWellformedness, Resolve, ResolvedPath};
 /// # use render::{RenderSettings, RenderScopeData, RenderScopeLabel};
-// {tutor name "empty-label"}
 /// # #[derive(Label, Hash, PartialEq, Eq, Debug, Clone, Copy)]
 /// # enum Lbl {}
 /// #
@@ -87,12 +86,9 @@ use scopegraphs_render_docs::render_scopegraphs;
 /// #     }
 /// # }
 /// #
-// {tutor end name }
-// {tutor name "empty-data"}
 /// # #[derive(Hash, PartialEq, Eq, Debug, Clone)]
 /// # enum Data {}
 /// # impl RenderScopeData for Data {}
-// {tutor end name }
 /// let storage = Storage::new();
 ///
 /// let sg: ScopeGraph<Lbl, Data, ImplicitClose<Lbl>> = ScopeGraph::new(&storage, ImplicitClose::default());
@@ -106,7 +102,6 @@ use scopegraphs_render_docs::render_scopegraphs;
 /// # use completeness::{ImplicitClose};
 /// # use resolve::{DataWellformedness, Resolve, ResolvedPath};
 /// # use render::{RenderSettings, RenderScopeData, RenderScopeLabel};
-// {tutor inserted "empty-label"}
 /// # #[derive(Label, Hash, PartialEq, Eq, Debug, Clone, Copy)]
 /// # enum Lbl {}
 /// #
@@ -118,12 +113,9 @@ use scopegraphs_render_docs::render_scopegraphs;
 /// #     }
 /// # }
 /// #
-// {tutor end insert}
-// {tutor inserted "empty-data"}
 /// # #[derive(Hash, PartialEq, Eq, Debug, Clone)]
 /// # enum Data {}
 /// # impl RenderScopeData for Data {}
-// {tutor end insert}
 /// type MyScopeGraph<'s> = ScopeGraph<'s, Lbl, Data, ImplicitClose<Lbl>>;
 ///
 /// let storage = Storage::new();
@@ -456,7 +448,6 @@ pub mod scope_data {}
 /// #     fn definition(&self) -> bool {
 /// #         matches!(self, Self::Variable {..})
 /// #     }
-// {tutor name "explicit-relabel-global"}
 /// #     fn explicit_relabel(&self, scope_id: usize) -> Option<String> {
 /// #         match scope_id {
 /// #             0 => Some("global".to_string()),
@@ -464,7 +455,6 @@ pub mod scope_data {}
 /// #             _ => None
 /// #         }
 /// #     }
-// {tutor end name }
 /// # }
 /// #
 /// # impl RenderScopeLabel for Lbl {
@@ -590,7 +580,6 @@ pub mod scope_data {}
 /// #     fn definition(&self) -> bool {
 /// #         matches!(self, Self::Variable {..})
 /// #     }
-// {tutor inserted "explicit-relabel-global"}
 /// #     fn explicit_relabel(&self, scope_id: usize) -> Option<String> {
 /// #         match scope_id {
 /// #             0 => Some("global".to_string()),
@@ -598,7 +587,6 @@ pub mod scope_data {}
 /// #             _ => None
 /// #         }
 /// #     }
-// {tutor end insert}
 /// # }
 /// #
 /// # impl RenderScopeLabel for Lbl {
@@ -690,7 +678,6 @@ pub mod scope_data {}
 /// #     fn definition(&self) -> bool {
 /// #         matches!(self, Self::Variable {..})
 /// #     }
-// {tutor inserted "explicit-relabel-global"}
 /// #     fn explicit_relabel(&self, scope_id: usize) -> Option<String> {
 /// #         match scope_id {
 /// #             0 => Some("global".to_string()),
@@ -698,7 +685,6 @@ pub mod scope_data {}
 /// #             _ => None
 /// #         }
 /// #     }
-// {tutor end insert}
 /// # }
 /// #
 /// # impl RenderScopeLabel for Lbl {
