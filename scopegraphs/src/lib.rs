@@ -30,7 +30,10 @@ pub use scopegraphs_regular_expressions::*;
 
 pub mod completeness;
 pub mod containers;
-mod future_wrapper;
+// #[cfg(test)]
+pub mod future_wrapper;
+// #[cfg(not(test))]
+// mod future_wrapper;
 
 pub mod resolve;
 

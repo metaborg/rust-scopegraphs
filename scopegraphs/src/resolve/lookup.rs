@@ -13,7 +13,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use crate::completeness::Completeness;
-use crate::containers::{EnvContainer, PathContainer, ScopeContainer};
+use crate::containers::{EnvContainer, PathContainer, PathContainerWf, ScopeContainer, ScopeContainerWf};
 use crate::resolve::{
     DataEquivalence, DataWellformedness, EdgeOrData, Env, LabelOrder, Path, Query, Resolve,
     ResolvedPath,
@@ -28,7 +28,7 @@ where
     LABEL: Label + Copy + Debug + Hash,
     DATA: Debug,
     CMPL: Completeness<LABEL, DATA>,
-    CMPL::GetEdgesResult<'rslv> : ScopeContainer<'sg, 'rslv, LABEL, DATA, DWF::Output>,
+    CMPL::GetEdgesResult<'rslv> : ScopeContainerWf<'sg, 'rslv, LABEL, DATA, DWF::Output>,
     PWF: for<'a> RegexMatcher<&'a LABEL> + 'rslv,
     DWF: DataWellformedness<'sg, DATA> + 'rslv,
 
@@ -97,7 +97,7 @@ struct ResolutionContext<'storage, 'sg: 'rslv, 'rslv, LABEL: Label, DATA, CMPL, 
 
 type EnvC<'sg, 'rslv, CMPL, LABEL, DATA, DWFO> = <<<CMPL as Completeness<LABEL, DATA>>::GetEdgesResult<
     'rslv,
-> as ScopeContainer<'sg, 'rslv, LABEL, DATA, DWFO>>::PathContainer as PathContainer<'sg, 'rslv, LABEL, DATA, DWFO>>::EnvContainer;
+> as ScopeContainerWf<'sg, 'rslv, LABEL, DATA, DWFO>>::PathContainerWf as PathContainerWf<'sg, 'rslv, LABEL, DATA, DWFO>>::EnvContainerWf;
 
 type EnvCache<LABEL, ENVC> = RefCell<HashMap<EdgeOrData<LABEL>, Rc<ENVC>>>;
 
@@ -108,7 +108,7 @@ where
     DATA: Debug,
     ResolvedPath<'sg, LABEL, DATA>: Hash + Eq,
     CMPL: Completeness<LABEL, DATA>,
-    CMPL::GetEdgesResult<'rslv> : ScopeContainer<'sg, 'rslv, LABEL, DATA, DWF::Output>,
+    CMPL::GetEdgesResult<'rslv> : ScopeContainerWf<'sg, 'rslv, LABEL, DATA, DWF::Output>,
     DEq: DataEquivalence<DATA>,
     DWF: DataWellformedness<'sg, DATA>,
     LO: LabelOrder<LABEL>,
@@ -482,10 +482,6 @@ mod tests {
 
             // todo!("assert the correct edges are closed!")
         });
-    }
-
-    fn explicate_dwf_impl<'sg, DATA: 'sg>(dwf: impl for<'b> Fn(&'b DATA) -> FutureWrapper<'b, bool> ) -> impl DataWellformedness<'sg, DATA> {
-        dwf
     }
 
     #[test]
