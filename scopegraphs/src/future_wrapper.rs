@@ -1,3 +1,5 @@
+//! Defines a cloneable pointer to a future.
+
 use futures::future::Shared;
 use futures::FutureExt;
 use std::fmt::{Debug, Formatter};
@@ -7,8 +9,8 @@ use std::{
     task::{Context, Poll},
 };
 
-// TODO: fork futures and create our own shared future that can have a
-//       ?Sized inner type (this should be possible)
+// FIXME: only expose futures on tests
+/// Shared pointer to a future, useful to make functions parametric over the type of future they are invoked with.
 pub struct FutureWrapper<'fut, T>(pub Shared<Pin<Box<dyn Future<Output = T> + 'fut>>>);
 
 impl<T> Clone for FutureWrapper<'_, T> {
@@ -18,6 +20,7 @@ impl<T> Clone for FutureWrapper<'_, T> {
 }
 
 impl<'fut, T: Clone> FutureWrapper<'fut, T> {
+    /// Creates shared pointer to `f`.
     pub fn new(f: impl Future<Output = T> + 'fut) -> Self {
         let f: Pin<Box<dyn Future<Output = T> + 'fut>> = Box::pin(f);
         Self(f.shared())

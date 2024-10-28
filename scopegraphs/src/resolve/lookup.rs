@@ -13,7 +13,9 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use crate::completeness::Completeness;
-use crate::containers::{EnvContainer, PathContainer, PathContainerWf, ScopeContainer, ScopeContainerWf};
+use crate::containers::{
+    EnvContainer, PathContainer, PathContainerWf, ScopeContainer, ScopeContainerWf,
+};
 use crate::resolve::{
     DataEquivalence, DataWellformedness, EdgeOrData, Env, LabelOrder, Path, Query, Resolve,
     ResolvedPath,
@@ -28,7 +30,7 @@ where
     LABEL: Label + Copy + Debug + Hash,
     DATA: Debug,
     CMPL: Completeness<LABEL, DATA>,
-    CMPL::GetEdgesResult<'rslv> : ScopeContainerWf<'sg, 'rslv, LABEL, DATA, DWF::Output>,
+    CMPL::GetEdgesResult<'rslv>: ScopeContainerWf<'sg, 'rslv, LABEL, DATA, DWF::Output>,
     PWF: for<'a> RegexMatcher<&'a LABEL> + 'rslv,
     DWF: DataWellformedness<'sg, DATA> + 'rslv,
 
@@ -95,9 +97,14 @@ struct ResolutionContext<'storage, 'sg: 'rslv, 'rslv, LABEL: Label, DATA, CMPL, 
     data_equiv: &'rslv DEq,
 }
 
-type EnvC<'sg, 'rslv, CMPL, LABEL, DATA, DWFO> = <<<CMPL as Completeness<LABEL, DATA>>::GetEdgesResult<
-    'rslv,
-> as ScopeContainerWf<'sg, 'rslv, LABEL, DATA, DWFO>>::PathContainerWf as PathContainerWf<'sg, 'rslv, LABEL, DATA, DWFO>>::EnvContainerWf;
+type EnvC<'sg, 'rslv, CMPL, LABEL, DATA, DWFO> =
+    <<<CMPL as Completeness<LABEL, DATA>>::GetEdgesResult<'rslv> as ScopeContainerWf<
+        'sg,
+        'rslv,
+        LABEL,
+        DATA,
+        DWFO,
+    >>::PathContainerWf as PathContainerWf<'sg, 'rslv, LABEL, DATA, DWFO>>::EnvContainerWf;
 
 type EnvCache<LABEL, ENVC> = RefCell<HashMap<EdgeOrData<LABEL>, Rc<ENVC>>>;
 
@@ -108,7 +115,7 @@ where
     DATA: Debug,
     ResolvedPath<'sg, LABEL, DATA>: Hash + Eq,
     CMPL: Completeness<LABEL, DATA>,
-    CMPL::GetEdgesResult<'rslv> : ScopeContainerWf<'sg, 'rslv, LABEL, DATA, DWF::Output>,
+    CMPL::GetEdgesResult<'rslv>: ScopeContainerWf<'sg, 'rslv, LABEL, DATA, DWF::Output>,
     DEq: DataEquivalence<DATA>,
     DWF: DataWellformedness<'sg, DATA>,
     LO: LabelOrder<LABEL>,
@@ -183,9 +190,9 @@ where
                     let mut merged_env = agg_env.clone();
                     env2.flat_map(move |new_env| {
                         merged_env.merge(new_env);
-                        <EnvC<'sg, 'rslv, CMPL, LABEL, DATA, DWF::Output> as From<Env<'sg, LABEL, DATA>>>::from(
-                            merged_env,
-                        )
+                        <EnvC<'sg, 'rslv, CMPL, LABEL, DATA, DWF::Output> as From<
+                            Env<'sg, LABEL, DATA>,
+                        >>::from(merged_env)
                     })
                 })
             })
@@ -211,9 +218,9 @@ where
         // environment of current (max) label, which might be shadowed by the base environment
         Rc::new(base_env.flat_map(move |base_env| {
             if !base_env.is_empty() && local_self.data_equiv.always_equivalent() {
-                <EnvC<'sg, 'rslv, CMPL, LABEL, DATA, DWF::Output> as From<Env<'sg, LABEL, DATA>>>::from(
-                    base_env.clone(),
-                )
+                <EnvC<'sg, 'rslv, CMPL, LABEL, DATA, DWF::Output> as From<
+                        Env<'sg, LABEL, DATA>,
+                    >>::from(base_env.clone())
             } else {
                 let sub_env = local_self.resolve_edge(path_wellformedness.clone(), edge, path);
                 let local_self = Arc::clone(&local_self);
@@ -245,9 +252,9 @@ where
                     for path in filtered_env {
                         new_env.insert(path.clone())
                     }
-                    <EnvC<'sg, 'rslv, CMPL, LABEL, DATA, DWF::Output> as From<Env<'sg, LABEL, DATA>>>::from(
-                        new_env,
-                    )
+                    <EnvC<'sg, 'rslv, CMPL, LABEL, DATA, DWF::Output> as From<
+                        Env<'sg, LABEL, DATA>,
+                    >>::from(new_env)
                 })
             }
         }))
@@ -284,9 +291,10 @@ where
         let targets = self.sg.get_edges(source, label);
         let path_set = targets.lift_step(label, path.clone());
         let local_ctx = Arc::clone(self);
-        let env: EnvC<'sg, 'rslv, CMPL, LABEL, DATA, DWF::Output> = path_set.map_into_env::<_>(move |p| {
-            local_ctx.resolve_all(path_wellformedness.clone(), p.clone())
-        });
+        let env: EnvC<'sg, 'rslv, CMPL, LABEL, DATA, DWF::Output> =
+            path_set.map_into_env::<_>(move |p| {
+                local_ctx.resolve_all(path_wellformedness.clone(), p.clone())
+            });
         env
     }
 
@@ -460,19 +468,14 @@ mod tests {
                 .with_path_wellformedness(query_regex!(Lbl: Lex* Imp? Def))
                 .with_data_wellformedness(TData::matcher_fut("x"))
                 .with_label_order(label_order!(Lbl: Def < Imp < Lex));
-            type DWF = impl for<'sg> DataWellformedness<'sg, TData<'sg>, Output = FutureWrapper<'sg, bool>>;
-            let env = crate::resolve::Query::<
-                '_,
-                '_,
-                '_,
-                _,
-                _,
-                _,
-                _,
-                DWF,
-                _,
-                _
-            >::resolve(&query, s_let).await;
+            type DWF = impl for<'sg> DataWellformedness<
+                'sg,
+                TData<'sg>,
+                Output = FutureWrapper<'sg, bool>,
+            >;
+            let env =
+                crate::resolve::Query::<'_, '_, '_, _, _, _, _, DWF, _, _>::resolve(&query, s_let)
+                    .await;
 
             let env_vec = env.into_iter().collect::<Vec<_>>();
             assert_eq!(1, env_vec.len());
