@@ -364,7 +364,7 @@ mod tests {
         },
         future_wrapper::FutureWrapper,
         query_regex,
-        resolve::{DataWellformedness, Resolve, ResolvedPath},
+        resolve::{Resolve, ResolvedPath},
         storage::Storage,
         Label, ScopeGraph,
     };
@@ -468,14 +468,7 @@ mod tests {
                 .with_path_wellformedness(query_regex!(Lbl: Lex* Imp? Def))
                 .with_data_wellformedness(TData::matcher_fut("x"))
                 .with_label_order(label_order!(Lbl: Def < Imp < Lex));
-            type DWF = impl for<'sg> DataWellformedness<
-                'sg,
-                TData<'sg>,
-                Output = FutureWrapper<'sg, bool>,
-            >;
-            let env =
-                crate::resolve::Query::<'_, '_, '_, _, _, _, _, DWF, _, _>::resolve(&query, s_let)
-                    .await;
+            let env = query.resolve(s_let).await;
 
             let env_vec = env.into_iter().collect::<Vec<_>>();
             assert_eq!(1, env_vec.len());

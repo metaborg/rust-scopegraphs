@@ -14,7 +14,7 @@ use super::Implicit;
 /// Unlike [`ExplicitClose`](crate::completeness::ExplicitClose), this implementation will implicitly close edges once traversed.
 /// This does not require special attention from the type checker writer.
 ///
-/// Returns [`EdgeClosedError`](EdgeClosedError) when an edge is added to a scope in which the label is already
+/// Returns [EdgeClosedError] when an edge is added to a scope in which the label is already
 /// closed (because `get_edges(s, l, ...)` was called earlier.
 ///
 /// When edges are retrieved (e.g. during query resolution) the `(src, label)` edge is closed.
