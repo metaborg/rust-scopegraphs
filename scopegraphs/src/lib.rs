@@ -11,7 +11,6 @@
 #![allow(unknown_lints)]
 #![allow(unexpected_cfgs)]
 #![allow(clippy::empty_docs)]
-#![feature(type_alias_impl_trait)]
 
 #[cfg(feature = "documentation")]
 pub mod concepts;
