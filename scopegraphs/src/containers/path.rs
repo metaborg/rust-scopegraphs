@@ -1,10 +1,13 @@
 use crate::future_wrapper::FutureWrapper;
 use crate::resolve::{Env, Path, ResolvedPath};
 use futures::future::join_all;
+use std::fmt::Debug;
 use std::hash::Hash;
 
+use super::EnvContainer;
+
 /// Interface for path containers that support the operations required for query resolution.
-pub trait PathContainer<'sg, 'rslv, LABEL: 'sg, DATA: 'sg>: 'rslv {
+pub trait PathContainer<'sg, 'rslv, LABEL: 'sg, DATA: 'sg>: Debug + 'rslv {
     /// Type returned by resolving a path to its sub-environment.
     type EnvContainer;
 
@@ -15,7 +18,26 @@ pub trait PathContainer<'sg, 'rslv, LABEL: 'sg, DATA: 'sg>: 'rslv {
     ) -> Self::EnvContainer;
 }
 
-impl<'rslv, 'sg, LABEL: 'sg, DATA: 'sg> PathContainer<'sg, 'rslv, LABEL, DATA> for Vec<Path<LABEL>>
+/// Trait that is auto-implemented for any [PathContainer] implementation that yields a valid [EnvContainer].
+pub trait PathContainerWf<'sg, 'rslv, LABEL: 'sg, DATA: 'sg, DWFO>:
+    PathContainer<'sg, 'rslv, LABEL, DATA, EnvContainer = Self::EnvContainerWf>
+{
+    /// Witness that ```Self::EnvContainer``` is a valid environment container.
+    type EnvContainerWf: EnvContainer<'sg, 'rslv, LABEL, DATA, DWFO>;
+}
+
+impl<'sg, 'rslv, LABEL, DATA, DWFO, T> PathContainerWf<'sg, 'rslv, LABEL, DATA, DWFO> for T
+where
+    LABEL: Debug + 'sg,
+    DATA: 'sg,
+    T: PathContainer<'sg, 'rslv, LABEL, DATA>,
+    Self::EnvContainer: EnvContainer<'sg, 'rslv, LABEL, DATA, DWFO>,
+{
+    type EnvContainerWf = Self::EnvContainer;
+}
+
+impl<'rslv, 'sg, LABEL: Debug + 'sg, DATA: 'sg> PathContainer<'sg, 'rslv, LABEL, DATA>
+    for Vec<Path<LABEL>>
 where
     Self: 'rslv,
     LABEL: Clone + Hash + Eq,
@@ -30,8 +52,8 @@ where
 
 // TODO: can this be generalized to arbitrary results of PathContainers?
 // (challenge is converting between the different `::EnvContainer`s.)
-impl<'rslv, 'sg, LABEL: 'sg, DATA: 'sg, E: 'rslv> PathContainer<'sg, 'rslv, LABEL, DATA>
-    for Result<Vec<Path<LABEL>>, E>
+impl<'rslv, 'sg, LABEL: Debug + 'sg, DATA: 'sg, E: Debug + 'rslv>
+    PathContainer<'sg, 'rslv, LABEL, DATA> for Result<Vec<Path<LABEL>>, E>
 where
     Self: 'rslv,
     LABEL: Clone + Hash,
