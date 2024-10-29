@@ -204,10 +204,9 @@ where
                     let filtered_env = sub_env
                         .iter()
                         .filter(|p1| {
-                            base_env
+                            !base_env
                                 .iter()
-                                .find(|p2| data_equiv.data_equiv(p1.data, p2.data))
-                                .is_none()
+                                .any(|p2| data_equiv.data_equiv(p1.data, p2.data))
                         })
                         .collect::<Vec<_>>();
 
