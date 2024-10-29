@@ -83,7 +83,7 @@ pub trait ScopeContainer<'sg, 'rslv, LABEL: Debug + 'sg, DATA: 'sg>: Debug {
 /// }
 /// ```
 ///
-pub trait ScopeContainerWf<'sg, 'rslv, LABEL, DATA, DWFO>:
+pub trait ScopeContainerWf<'sg, 'rslv, LABEL, DATA, DWFO, DEQO>:
     ScopeContainer<'sg, 'rslv, LABEL, DATA, PathContainer = Self::PathContainerWf>
 where
     LABEL: Debug + 'sg,
@@ -91,15 +91,16 @@ where
     ResolvedPath<'sg, LABEL, DATA>: Eq + Hash + Clone,
 {
     /// Refinement of `Self::PathContainer`, carrying proof that this scope container resolves to valid path containers.
-    type PathContainerWf: PathContainerWf<'sg, 'rslv, LABEL, DATA, DWFO>;
+    type PathContainerWf: PathContainerWf<'sg, 'rslv, LABEL, DATA, DWFO, DEQO>;
 }
 
-impl<'sg, 'rslv, LABEL, DATA, DWFO, T> ScopeContainerWf<'sg, 'rslv, LABEL, DATA, DWFO> for T
+impl<'sg, 'rslv, LABEL, DATA, DWFO, DEQO, T> ScopeContainerWf<'sg, 'rslv, LABEL, DATA, DWFO, DEQO>
+    for T
 where
     LABEL: Debug + 'sg,
     DATA: 'sg,
     T: ScopeContainer<'sg, 'rslv, LABEL, DATA>,
-    Self::PathContainer: PathContainerWf<'sg, 'rslv, LABEL, DATA, DWFO>,
+    Self::PathContainer: PathContainerWf<'sg, 'rslv, LABEL, DATA, DWFO, DEQO>,
     ResolvedPath<'sg, LABEL, DATA>: Eq + Hash + Clone,
 {
     type PathContainerWf = Self::PathContainer;

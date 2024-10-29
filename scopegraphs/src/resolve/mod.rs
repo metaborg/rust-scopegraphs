@@ -197,6 +197,16 @@ impl<LABEL> Path<LABEL> {
 #[derive(Debug)]
 pub struct Env<'sg, LABEL: 'sg, DATA>(HashSet<ResolvedPath<'sg, LABEL, DATA>>);
 
+impl<'a, 'sg, LABEL, DATA> IntoIterator for &'a Env<'sg, LABEL, DATA> {
+    type Item = &'a ResolvedPath<'sg, LABEL, DATA>;
+
+    type IntoIter = <&'a HashSet<ResolvedPath<'sg, LABEL, DATA>> as IntoIterator>::IntoIter;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.iter()
+    }
+}
+
 impl<'sg, LABEL, DATA> IntoIterator for Env<'sg, LABEL, DATA> {
     type Item = ResolvedPath<'sg, LABEL, DATA>;
 

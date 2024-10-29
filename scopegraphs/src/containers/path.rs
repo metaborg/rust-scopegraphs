@@ -4,7 +4,7 @@ use futures::future::join_all;
 use std::fmt::Debug;
 use std::hash::Hash;
 
-use super::{Injectable, Mergable};
+use super::{Injectable, Shadowable};
 
 /// Interface for path containers that support the operations required for query resolution.
 pub trait PathContainer<'sg, 'rslv, LABEL: 'sg, DATA: 'sg>: Debug + 'rslv {
@@ -19,23 +19,24 @@ pub trait PathContainer<'sg, 'rslv, LABEL: 'sg, DATA: 'sg>: Debug + 'rslv {
 }
 
 /// Trait that is auto-implemented for any [PathContainer] implementation that yields a valid [EnvContainer].
-pub trait PathContainerWf<'sg, 'rslv, LABEL: 'sg, DATA: 'sg, DWFO>:
+pub trait PathContainerWf<'sg, 'rslv, LABEL: 'sg, DATA: 'sg, DWFO, DEQO>:
     PathContainer<'sg, 'rslv, LABEL, DATA, EnvContainer = Self::EnvContainerWf>
 where
     ResolvedPath<'sg, LABEL, DATA>: Eq + Hash + Clone,
 {
     /// Witness that ```Self::EnvContainer``` is a valid environment container.
     type EnvContainerWf: Injectable<'sg, 'rslv, LABEL, DATA, DWFO>
-        + Mergable<'sg, 'rslv, LABEL, DATA, bool>;
+        + Shadowable<'sg, 'rslv, LABEL, DATA, DEQO>;
 }
 
-impl<'sg, 'rslv, LABEL, DATA, DWFO, T> PathContainerWf<'sg, 'rslv, LABEL, DATA, DWFO> for T
+impl<'sg, 'rslv, LABEL, DATA, DWFO, DEQO, T> PathContainerWf<'sg, 'rslv, LABEL, DATA, DWFO, DEQO>
+    for T
 where
     LABEL: Debug + 'sg,
     DATA: 'sg,
     T: PathContainer<'sg, 'rslv, LABEL, DATA>,
     Self::EnvContainer:
-        Injectable<'sg, 'rslv, LABEL, DATA, DWFO> + Mergable<'sg, 'rslv, LABEL, DATA, bool>,
+        Injectable<'sg, 'rslv, LABEL, DATA, DWFO> + Shadowable<'sg, 'rslv, LABEL, DATA, DEQO>,
     ResolvedPath<'sg, LABEL, DATA>: Eq + Hash + Clone,
 {
     type EnvContainerWf = Self::EnvContainer;

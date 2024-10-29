@@ -165,58 +165,119 @@ where
     }
 }
 
-// Mergeable
+// Shadowable
 
-/// Environment Container in which a path can be injected based on a condition.
-pub trait Mergable<'sg, 'rslv, LABEL: 'sg, DATA: 'sg, DEQO>:
+/// Sub trait of [EnvContainer] that validates that shadowin operations can be applied on it.
+pub trait Shadowable<'sg, 'rslv, LABEL: 'sg, DATA: 'sg, DEQO>:
     EnvContainer<'sg, 'rslv, LABEL, DATA>
 where
     ResolvedPath<'sg, LABEL, DATA>: Eq + Hash + Clone,
 {
-    /// Creates a new environment that contains path when `data_ok` is `true`, and is empty otherwise.
-    fn merge_if(
-        &self,
-        data_equiv: &'rslv impl DataEquivalence<'sg, DATA, Output = DEQO>,
-        sub_env: Self,
+    /// Implementation of the shadow operation on this container.
+    fn shadow(
+        base_env: Env<'sg, LABEL, DATA>,
+        sub_env: &Env<'sg, LABEL, DATA>,
+        equiv: &'rslv impl DataEquivalence<'sg, DATA, Output = DEQO>,
     ) -> Self;
 }
 
-impl<'sg: 'rslv, 'rslv, LABEL: Eq + 'sg, DATA: Eq + 'sg, ENVC>
-    Mergable<'sg, 'rslv, LABEL, DATA, bool> for ENVC
+impl<'sg: 'rslv, 'rslv, LABEL: 'sg, DATA: 'sg, ENVC> Shadowable<'sg, 'rslv, LABEL, DATA, bool>
+    for ENVC
 where
     ENVC: EnvContainer<'sg, 'rslv, LABEL, DATA>,
     Env<'sg, LABEL, DATA>: Clone,
     ResolvedPath<'sg, LABEL, DATA>: Eq + Hash + Clone,
 {
-    fn merge_if(
-        &self,
-        data_equiv: &'rslv impl DataEquivalence<'sg, DATA, Output = bool>,
-        sub_env: Self,
+    fn shadow(
+        base_env: Env<'sg, LABEL, DATA>,
+        sub_env: &Env<'sg, LABEL, DATA>,
+        equiv: &'rslv impl DataEquivalence<'sg, DATA, Output = bool>,
     ) -> Self {
-        let base_env = self;
-        base_env.flat_map(move |base_env| {
-            if !base_env.is_empty() && data_equiv.always_equivalent() {
-                <ENVC as From<Env<'sg, LABEL, DATA>>>::from(base_env.clone())
-            } else {
-                let base_env = base_env.clone();
+        let filtered_env = sub_env
+            .iter()
+            .filter(|p1| !base_env.iter().any(|p2| equiv.data_equiv(p1.data, p2.data)))
+            .collect::<Vec<_>>();
 
-                sub_env.flat_map(move |sub_env| {
-                    let filtered_env = sub_env
-                        .iter()
-                        .filter(|p1| {
-                            !base_env
-                                .iter()
-                                .any(|p2| data_equiv.data_equiv(p1.data, p2.data))
-                        })
-                        .collect::<Vec<_>>();
+        // FIXME: factor out this part?
+        let mut new_env = base_env;
+        for path in filtered_env {
+            new_env.insert(path.clone())
+        }
+        new_env.into()
+    }
+}
 
-                    let mut new_env = base_env;
-                    for path in filtered_env {
-                        new_env.insert(path.clone())
+impl<'sg: 'rslv, 'rslv, LABEL: Clone + Eq + 'sg, DATA: Eq + 'sg, E: Clone + 'rslv>
+    Shadowable<'sg, 'rslv, LABEL, DATA, Result<bool, E>> for Result<Env<'sg, LABEL, DATA>, E>
+where
+    Env<'sg, LABEL, DATA>: Clone,
+    ResolvedPath<'sg, LABEL, DATA>: Eq + Hash + Clone,
+{
+    fn shadow(
+        base_env: Env<'sg, LABEL, DATA>,
+        sub_env: &Env<'sg, LABEL, DATA>,
+        equiv: &'rslv impl DataEquivalence<'sg, DATA, Output = Result<bool, E>>,
+    ) -> Self {
+        let sub_env = sub_env.clone();
+        let filtered_env = sub_env.into_iter().try_fold(
+            Vec::<ResolvedPath<'sg, LABEL, DATA>>::new(),
+            |mut filtered_env: Vec<ResolvedPath<'sg, LABEL, DATA>>,
+             p1: ResolvedPath<'sg, LABEL, DATA>| {
+                let shadowed = base_env.iter().try_fold(
+                    /* initially, not shadowed */ false,
+                    |previously_shadowed: bool, p2: &ResolvedPath<'sg, LABEL, DATA>| {
+                        if previously_shadowed {
+                            Ok(true) // if it was shadowed, it will be
+                        } else {
+                            // not yet shadowed, try if current path shadows
+                            equiv.data_equiv(p1.data, p2.data)
+                        }
+                    },
+                )?;
+                // p1 is not shadowed, so add it to accumulator
+                if !shadowed {
+                    filtered_env.push(p1);
+                }
+
+                Ok(filtered_env)
+            },
+        )?;
+        let mut new_env = base_env;
+        filtered_env
+            .into_iter()
+            .for_each(|path| new_env.insert(path));
+        new_env.into()
+    }
+}
+
+impl<'sg: 'rslv, 'rslv, LABEL: Clone + Eq + 'sg, DATA: Eq + 'sg>
+    Shadowable<'sg, 'rslv, LABEL, DATA, FutureWrapper<'rslv, bool>>
+    for FutureWrapper<'rslv, Env<'sg, LABEL, DATA>>
+where
+    Env<'sg, LABEL, DATA>: Clone,
+    ResolvedPath<'sg, LABEL, DATA>: Eq + Hash + Clone,
+{
+    fn shadow(
+        base_env: Env<'sg, LABEL, DATA>,
+        sub_env: &Env<'sg, LABEL, DATA>,
+        equiv: &'rslv impl DataEquivalence<'sg, DATA, Output = FutureWrapper<'rslv, bool>>,
+    ) -> Self {
+        let sub_env = sub_env.clone();
+        FutureWrapper::new(async move {
+            let mut filtered_env: Vec<ResolvedPath<'sg, LABEL, DATA>> = Vec::new();
+            'outer: for sub_path in sub_env {
+                for base_path in &base_env {
+                    if equiv.data_equiv(sub_path.data, base_path.data).await {
+                        continue 'outer;
                     }
-                    new_env.into()
-                })
+                }
+                filtered_env.push(sub_path.clone());
             }
+            let mut new_env = base_env;
+            for path in filtered_env {
+                new_env.insert(path);
+            }
+            new_env
         })
     }
 }
