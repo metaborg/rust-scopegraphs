@@ -14,7 +14,8 @@ use std::sync::Arc;
 
 use crate::completeness::Completeness;
 use crate::containers::{
-    EnvContainer, PathContainer, PathContainerWf, ScopeContainer, ScopeContainerWf,
+    EnvContainer, Injectable, Mergable, PathContainer, PathContainerWf, ScopeContainer,
+    ScopeContainerWf,
 };
 use crate::resolve::{
     DataEquivalence, DataWellformedness, EdgeOrData, Env, LabelOrder, Path, Query, Resolve,
@@ -36,7 +37,7 @@ where
 
     // DWF : DataWellFormedNess<DATA, Completeness::DWF>
     LO: LabelOrder<LABEL> + 'rslv,
-    DEq: DataEquivalence<DATA> + 'rslv,
+    DEq: DataEquivalence<'sg, DATA, /* tmp */ Output = bool> + 'rslv,
     ResolvedPath<'sg, LABEL, DATA>: Hash + Eq,
     Path<LABEL>: Clone,
 {
@@ -116,7 +117,7 @@ where
     ResolvedPath<'sg, LABEL, DATA>: Hash + Eq,
     CMPL: Completeness<LABEL, DATA>,
     CMPL::GetEdgesResult<'rslv>: ScopeContainerWf<'sg, 'rslv, LABEL, DATA, DWF::Output>,
-    DEq: DataEquivalence<DATA>,
+    DEq: DataEquivalence<'sg, DATA, /* tmp */ Output = bool>,
     DWF: DataWellformedness<'sg, DATA>,
     LO: LabelOrder<LABEL>,
     Path<LABEL>: Clone,
@@ -215,49 +216,10 @@ where
         let base_env: EnvC<'sg, 'rslv, CMPL, LABEL, DATA, DWF::Output> =
             self.resolve_edges(path_wellformedness.clone(), edges, path.clone(), cache);
         let local_self = Arc::clone(self);
+        let sub_env = local_self.resolve_edge(path_wellformedness.clone(), edge, path);
+
         // environment of current (max) label, which might be shadowed by the base environment
-        Rc::new(base_env.flat_map(move |base_env| {
-            if !base_env.is_empty() && local_self.data_equiv.always_equivalent() {
-                <EnvC<'sg, 'rslv, CMPL, LABEL, DATA, DWF::Output> as From<
-                        Env<'sg, LABEL, DATA>,
-                    >>::from(base_env.clone())
-            } else {
-                let sub_env = local_self.resolve_edge(path_wellformedness.clone(), edge, path);
-                let local_self = Arc::clone(&local_self);
-                let base_env = base_env.clone();
-
-                sub_env.flat_map(move |sub_env| {
-                    let filtered_env = sub_env
-                        .iter()
-                        .filter(|p1| {
-                            if let Some(p2) = base_env
-                                .iter()
-                                .find(|p2| local_self.data_equiv.data_equiv(p1.data, p2.data))
-                            {
-                                log::info!(
-                                    "Discarding {:?} in {:?}; shadowed by {:?} in {:?}",
-                                    p1.data,
-                                    p1.path.target(),
-                                    p2.data,
-                                    p2.path.target()
-                                );
-                                false
-                            } else {
-                                true
-                            }
-                        })
-                        .collect::<Vec<_>>();
-
-                    let mut new_env = base_env;
-                    for path in filtered_env {
-                        new_env.insert(path.clone())
-                    }
-                    <EnvC<'sg, 'rslv, CMPL, LABEL, DATA, DWF::Output> as From<
-                        Env<'sg, LABEL, DATA>,
-                    >>::from(new_env)
-                })
-            }
-        }))
+        Rc::new(base_env.merge_if(local_self.data_equiv, sub_env))
     }
 
     /// Compute environment for single edge
@@ -304,12 +266,12 @@ where
         let path = path.clone().resolve(data);
         let data_ok = self.data_wellformedness.data_wf(data);
 
-        <EnvC<'sg, 'rslv, CMPL, LABEL, DATA, DWF::Output> as EnvContainer<
+        <EnvC<'sg, 'rslv, CMPL, LABEL, DATA, DWF::Output> as Injectable<
             'sg,
             'rslv,
             LABEL,
             DATA,
-            <DWF as DataWellformedness<DATA>>::Output,
+            DWF::Output,
         >>::inject_if(data_ok, path)
     }
 
@@ -347,7 +309,6 @@ where
             'rslv,
             LABEL,
             DATA,
-            <DWF as DataWellformedness<DATA>>::Output,
         >>::empty()
     }
 }

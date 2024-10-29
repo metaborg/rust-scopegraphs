@@ -119,7 +119,7 @@ where
 #[derive(Hash, PartialEq, Eq, Debug)]
 pub struct ResolvedPath<'sg, LABEL, DATA> {
     path: Path<LABEL>,
-    data: &'sg DATA,
+    pub(crate) data: &'sg DATA,
 }
 
 impl<LABEL: Clone, DATA> Clone for ResolvedPath<'_, LABEL, DATA> {
@@ -585,7 +585,7 @@ impl<'sg, 'storage, 'rslv, LABEL: Label, DATA, CMPL, PWF, DWF, LO, DEq>
         new_data_equivalence: NDEq,
     ) -> Query<'sg, 'storage, 'rslv, LABEL, DATA, CMPL, PWF, DWF, LO, NDEq>
     where
-        NDEq: DataEquivalence<DATA> + 'rslv,
+        NDEq: DataEquivalence<'sg, DATA> + 'rslv,
     {
         Query {
             _phantom: PhantomData,

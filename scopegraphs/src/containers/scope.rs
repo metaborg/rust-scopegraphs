@@ -1,9 +1,9 @@
 use std::fmt::Debug;
 use std::hash::Hash;
 
-use crate::future_wrapper::FutureWrapper;
 use crate::resolve::Path;
 use crate::Scope;
+use crate::{future_wrapper::FutureWrapper, resolve::ResolvedPath};
 
 use super::{PathContainer, PathContainerWf};
 
@@ -64,7 +64,7 @@ pub trait ScopeContainer<'sg, 'rslv, LABEL: Debug + 'sg, DATA: 'sg>: Debug {
 /// # use std::hash::Hash;
 ///
 ///
-/// fn test<'sg, 'rslv, LABEL: Hash + Eq + Debug + 'sg, DATA: Hash + Eq + 'sg, DWFO>(cont: impl ScopeContainerWf<'sg, 'rslv, LABEL, DATA, DWFO>) {
+/// fn test<'sg, 'rslv, LABEL: Clone + Hash + Eq + Debug + 'sg, DATA: Hash + Eq + 'sg, DWFO>(cont: impl ScopeContainerWf<'sg, 'rslv, LABEL, DATA, DWFO>) {
 ///
 /// }
 /// ```
@@ -78,7 +78,7 @@ pub trait ScopeContainer<'sg, 'rslv, LABEL: Debug + 'sg, DATA: 'sg>: Debug {
 /// test::<'_, '_, (), (), bool>(Result::<_, ()>::Ok(Vec::<Scope>::new()));
 /// test::<'_, '_, (), (), Result<bool, ()>>(Result::<_, ()>::Ok(Vec::<Scope>::new()));
 ///
-/// fn test<'sg, 'rslv, LABEL: Hash + Eq + Debug + 'sg, DATA: Hash + Eq + 'sg, DWFO>(cont: impl ScopeContainerWf<'sg, 'rslv, LABEL, DATA, DWFO>) {
+/// fn test<'sg, 'rslv, LABEL: Clone + Hash + Eq + Debug + 'sg, DATA: Hash + Eq + 'sg, DWFO>(cont: impl ScopeContainerWf<'sg, 'rslv, LABEL, DATA, DWFO>) {
 ///
 /// }
 /// ```
@@ -88,6 +88,7 @@ pub trait ScopeContainerWf<'sg, 'rslv, LABEL, DATA, DWFO>:
 where
     LABEL: Debug + 'sg,
     DATA: 'sg,
+    ResolvedPath<'sg, LABEL, DATA>: Eq + Hash + Clone,
 {
     /// Refinement of `Self::PathContainer`, carrying proof that this scope container resolves to valid path containers.
     type PathContainerWf: PathContainerWf<'sg, 'rslv, LABEL, DATA, DWFO>;
@@ -99,6 +100,7 @@ where
     DATA: 'sg,
     T: ScopeContainer<'sg, 'rslv, LABEL, DATA>,
     Self::PathContainer: PathContainerWf<'sg, 'rslv, LABEL, DATA, DWFO>,
+    ResolvedPath<'sg, LABEL, DATA>: Eq + Hash + Clone,
 {
     type PathContainerWf = Self::PathContainer;
 }
