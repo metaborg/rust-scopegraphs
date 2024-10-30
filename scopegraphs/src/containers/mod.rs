@@ -3,8 +3,11 @@
 //! Using these interfaces, the resolution algorithms can deal with custom behavior introduced
 //! by [`Completeness`](crate::completeness::Completeness) implementations.
 
-enum ResolveOrUserError<RE, UE> {
+/// Union of errors during resolution (i.e., delays) and error during predicate evaluation.
+pub enum ResolveOrUserError<RE, UE> {
+    /// Resolution error.
     Resolve(RE),
+    /// User error (predicates)
     User(UE),
 }
 
