@@ -17,7 +17,7 @@ use std::sync::Arc;
 use crate::completeness::Completeness;
 use crate::containers::{
     EnvContainer, Injectable, PathContainer, PathContainerWf, ScopeContainer, ScopeContainerWf,
-    Shadowable,
+    Filterable,
 };
 use crate::resolve::{
     DataEquivalence, DataWellformedness, EdgeOrData, LabelOrder, Path, Query, Resolve, ResolvedPath,
@@ -224,10 +224,14 @@ where
             if !base_env.is_empty() && local_self.data_equiv.always_equivalent() {
                 base_env.clone().into()
             } else {
-                let base_env = base_env.clone();
+                let mut base_env = base_env.clone();
                 let sub_env = local_self.resolve_edge(path_wellformedness.clone(), edge, path);
                 sub_env.flat_map(move |sub_env| {
-                    Shadowable::shadow(base_env, sub_env, local_self.data_equiv)
+                    let merged_env: EnvC<'sg, 'rslv, CMPL, LABEL, DATA, DWF::Output, DEq::Output> = Filterable::filter(&base_env, sub_env, local_self.data_equiv);
+                    merged_env.flat_map(move |merged_env| {
+                        base_env.merge(merged_env);
+                        base_env.into()
+                    })
                 })
             }
         }))

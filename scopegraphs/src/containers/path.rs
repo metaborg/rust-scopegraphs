@@ -4,7 +4,7 @@ use futures::future::join_all;
 use std::fmt::Debug;
 use std::hash::Hash;
 
-use super::{Injectable, Shadowable};
+use super::{Injectable, Filterable};
 
 /// Interface for path containers that support the operations required for query resolution.
 pub trait PathContainer<'sg, 'rslv, LABEL: 'sg, DATA: 'sg>: Debug + 'rslv {
@@ -26,7 +26,7 @@ where
 {
     /// Witness that ```Self::EnvContainer``` is a valid environment container.
     type EnvContainerWf: Injectable<'sg, 'rslv, LABEL, DATA, DWFO>
-        + Shadowable<'sg, 'rslv, LABEL, DATA, DEQO>;
+        + Filterable<'sg, 'rslv, LABEL, DATA, DEQO>;
 }
 
 impl<'sg, 'rslv, LABEL, DATA, DWFO, DEQO, T> PathContainerWf<'sg, 'rslv, LABEL, DATA, DWFO, DEQO>
@@ -36,7 +36,7 @@ where
     DATA: 'sg,
     T: PathContainer<'sg, 'rslv, LABEL, DATA>,
     Self::EnvContainer:
-        Injectable<'sg, 'rslv, LABEL, DATA, DWFO> + Shadowable<'sg, 'rslv, LABEL, DATA, DEQO>,
+        Injectable<'sg, 'rslv, LABEL, DATA, DWFO> + Filterable<'sg, 'rslv, LABEL, DATA, DEQO>,
     ResolvedPath<'sg, LABEL, DATA>: Eq + Hash + Clone,
 {
     type EnvContainerWf = Self::EnvContainer;
