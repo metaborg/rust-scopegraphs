@@ -372,8 +372,7 @@ where
     }
 }
 
-impl<'sg, LABEL: 'sg, DATA> FromIterator<ResolvedPath<'sg, LABEL, DATA>>
-    for Env<'sg, LABEL, DATA>
+impl<'sg, LABEL: 'sg, DATA> FromIterator<ResolvedPath<'sg, LABEL, DATA>> for Env<'sg, LABEL, DATA>
 where
     ResolvedPath<'sg, LABEL, DATA>: Eq + Hash,
 {

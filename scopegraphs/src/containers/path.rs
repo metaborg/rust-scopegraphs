@@ -4,7 +4,7 @@ use futures::future::join_all;
 use std::fmt::Debug;
 use std::hash::Hash;
 
-use super::{Injectable, Filterable};
+use super::{Filterable, Injectable};
 
 /// Interface for path containers that support the operations required for query resolution.
 pub trait PathContainer<'sg, 'rslv, LABEL: 'sg, DATA: 'sg>: Debug + 'rslv {

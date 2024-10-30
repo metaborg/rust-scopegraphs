@@ -216,8 +216,7 @@ where
         let sub_env = sub_env.clone();
         sub_env.into_iter().try_fold(
             Env::new(),
-            |mut filtered_env: Env<'sg, LABEL, DATA>,
-             p1: ResolvedPath<'sg, LABEL, DATA>| {
+            |mut filtered_env: Env<'sg, LABEL, DATA>, p1: ResolvedPath<'sg, LABEL, DATA>| {
                 let shadowed = base_env.iter().try_fold(
                     /* initially, not shadowed */ false,
                     |previously_shadowed: bool, p2: &ResolvedPath<'sg, LABEL, DATA>| {
