@@ -173,7 +173,7 @@ pub trait Filterable<'sg, 'rslv, LABEL: 'sg, DATA: 'sg, DEQO>:
 where
     ResolvedPath<'sg, LABEL, DATA>: Eq + Hash + Clone,
 {
-    /// Implementation of the shadow operation on this container.
+    /// Implementation of the filter operation on this container.
     fn filter(
         base_env: &Env<'sg, LABEL, DATA>,
         sub_env: &Env<'sg, LABEL, DATA>,
