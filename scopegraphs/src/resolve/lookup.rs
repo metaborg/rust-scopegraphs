@@ -227,12 +227,19 @@ where
                 let mut base_env = base_env.clone();
                 let sub_env = local_self.resolve_edge(path_wellformedness.clone(), edge, path);
                 sub_env.flat_map(move |sub_env| {
-                    let filtered_env: EnvC<'sg, 'rslv, CMPL, LABEL, DATA, DWF::Output, DEq::Output> =
-                        Filterable::filter(&base_env, sub_env, local_self.data_equiv);
-                        filtered_env.flat_map(move |filtered_env| {
-                            base_env.merge(filtered_env);
-                            base_env.into()
-                        })
+                    let filtered_env: EnvC<
+                        'sg,
+                        'rslv,
+                        CMPL,
+                        LABEL,
+                        DATA,
+                        DWF::Output,
+                        DEq::Output,
+                    > = Filterable::filter(&base_env, sub_env, local_self.data_equiv);
+                    filtered_env.flat_map(move |filtered_env| {
+                        base_env.merge(filtered_env);
+                        base_env.into()
+                    })
                 })
             }
         }))
