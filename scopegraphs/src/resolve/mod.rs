@@ -119,7 +119,7 @@ where
 #[derive(Hash, PartialEq, Eq, Debug)]
 pub struct ResolvedPath<'sg, LABEL, DATA> {
     path: Path<LABEL>,
-    data: &'sg DATA,
+    pub(crate) data: &'sg DATA,
 }
 
 impl<LABEL: Clone, DATA> Clone for ResolvedPath<'_, LABEL, DATA> {
@@ -196,6 +196,16 @@ impl<LABEL> Path<LABEL> {
 // Perhaps we will resort to fibbonacy heaps/pairing heaps, and/or make resolution parametric in the environment type.
 #[derive(Debug)]
 pub struct Env<'sg, LABEL: 'sg, DATA>(HashSet<ResolvedPath<'sg, LABEL, DATA>>);
+
+impl<'a, 'sg, LABEL, DATA> IntoIterator for &'a Env<'sg, LABEL, DATA> {
+    type Item = &'a ResolvedPath<'sg, LABEL, DATA>;
+
+    type IntoIter = <&'a HashSet<ResolvedPath<'sg, LABEL, DATA>> as IntoIterator>::IntoIter;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.iter()
+    }
+}
 
 impl<'sg, LABEL, DATA> IntoIterator for Env<'sg, LABEL, DATA> {
     type Item = ResolvedPath<'sg, LABEL, DATA>;
@@ -362,8 +372,7 @@ where
     }
 }
 
-impl<'sg, LABEL: 'sg, DATA: Hash> FromIterator<ResolvedPath<'sg, LABEL, DATA>>
-    for Env<'sg, LABEL, DATA>
+impl<'sg, LABEL: 'sg, DATA> FromIterator<ResolvedPath<'sg, LABEL, DATA>> for Env<'sg, LABEL, DATA>
 where
     ResolvedPath<'sg, LABEL, DATA>: Eq + Hash,
 {
@@ -585,7 +594,7 @@ impl<'sg, 'storage, 'rslv, LABEL: Label, DATA, CMPL, PWF, DWF, LO, DEq>
         new_data_equivalence: NDEq,
     ) -> Query<'sg, 'storage, 'rslv, LABEL, DATA, CMPL, PWF, DWF, LO, NDEq>
     where
-        NDEq: DataEquivalence<DATA> + 'rslv,
+        NDEq: DataEquivalence<'sg, DATA> + 'rslv,
     {
         Query {
             _phantom: PhantomData,

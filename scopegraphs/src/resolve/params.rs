@@ -86,9 +86,12 @@ impl<LABEL> LabelOrder<LABEL> for DefaultLabelOrder {
 /// Defines equivalence classes of declarations. Shadowing will only be applied with respect to
 /// declarations in the same equivalence class. That is, the shadowing explained in [`LabelOrder`]
 /// will only be applied if the declarations are equivalent.
-pub trait DataEquivalence<DATA> {
+pub trait DataEquivalence<'sg, DATA> {
+    /// Output of the data equivalence function; should something that contains a [bool].
+    type Output;
+
     /// Returns true if d1 is equivalent to d2
-    fn data_equiv(&self, d1: &DATA, d2: &DATA) -> bool;
+    fn data_equiv(&self, d1: &'sg DATA, d2: &'sg DATA) -> Self::Output;
 
     /// Returns if for this data equivalence, any data is always equivalent to any other data.
     fn always_equivalent(&self) -> bool {
@@ -96,11 +99,13 @@ pub trait DataEquivalence<DATA> {
     }
 }
 
-impl<DATA, T> DataEquivalence<DATA> for T
+impl<'sg, DATA: 'sg, T, O: 'sg> DataEquivalence<'sg, DATA> for T
 where
-    for<'sg> T: Fn(&'sg DATA, &'sg DATA) -> bool,
+    T: Fn(&'sg DATA, &'sg DATA) -> O,
 {
-    fn data_equiv(&self, d1: &DATA, d2: &DATA) -> bool {
+    type Output = O;
+
+    fn data_equiv(&self, d1: &'sg DATA, d2: &'sg DATA) -> Self::Output {
         self(d1, d2)
     }
 }
@@ -109,8 +114,10 @@ where
 #[derive(Default)]
 pub struct DefaultDataEquivalence {}
 
-impl<DATA> DataEquivalence<DATA> for DefaultDataEquivalence {
-    fn data_equiv(&self, _d1: &DATA, _d2: &DATA) -> bool {
+impl<'sg, DATA> DataEquivalence<'sg, DATA> for DefaultDataEquivalence {
+    type Output = bool;
+
+    fn data_equiv(&self, _d1: &'sg DATA, _d2: &'sg DATA) -> bool {
         true // all data in same equivalence class by default
     }
 
