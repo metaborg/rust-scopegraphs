@@ -134,7 +134,7 @@ where
     }
 }
 
-impl<'sg: 'rslv, 'rslv, LABEL: 'sg + Eq, DATA: 'sg + Eq, E: 'rslv>
+/* impl<'sg: 'rslv, 'rslv, LABEL: 'sg + Eq, DATA: 'sg + Eq, E: 'rslv>
     Injectable<'sg, 'rslv, LABEL, DATA, Result<bool, E>> for Result<Env<'sg, LABEL, DATA>, E>
 where
     ResolvedPath<'sg, LABEL, DATA>: Hash + Clone,
@@ -143,7 +143,7 @@ where
     fn inject_if(data_ok: Result<bool, E>, path: ResolvedPath<'sg, LABEL, DATA>) -> Self {
         data_ok.map(|ok| if ok { Env::single(path) } else { Env::empty() })
     }
-}
+} */
 
 impl<'sg: 'rslv, 'rslv, LABEL: 'sg + Eq, DATA: 'sg + Eq, RE, UE>
     Injectable<'sg, 'rslv, LABEL, DATA, Result<bool, RE>>

@@ -4,6 +4,7 @@
 //! by [`Completeness`](crate::completeness::Completeness) implementations.
 
 /// Union of errors during resolution (i.e., delays) and error during predicate evaluation.
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
 pub enum ResolveOrUserError<RE, UE> {
     /// Resolution error.
     Resolve(RE),

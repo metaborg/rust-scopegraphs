@@ -26,7 +26,7 @@ pub trait ScopeContainer<'sg, 'rslv, LABEL: Debug + 'sg, DATA: 'sg>: Debug {
 /// - [Result] of scope containers, and
 /// - [FutureWrapper] of scope containers.
 /// ```
-/// # use scopegraphs::containers::ScopeContainerWf;
+/// # use scopegraphs::containers::{ResolveOrUserError,ScopeContainerWf};
 /// # use scopegraphs::future_wrapper::FutureWrapper;
 /// # use scopegraphs::Scope;
 /// # use std::fmt::Debug;
@@ -44,10 +44,11 @@ pub trait ScopeContainer<'sg, 'rslv, LABEL: Debug + 'sg, DATA: 'sg>: Debug {
 ///     test::<'_, '_, LABEL, DATA, bool>(vec);
 /// # }
 ///
-/// # fn result<'sg, 'rslv, LABEL: LBound<'sg>, DATA: DBound<'sg>, E: Debug + Clone>() {
-///     let result: Result<Vec<Scope>, E> = todo!();
+/// # fn result<'sg, 'rslv, LABEL: LBound<'sg>, DATA: DBound<'sg>, RE: Debug + Clone + 'rslv, UE: Debug + Clone + 'rslv>() {
+///     let result: Result<Vec<Scope>, RE> = todo!();
 ///     test::<'_, '_, LABEL, DATA, bool>(result);
-///     test::<'_, '_, LABEL, DATA, Result<bool, E>>(result);
+///     let result_or_err: Result<Vec<Scope>, ResolveOrUserError<RE, UE>> = todo!();
+///     test::<'_, '_, LABEL, DATA, Result<bool, UE>>(result_or_err);
 /// # }
 ///
 /// # fn future<'sg, 'rslv, LABEL: LBound<'sg>, DATA: DBound<'sg>>() {
@@ -70,13 +71,13 @@ pub trait ScopeContainer<'sg, 'rslv, LABEL: Debug + 'sg, DATA: 'sg>: Debug {
 /// ```
 ///
 /// ```no_run
-/// # use scopegraphs::containers::ScopeContainerWf;
+/// # use scopegraphs::containers::{ResolveOrUserError, ScopeContainerWf};
 /// # use scopegraphs::Scope;
 /// # use std::fmt::Debug;
 /// # use std::hash::Hash;
 ///
 /// test::<'_, '_, (), (), bool>(Result::<_, ()>::Ok(Vec::<Scope>::new()));
-/// test::<'_, '_, (), (), Result<bool, ()>>(Result::<_, ()>::Ok(Vec::<Scope>::new()));
+/// test::<'_, '_, (), (), Result<bool, ()>>(Result::<_, ResolveOrUserError<(), ()>>::Ok(Vec::<Scope>::new()));
 ///
 /// fn test<'sg, 'rslv, LABEL: Clone + Hash + Eq + Debug + 'sg, DATA: Hash + Eq + 'sg, DWFO>(
 ///     cont: impl ScopeContainerWf<'sg, 'rslv, LABEL, DATA, DWFO, DWFO>
