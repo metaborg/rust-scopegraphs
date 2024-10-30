@@ -4,6 +4,8 @@ use futures::future::Shared;
 use std::hash::Hash;
 use std::rc::Rc;
 
+use super::ResolveOrUserError;
+
 /// Interface for environment containers that support the operations required for query resolution.
 pub trait EnvContainer<'sg, 'rslv, LABEL: 'sg, DATA: 'sg>:
     From<Env<'sg, LABEL, DATA>> + 'rslv
@@ -143,6 +145,20 @@ where
     }
 }
 
+impl<'sg: 'rslv, 'rslv, LABEL: 'sg + Eq, DATA: 'sg + Eq, RE, UE>
+    Injectable<'sg, 'rslv, LABEL, DATA, Result<bool, RE>>
+    for Result<Env<'sg, LABEL, DATA>, ResolveOrUserError<RE, UE>>
+where
+    ResolvedPath<'sg, LABEL, DATA>: Hash + Clone,
+    ResolveOrUserError<RE, UE>: Clone + 'rslv,
+{
+    fn inject_if(data_ok: Result<bool, RE>, path: ResolvedPath<'sg, LABEL, DATA>) -> Self {
+        data_ok
+            .map(|ok| if ok { Env::single(path) } else { Env::empty() })
+            .map_err(|err| ResolveOrUserError::Resolve(err))
+    }
+}
+
 impl<'sg: 'rslv, 'rslv, LABEL: 'sg + Eq, DATA: 'sg + Eq>
     Injectable<'sg, 'rslv, LABEL, DATA, FutureWrapper<'rslv, bool>>
     for FutureWrapper<'rslv, Env<'sg, LABEL, DATA>>
@@ -202,16 +218,18 @@ where
     }
 }
 
-impl<'sg: 'rslv, 'rslv, LABEL: Clone + Eq + 'sg, DATA: Eq + 'sg, E: Clone + 'rslv>
-    Filterable<'sg, 'rslv, LABEL, DATA, Result<bool, E>> for Result<Env<'sg, LABEL, DATA>, E>
+impl<'sg: 'rslv, 'rslv, LABEL: Clone + Eq + 'sg, DATA: Eq + 'sg, RE, UE>
+    Filterable<'sg, 'rslv, LABEL, DATA, Result<bool, UE>>
+    for Result<Env<'sg, LABEL, DATA>, ResolveOrUserError<RE, UE>>
 where
     Env<'sg, LABEL, DATA>: Clone,
     ResolvedPath<'sg, LABEL, DATA>: Eq + Hash + Clone,
+    ResolveOrUserError<RE, UE>: Clone + 'rslv,
 {
     fn filter(
         base_env: &Env<'sg, LABEL, DATA>,
         sub_env: &Env<'sg, LABEL, DATA>,
-        equiv: &'rslv impl DataEquivalence<'sg, DATA, Output = Result<bool, E>>,
+        equiv: &'rslv impl DataEquivalence<'sg, DATA, Output = Result<bool, UE>>,
     ) -> Self {
         let sub_env = sub_env.clone();
         sub_env.into_iter().try_fold(
@@ -227,10 +245,12 @@ where
                             equiv.data_equiv(p1.data, p2.data)
                         }
                     },
-                )?;
-                // p1 is not shadowed, so add it to accumulator
-                if !shadowed {
-                    filtered_env.insert(p1);
+                );
+                match shadowed {
+                    // p1 is not shadowed, so add it to accumulator
+                    Ok(false) => filtered_env.insert(p1),
+                    Ok(true) => {} // ignore
+                    Err(err) => return Err(ResolveOrUserError::User(err)),
                 }
 
                 Ok(filtered_env)

@@ -3,7 +3,13 @@
 //! Using these interfaces, the resolution algorithms can deal with custom behavior introduced
 //! by [`Completeness`](crate::completeness::Completeness) implementations.
 
+enum ResolveOrUserError<RE, UE> {
+    Resolve(RE),
+    User(UE),
+}
+
 mod scope;
+
 pub use scope::*;
 
 mod path;
