@@ -146,16 +146,16 @@ where
 } */
 
 impl<'sg: 'rslv, 'rslv, LABEL: 'sg + Eq, DATA: 'sg + Eq, RE, UE>
-    Injectable<'sg, 'rslv, LABEL, DATA, Result<bool, RE>>
+    Injectable<'sg, 'rslv, LABEL, DATA, Result<bool, UE>>
     for Result<Env<'sg, LABEL, DATA>, ResolveOrUserError<RE, UE>>
 where
     ResolvedPath<'sg, LABEL, DATA>: Hash + Clone,
     ResolveOrUserError<RE, UE>: Clone + 'rslv,
 {
-    fn inject_if(data_ok: Result<bool, RE>, path: ResolvedPath<'sg, LABEL, DATA>) -> Self {
+    fn inject_if(data_ok: Result<bool, UE>, path: ResolvedPath<'sg, LABEL, DATA>) -> Self {
         data_ok
             .map(|ok| if ok { Env::single(path) } else { Env::empty() })
-            .map_err(|err| ResolveOrUserError::Resolve(err))
+            .map_err(|err| ResolveOrUserError::User(err))
     }
 }
 

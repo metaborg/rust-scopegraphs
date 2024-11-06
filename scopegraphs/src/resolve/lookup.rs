@@ -654,7 +654,7 @@ mod tests {
         // todo!("assert the correct edges are closed!")
     }
 
-    /* #[test]
+    #[test]
     fn test_label_order_complex_explicit_close() {
         let storage = Storage::new();
         let scope_graph: ScopeGraph<Lbl, TData, ExplicitClose<Lbl>> =
@@ -703,7 +703,7 @@ mod tests {
         assert!(matches!(path.data(), &Data { name: "x", data: 2 }));
 
         // todo!("assert the correct edges are closed!")
-    }*/
+    }
 
     #[test]
     fn test_caching() {
