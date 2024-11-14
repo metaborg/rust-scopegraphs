@@ -18,7 +18,7 @@ pub struct Arg {
     pub type_ann: Option<Type>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Type {
     IntT,
     BoolT,

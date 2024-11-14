@@ -6,6 +6,7 @@ use crate::parse::parse;
 mod ast;
 mod parse;
 mod union_find;
+mod type_check;
 
 pub fn main() {
     let program = "
@@ -25,17 +26,21 @@ pub fn main() {
         $ and(not(false), tt())
     ";
 
-    assert!(parse(program).is_ok())
+    let result = parse(program);
+
+    println!("{:?}", result);
+
+    assert!(result.is_ok())
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum PartialType {
     // Types are not recursive, so no need to have separate constructors for each variant
     Type(Type),
     Variable(TypeVar),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct TypeVar(usize);
 
 pub struct FunType {

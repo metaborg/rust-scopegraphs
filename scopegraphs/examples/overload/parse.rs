@@ -10,6 +10,8 @@ use winnow::seq;
 use winnow::stream::AsChar;
 use winnow::token::{one_of, take_while};
 
+const KEYWORDS: [&str; 7] = ["fun", "if", "else", "true", "false", "int", "bool"];
+
 fn ws<'a, F, O, E: ParserError<&'a str>>(inner: F) -> impl Parser<&'a str, O, E>
 where
     F: Parser<&'a str, O, E>,
@@ -23,7 +25,7 @@ fn parse_ident(input: &mut &'_ str) -> PResult<String> {
         take_while(0.., |c: char| c.is_alphanum() || c == '_'),
     )
         .recognize()
-        .verify(|i: &str| !["fun", "if", "else", "true", "false", "int", "bool"].contains(&i)))
+        .verify(|i: &str| !KEYWORDS.contains(&i)))
     .context(StrContext::Label("parse ident"))
     .parse_next(input)
     .map(|i| i.to_string())
@@ -63,7 +65,6 @@ fn parse_base_expr(input: &mut &'_ str) -> PResult<Expr> {
     alt((
         parse_int.map(Expr::IntLit),
         parse_bool.map(Expr::BoolLit),
-        parse_ident.map(Expr::Ident),
         seq! {
             _: ws("if"),
             parse_expr,
@@ -85,6 +86,7 @@ fn parse_base_expr(input: &mut &'_ str) -> PResult<Expr> {
             _: ws(")")
         }
         .map(|(function_name, args)| Expr::FunCall(function_name, args)),
+        parse_ident.map(Expr::Ident), // must come after funcall
         parse_bracketed,
     ))
     .context(StrContext::Label("parse base expr"))
@@ -190,7 +192,7 @@ pub fn parse_program(input: &mut &'_ str) -> PResult<Program> {
 }
 
 pub fn parse(mut input: &str) -> PResult<Program> {
-    terminated(parse_program, eof).parse_next(&mut input)
+    terminated(ws(parse_program), eof).parse_next(&mut input)
 }
 
 pub fn parse_trace(mut input: &str) -> PResult<Program> {
@@ -208,7 +210,7 @@ mod test {
 
     use crate::{
         parse::{parse, parse_arith_expr, parse_base_expr, parse_cmp_expr, parse_ident},
-        Expr,
+        Expr, Type,
     };
 
     use super::{parse_args, parse_expr, parse_function, parse_trace};
@@ -329,14 +331,56 @@ mod test {
     }
 
     #[test]
+    pub fn parse_funcall_no_args() {
+        let mut input = "foo()";
+        assert_eq!(
+            Expr::FunCall("foo".into(), vec![],),
+            trace("parse expr", parse_expr)
+                .parse_next(&mut input)
+                .unwrap(),
+        );
+    }
+
+    #[test]
+    pub fn parse_if_in_if() {
+        let mut input = "if a { if b < f(42, false) { c + 2 } else { d(true) } } else { f : int }";
+        assert_eq!(
+            Expr::IfThenElse(
+                Expr::Ident("a".into()).into(),
+                Expr::IfThenElse(
+                    Expr::Lt(
+                        Expr::Ident("b".into()).into(),
+                        Expr::FunCall("f".into(), vec![Expr::IntLit(42), Expr::BoolLit(false),])
+                            .into(),
+                    )
+                    .into(),
+                    Expr::Plus(Expr::Ident("c".into()).into(), Expr::IntLit(2).into(),).into(),
+                    Expr::FunCall("d".into(), vec![Expr::BoolLit(true),]).into(),
+                )
+                .into(),
+                Expr::Ascribe(Expr::Ident("f".into()).into(), Type::IntT,).into(),
+            ),
+            parse_expr(&mut input).unwrap()
+        );
+    }
+
+    #[test]
     pub fn parse_all_constructs() {
         let program = "
             fun tt() = true;
-            fun lt(i1, i2) = (1 < 2);
-            fun and(b1, b2: bool): bool =
-              if b1 { b2: int } else { false };
+            fun not(b) = if b { false } else { true };
+            fun and(b1: bool, b2): bool = 
+                if b1 {
+                    if b2 {
+                        true
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                };
 
-            $ tt()
+            $ and(not(false), tt())
         ";
 
         assert!(parse_trace(program).is_ok());
