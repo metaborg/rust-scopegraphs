@@ -5,8 +5,8 @@ use crate::parse::parse;
 
 mod ast;
 mod parse;
-mod union_find;
 mod type_check;
+mod union_find;
 
 pub fn main() {
     let program = "
