@@ -287,3 +287,64 @@ where
         })
     }
 }
+
+
+#[cfg(test)]
+mod test {
+    use scopegraphs_macros::{label_order, Label};
+
+    use crate::{completeness::{Delay, ExplicitClose}, containers::ResolveOrUserError, resolve::{DataEquivalence, DataWellformedness, Resolve}, ScopeGraph, Storage};
+
+    pub mod scopegraphs {
+        pub use crate::*;
+    }
+
+
+    macro_rules! t {
+        ($DWFO: ty, $DEQO: ty, $OUT: ty) => {
+            {
+            #[derive(Label, Clone, Copy, Debug, PartialEq, Eq, Hash)]
+            enum Lbl { }
+        
+            fn test_dwf<'a>(_ : impl DataWellformedness<'a, u32, Output = $DWFO>) { }
+            fn test_equiv<'a>(_ : impl DataEquivalence<'a, u32, Output = $DEQO>) { }
+        
+            fn some_dwf(_: &u32) -> $DWFO {
+                todo!()
+            }
+        
+            fn some_equiv(_: &u32, _: &u32) -> $DEQO {
+                todo!()
+            }
+    
+    
+            let storage = Storage::new();
+            let sg: ScopeGraph<Lbl, u32, _> = ScopeGraph::new(&storage, ExplicitClose::default());
+    
+            let dwf = some_dwf;
+            let equiv = some_equiv;
+    
+            test_dwf(dwf);
+            test_equiv(equiv);
+    
+            let query: $OUT = sg.query()
+                .with_path_wellformedness(query_regex!(Lbl: e))
+                .with_data_wellformedness(dwf)
+                .with_data_equivalence(equiv)
+                // .with_label_order(label_order!(Lbl))
+                .resolve(todo!());
+        }
+    };
+    }
+
+    #[test]
+    fn test_type() {
+        if false {
+            t![bool, bool, Result<_, Delay<_>>];
+            t![Result<bool, ()>, bool, Result<_, ResolveOrUserError<Delay<_>, ()>>];
+            t![bool, Result<bool, ()>, Result<_, ResolveOrUserError<Delay<_>, ()>>];
+            t![Result<bool, ()>, Result<bool, ()>, Result<_, ResolveOrUserError<Delay<_>, ()>>];
+        }
+    }
+
+}
