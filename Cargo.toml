@@ -14,7 +14,7 @@ default-members = [
 ]
 
 [workspace.package]
-version = "0.3.2"
+version = "0.3.3"
 authors = [
     "Aron Zwaan <A.S.Zwaan@tudelft.nl>",
     "Jonathan Dönszelmann <J.B.Doenszelmann@tudelft.nl>"
@@ -36,6 +36,6 @@ thiserror = "1"
 # Scopegraphs is a dev-dependency of scopegraphs-macros, and we deploy scopegraphs macros first.
 # By that time, scopegraphs is not yet released at the right version.
 scopegraphs = { path = "./scopegraphs", version = "0.3" }
-scopegraphs-macros = { path = "./scopegraphs-macros", version = "0.3.2" }
-scopegraphs-regular-expressions = { path = "./scopegraphs-regular-expressions", version = "0.3.2" }
-scopegraphs-render-docs = { path = "./scopegraphs-render-docs", version = "0.3.2" }
+scopegraphs-macros = { path = "./scopegraphs-macros", version = "0.3.3" }
+scopegraphs-regular-expressions = { path = "./scopegraphs-regular-expressions", version = "0.3.3" }
+scopegraphs-render-docs = { path = "./scopegraphs-render-docs", version = "0.3.3" }
