@@ -4,6 +4,8 @@ use futures::future::Shared;
 use std::hash::Hash;
 use std::rc::Rc;
 
+use super::ResolveOrUserError;
+
 /// Interface for environment containers that support the operations required for query resolution.
 pub trait EnvContainer<'sg, 'rslv, LABEL: 'sg, DATA: 'sg>:
     From<Env<'sg, LABEL, DATA>> + 'rslv
@@ -132,7 +134,7 @@ where
     }
 }
 
-impl<'sg: 'rslv, 'rslv, LABEL: 'sg + Eq, DATA: 'sg + Eq, E: 'rslv>
+/* impl<'sg: 'rslv, 'rslv, LABEL: 'sg + Eq, DATA: 'sg + Eq, E: 'rslv>
     Injectable<'sg, 'rslv, LABEL, DATA, Result<bool, E>> for Result<Env<'sg, LABEL, DATA>, E>
 where
     ResolvedPath<'sg, LABEL, DATA>: Hash + Clone,
@@ -140,6 +142,20 @@ where
 {
     fn inject_if(data_ok: Result<bool, E>, path: ResolvedPath<'sg, LABEL, DATA>) -> Self {
         data_ok.map(|ok| if ok { Env::single(path) } else { Env::empty() })
+    }
+} */
+
+impl<'sg: 'rslv, 'rslv, LABEL: 'sg + Eq, DATA: 'sg + Eq, RE, UE>
+    Injectable<'sg, 'rslv, LABEL, DATA, Result<bool, UE>>
+    for Result<Env<'sg, LABEL, DATA>, ResolveOrUserError<RE, UE>>
+where
+    ResolvedPath<'sg, LABEL, DATA>: Hash + Clone,
+    ResolveOrUserError<RE, UE>: Clone + 'rslv,
+{
+    fn inject_if(data_ok: Result<bool, UE>, path: ResolvedPath<'sg, LABEL, DATA>) -> Self {
+        data_ok
+            .map(|ok| if ok { Env::single(path) } else { Env::empty() })
+            .map_err(|err| ResolveOrUserError::User(err))
     }
 }
 
@@ -202,16 +218,18 @@ where
     }
 }
 
-impl<'sg: 'rslv, 'rslv, LABEL: Clone + Eq + 'sg, DATA: Eq + 'sg, E: Clone + 'rslv>
-    Filterable<'sg, 'rslv, LABEL, DATA, Result<bool, E>> for Result<Env<'sg, LABEL, DATA>, E>
+impl<'sg: 'rslv, 'rslv, LABEL: Clone + Eq + 'sg, DATA: Eq + 'sg, RE, UE>
+    Filterable<'sg, 'rslv, LABEL, DATA, Result<bool, UE>>
+    for Result<Env<'sg, LABEL, DATA>, ResolveOrUserError<RE, UE>>
 where
     Env<'sg, LABEL, DATA>: Clone,
     ResolvedPath<'sg, LABEL, DATA>: Eq + Hash + Clone,
+    ResolveOrUserError<RE, UE>: Clone + 'rslv,
 {
     fn filter(
         base_env: &Env<'sg, LABEL, DATA>,
         sub_env: &Env<'sg, LABEL, DATA>,
-        equiv: &'rslv impl DataEquivalence<'sg, DATA, Output = Result<bool, E>>,
+        equiv: &'rslv impl DataEquivalence<'sg, DATA, Output = Result<bool, UE>>,
     ) -> Self {
         let sub_env = sub_env.clone();
         sub_env.into_iter().try_fold(
@@ -227,10 +245,12 @@ where
                             equiv.data_equiv(p1.data, p2.data)
                         }
                     },
-                )?;
-                // p1 is not shadowed, so add it to accumulator
-                if !shadowed {
-                    filtered_env.insert(p1);
+                );
+                match shadowed {
+                    // p1 is not shadowed, so add it to accumulator
+                    Ok(false) => filtered_env.insert(p1),
+                    Ok(true) => {} // ignore
+                    Err(err) => return Err(ResolveOrUserError::User(err)),
                 }
 
                 Ok(filtered_env)
@@ -266,4 +286,65 @@ where
             filtered_env
         })
     }
+}
+
+
+#[cfg(test)]
+mod test {
+    use scopegraphs_macros::{label_order, Label};
+
+    use crate::{completeness::{Delay, ExplicitClose}, containers::ResolveOrUserError, resolve::{DataEquivalence, DataWellformedness, Resolve}, ScopeGraph, Storage};
+
+    pub mod scopegraphs {
+        pub use crate::*;
+    }
+
+
+    macro_rules! t {
+        ($DWFO: ty, $DEQO: ty, $OUT: ty) => {
+            {
+            #[derive(Label, Clone, Copy, Debug, PartialEq, Eq, Hash)]
+            enum Lbl { }
+        
+            fn test_dwf<'a>(_ : impl DataWellformedness<'a, u32, Output = $DWFO>) { }
+            fn test_equiv<'a>(_ : impl DataEquivalence<'a, u32, Output = $DEQO>) { }
+        
+            fn some_dwf(_: &u32) -> $DWFO {
+                todo!()
+            }
+        
+            fn some_equiv(_: &u32, _: &u32) -> $DEQO {
+                todo!()
+            }
+    
+    
+            let storage = Storage::new();
+            let sg: ScopeGraph<Lbl, u32, _> = ScopeGraph::new(&storage, ExplicitClose::default());
+    
+            let dwf = some_dwf;
+            let equiv = some_equiv;
+    
+            test_dwf(dwf);
+            test_equiv(equiv);
+    
+            let query: $OUT = sg.query()
+                .with_path_wellformedness(query_regex!(Lbl: e))
+                .with_data_wellformedness(dwf)
+                .with_data_equivalence(equiv)
+                // .with_label_order(label_order!(Lbl))
+                .resolve(todo!());
+        }
+    };
+    }
+
+    #[test]
+    fn test_type() {
+        if false {
+            t![bool, bool, Result<_, Delay<_>>];
+            t![Result<bool, ()>, bool, Result<_, ResolveOrUserError<Delay<_>, ()>>];
+            t![bool, Result<bool, ()>, Result<_, ResolveOrUserError<Delay<_>, ()>>];
+            t![Result<bool, ()>, Result<bool, ()>, Result<_, ResolveOrUserError<Delay<_>, ()>>];
+        }
+    }
+
 }
